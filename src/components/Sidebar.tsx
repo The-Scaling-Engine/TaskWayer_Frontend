@@ -1,0 +1,160 @@
+import { Link, useLocation } from 'react-router-dom';
+import { useAuthStore } from '@/store/authStore';
+import { useNavigate } from 'react-router-dom';
+import {
+  LayoutDashboard,
+  CheckSquare,
+  Calendar,
+  Users,
+  BarChart3,
+  LogOut,
+  ChevronLeft,
+  Menu,
+} from 'lucide-react';
+import { cn } from '@/lib/utils';
+
+interface SidebarProps {
+  collapsed: boolean;
+  onToggle: () => void;
+  mobileOpen: boolean;
+  onMobileClose: () => void;
+}
+
+const navItems = [
+  { icon: LayoutDashboard, label: 'Overview', path: '/dashboard' },
+  { icon: CheckSquare, label: 'My Tasks', path: '/dashboard/tasks', badge: null },
+  { icon: Calendar, label: 'Calendar', path: '/dashboard/calendar' },
+  { icon: Users, label: 'Clients', path: '/dashboard/clients', badge: '18' },
+  { icon: BarChart3, label: 'Reporting', path: '/dashboard/reporting' },
+];
+
+export default function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: SidebarProps) {
+  const { user, logout } = useAuthStore();
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
+
+  const isActive = (path: string) => {
+    if (path === '/dashboard') return location.pathname === '/dashboard';
+    return location.pathname.startsWith(path);
+  };
+
+  return (
+    <>
+      {/* Mobile Overlay */}
+      {mobileOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+          onClick={onMobileClose}
+        />
+      )}
+
+      {/* Sidebar */}
+      <aside
+        className={cn(
+          'fixed top-0 left-0 h-full z-50 bg-card border-r border-border flex flex-col transition-all duration-300 ease-in-out',
+          collapsed ? 'w-20' : 'w-64',
+          mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+        )}
+      >
+        {/* Logo */}
+        <div className={cn(
+          'flex items-center h-16 px-4 border-b border-border shrink-0',
+          collapsed ? 'justify-center' : 'gap-3'
+        )}>
+          <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center shrink-0">
+            <CheckSquare className="text-primary-foreground" size={22} />
+          </div>
+          {!collapsed && (
+            <span className="text-xl font-bold text-foreground tracking-tight">MicroDo</span>
+          )}
+        </div>
+
+        {/* Navigation */}
+        <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            const active = isActive(item.path);
+            return (
+              <Link
+                key={item.path}
+                to={item.path}
+                onClick={onMobileClose}
+                className={cn(
+                  'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200',
+                  active
+                    ? 'bg-primary/10 text-primary'
+                    : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                  collapsed && 'justify-center px-2'
+                )}
+              >
+                <Icon size={20} className="shrink-0" />
+                {!collapsed && (
+                  <>
+                    <span className="flex-1">{item.label}</span>
+                    {item.badge && (
+                      <span className="bg-primary text-primary-foreground text-xs font-bold px-2 py-0.5 rounded-full">
+                        {item.badge}
+                      </span>
+                    )}
+                  </>
+                )}
+              </Link>
+            );
+          })}
+        </nav>
+
+        {/* Footer */}
+        <div className="p-3 border-t border-border space-y-1">
+          {/* User info */}
+          {!collapsed && (
+            <div className="flex items-center gap-3 px-3 py-2">
+              <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary text-sm font-bold">
+                {user?.email?.charAt(0).toUpperCase() || 'U'}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-foreground truncate">{user?.email || 'User'}</p>
+              </div>
+            </div>
+          )}
+
+          {/* Logout */}
+          <button
+            onClick={handleLogout}
+            className={cn(
+              'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium w-full text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-all duration-200',
+              collapsed && 'justify-center px-2'
+            )}
+          >
+            <LogOut size={20} className="shrink-0" />
+            {!collapsed && <span>Sign Out</span>}
+          </button>
+
+          {/* Collapse Toggle (desktop only) */}
+          <button
+            onClick={onToggle}
+            className={cn(
+              'hidden lg:flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium w-full text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-200',
+              collapsed && 'justify-center px-2'
+            )}
+          >
+            <ChevronLeft size={20} className={cn('shrink-0 transition-transform', collapsed && 'rotate-180')} />
+            {!collapsed && <span>Collapse</span>}
+          </button>
+        </div>
+      </aside>
+
+      {/* Mobile menu button (rendered by Sidebar so it's always visible) */}
+      <button
+        onClick={() => mobileOpen ? onMobileClose() : onToggle()}
+        className="fixed top-4 left-4 z-30 lg:hidden p-2 rounded-xl bg-card border border-border text-muted-foreground hover:text-foreground shadow-sm"
+      >
+        <Menu size={20} />
+      </button>
+    </>
+  );
+}
