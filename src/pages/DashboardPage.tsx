@@ -1,24 +1,25 @@
 import { useAuthStore } from '@/store/authStore';
+import KanbanBoard from '@/components/KanbanBoard';
 import {
   CheckSquare,
   ClipboardList,
   Clock,
   TrendingUp,
 } from 'lucide-react';
+import { useTaskStore } from '@/store/taskStore';
 
 export default function DashboardPage() {
   const user = useAuthStore((s) => s.user);
+  const tasks = useTaskStore((s) => s.tasks);
+
+  const completedCount = tasks.filter((t) => t.status === 'done').length;
+  const inProgressCount = tasks.filter((t) => t.status === 'doing').length;
+  const todoCount = tasks.filter((t) => t.status === 'todo').length;
 
   const quickActions = [
     { icon: CheckSquare, label: 'Create Task', color: 'text-[#FE812C]' },
     { icon: ClipboardList, label: 'Plan Today', color: 'text-primary' },
     { icon: Clock, label: 'Review Blocked', color: 'text-[#E298B9]' },
-  ];
-
-  const stats = [
-    { label: 'Completed', value: '22', color: 'text-primary' },
-    { label: 'In Progress', value: '30', color: 'text-[#FE812C]' },
-    { label: 'Blocked', value: '18', color: 'text-destructive' },
   ];
 
   return (
@@ -65,7 +66,6 @@ export default function DashboardPage() {
           </div>
           <div className="flex flex-col items-center justify-center py-4">
             <div className="relative w-32 h-32">
-              {/* Circular progress ring */}
               <svg className="w-full h-full -rotate-90" viewBox="0 0 120 120">
                 <circle cx="60" cy="60" r="52" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="8" />
                 <circle
@@ -91,30 +91,34 @@ export default function DashboardPage() {
           <div className="flex items-center justify-between mb-5">
             <div>
               <h3 className="text-sm font-semibold text-foreground">Task Progress</h3>
-              <p className="text-xs text-muted-foreground">Weekly snapshot of your workflow</p>
+              <p className="text-xs text-muted-foreground">Your current workflow snapshot</p>
             </div>
-            <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded-md">Week</span>
+            <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded-md">Live</span>
           </div>
-
-          {/* Stats */}
           <div className="grid grid-cols-3 gap-4 mb-5">
-            {stats.map((stat) => (
-              <div key={stat.label} className="text-center">
-                <p className={`text-2xl font-bold ${stat.color}`}>{stat.value}</p>
-                <p className="text-xs text-muted-foreground mt-1">{stat.label}</p>
-              </div>
-            ))}
+            <div className="text-center">
+              <p className="text-2xl font-bold text-primary">{completedCount}</p>
+              <p className="text-xs text-muted-foreground mt-1">Completed</p>
+            </div>
+            <div className="text-center">
+              <p className="text-2xl font-bold text-[#FE812C]">{inProgressCount}</p>
+              <p className="text-xs text-muted-foreground mt-1">In Progress</p>
+            </div>
+            <div className="text-center">
+              <p className="text-2xl font-bold text-blue-500">{todoCount}</p>
+              <p className="text-xs text-muted-foreground mt-1">To Do</p>
+            </div>
           </div>
-
-          {/* Progress Bar */}
           <div className="bg-primary/10 rounded-xl p-3 flex items-center gap-2">
             <TrendingUp size={16} className="text-primary shrink-0" />
-            <span className="text-xs font-medium text-primary">+12% compared to last week</span>
+            <span className="text-xs font-medium text-primary">
+              {tasks.length} total tasks tracked
+            </span>
           </div>
         </div>
       </div>
 
-      {/* Task Tracker Section Header */}
+      {/* Task Tracker Section */}
       <div className="flex items-center justify-between pt-2">
         <div className="flex items-center gap-3">
           <h2 className="text-xl font-bold text-foreground">Task Tracker</h2>
@@ -124,12 +128,8 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Placeholder for Kanban Board (Phase 4) */}
-      <div className="bg-card rounded-2xl border border-border p-8 text-center min-h-[200px] flex items-center justify-center">
-        <p className="text-muted-foreground">
-          Kanban board will be built in Phase 4
-        </p>
-      </div>
+      {/* Kanban Board */}
+      <KanbanBoard />
     </div>
   );
 }
