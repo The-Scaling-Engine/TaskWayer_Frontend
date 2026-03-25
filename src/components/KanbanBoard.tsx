@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, forwardRef, useImperativeHandle } from 'react';
 import { useTaskStore } from '@/store/taskStore';
 import TaskCard from '@/components/TaskCard';
 import TaskDialog from '@/components/TaskDialog';
@@ -29,7 +29,11 @@ const columns: Column[] = [
   { id: 'done', title: 'Done', color: 'bg-primary' },
 ];
 
-export default function KanbanBoard() {
+export interface KanbanBoardRef {
+  openCreateTask: () => void;
+}
+
+const KanbanBoard = forwardRef<KanbanBoardRef>((_props, ref) => {
   const { tasks, loading, fetchTasks, createTask, updateTask, deleteTask } = useTaskStore();
 
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -41,6 +45,10 @@ export default function KanbanBoard() {
   useEffect(() => {
     fetchTasks();
   }, [fetchTasks]);
+
+  useImperativeHandle(ref, () => ({
+    openCreateTask: () => handleCreate()
+  }));
 
   const handleCreate = (columnStatus?: 'todo' | 'doing' | 'done') => {
     setEditingTask(null);
@@ -239,4 +247,6 @@ export default function KanbanBoard() {
       )}
     </>
   );
-}
+});
+
+export default KanbanBoard;

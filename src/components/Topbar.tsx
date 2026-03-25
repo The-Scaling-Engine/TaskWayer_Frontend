@@ -1,6 +1,5 @@
 import { useAuthStore } from '@/store/authStore';
-import { Button } from '@/components/ui/button';
-import { Plus } from 'lucide-react';
+
 import { cn } from '@/lib/utils';
 import ThemeToggle from '@/components/ThemeToggle';
 
@@ -27,12 +26,6 @@ export default function Topbar({ sidebarCollapsed }: TopbarProps) {
         <ThemeToggle />
 
 
-
-        {/* Create Task Button */}
-        <Button className="bg-[#FE812C] hover:bg-[#e5732a] text-white rounded-xl shadow-md shadow-[#FE812C]/20 gap-2 ml-1">
-          <Plus size={18} />
-          <span className="hidden sm:inline">Create Task</span>
-        </Button>
 
         {/* User Avatar */}
         <div className="w-9 h-9 rounded-full bg-primary/20 flex items-center justify-center text-primary text-sm font-bold ml-1">
