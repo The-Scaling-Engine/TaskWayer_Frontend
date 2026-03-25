@@ -2,7 +2,7 @@
 
 A modern, high-performance task management application built with **React**, **TypeScript**, and **Vite**. This project focuses on seamless task tracking, intuitive user experience, and professional state management.
 
-📂 **GitHub Repo:** [github.com/bttu2002/TasksManagement](https://github.com/bttu2002/TasksManagement)
+📂 **GitHub Repo:** [github.com/bttu2002/TasksManagement](https://github.com/bttu2002/MicroDo_Frontend)
 
 ---
 
