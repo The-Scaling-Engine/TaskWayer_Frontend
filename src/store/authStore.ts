@@ -7,7 +7,6 @@ interface AuthState {
   isAuthenticated: boolean;
   login: (token: string, user: User) => void;
   logout: () => void;
-  setUser: (user: User) => void;
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
@@ -25,10 +24,5 @@ export const useAuthStore = create<AuthState>((set) => ({
     localStorage.removeItem('microdo_token');
     localStorage.removeItem('microdo_user');
     set({ token: null, user: null, isAuthenticated: false });
-  },
-
-  setUser: (user: User) => {
-    localStorage.setItem('microdo_user', JSON.stringify(user));
-    set({ user });
   },
 }));
