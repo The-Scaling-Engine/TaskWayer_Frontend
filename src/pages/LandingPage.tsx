@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { CheckSquare, ArrowRight, LayoutDashboard, Clock, Users, Zap, Shield, Sparkles } from 'lucide-react';
+import ThemeToggle from '@/components/ThemeToggle';
 
 const slides = [
   {
@@ -66,6 +67,7 @@ export default function LandingPage() {
           <span className="text-2xl font-bold tracking-tight">MicroDo</span>
         </div>
         <div className="flex items-center gap-4">
+          <ThemeToggle />
           <Button asChild className="bg-[#F4DFDE] hover:bg-[#FE812C] hover:text-white px-4 text-black rounded-xl shadow-lg shadow-[#FE812C]/20">
             <Link to="/login">
               Log In
