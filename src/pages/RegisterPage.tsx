@@ -59,12 +59,12 @@ export default function RegisterPage() {
   const honeycombItems = [
     { icon: ListTodo, label: 'Task', delay: '0s' },
     { icon: CheckSquare, label: 'Task', delay: '0.1s' },
-    { icon: FileText, label: 'Meme', delay: '0.2s' },
+    { icon: FileText, label: 'List', delay: '0.2s' },
     { icon: Briefcase, label: 'Work', delay: '0.3s' },
     { icon: FolderKanban, label: 'Projects', delay: '0.4s' },
     { icon: Home, label: 'Home', delay: '0.5s' },
     { icon: Lightbulb, label: 'Idea', delay: '0.6s' },
-    { icon: ListTodo, label: 'Tone', delay: '0.7s' },
+    { icon: ListTodo, label: 'Done', delay: '0.7s' },
     { icon: FolderKanban, label: 'Projects', delay: '0.8s' },
   ];
 
@@ -108,7 +108,7 @@ export default function RegisterPage() {
 
           <div className="flex items-center justify-center">
             <div className="w-20 h-20 bg-[#034D36] rounded-full flex items-center justify-center shadow-xl">
-              <Bot size={40} className="text-white" />
+              <Bot size={40} className="text-white hover:text-[#10BA41] transition-colors cursor-pointer" onClick={() => navigate('/')}/>
             </div>
           </div>
         </div>

@@ -1,5 +1,5 @@
 import { useAuthStore } from '@/store/authStore';
-import KanbanBoard from '@/components/KanbanBoard';
+
 import {
   CheckSquare,
   ClipboardList,
@@ -33,7 +33,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Top Cards Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         {/* Quick Actions Card */}
         <div className="bg-card rounded-2xl border border-border p-6 shadow-sm hover:shadow-md transition-shadow">
           <div className="flex items-center justify-between mb-5">
@@ -56,35 +56,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Time Tracker Card */}
-        <div className="bg-gradient-to-br from-[#FE812C] to-[#e5732a] rounded-2xl p-6 text-white shadow-lg shadow-[#FE812C]/20">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h3 className="text-sm font-semibold opacity-90">Time Tracker</h3>
-              <p className="text-xs opacity-70">Week total: 36h</p>
-            </div>
-          </div>
-          <div className="flex flex-col items-center justify-center py-4">
-            <div className="relative w-32 h-32">
-              <svg className="w-full h-full -rotate-90" viewBox="0 0 120 120">
-                <circle cx="60" cy="60" r="52" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="8" />
-                <circle
-                  cx="60" cy="60" r="52" fill="none" stroke="white" strokeWidth="8"
-                  strokeDasharray={`${2 * Math.PI * 52 * 0.65} ${2 * Math.PI * 52 * 0.35}`}
-                  strokeLinecap="round"
-                />
-              </svg>
-              <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <span className="text-2xl font-bold">02:34</span>
-                <span className="text-xs opacity-70">Elapsed</span>
-              </div>
-            </div>
-            <div className="mt-3 text-center">
-              <span className="text-lg font-bold">05:26</span>
-              <span className="text-xs block opacity-70">Remaining</span>
-            </div>
-          </div>
-        </div>
+
 
         {/* Task Progress Card */}
         <div className="bg-card rounded-2xl border border-border p-6 shadow-sm hover:shadow-md transition-shadow">
@@ -118,18 +90,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Task Tracker Section */}
-      <div className="flex items-center justify-between pt-2">
-        <div className="flex items-center gap-3">
-          <h2 className="text-xl font-bold text-foreground">Task Tracker</h2>
-          <span className="text-sm text-muted-foreground">
-            {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
-          </span>
-        </div>
-      </div>
 
-      {/* Kanban Board */}
-      <KanbanBoard />
     </div>
   );
 }

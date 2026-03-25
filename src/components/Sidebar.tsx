@@ -4,9 +4,6 @@ import { useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
   CheckSquare,
-  Calendar,
-  Users,
-  BarChart3,
   LogOut,
   ChevronLeft,
   Menu,
@@ -22,10 +19,7 @@ interface SidebarProps {
 
 const navItems = [
   { icon: LayoutDashboard, label: 'Overview', path: '/dashboard' },
-  { icon: CheckSquare, label: 'My Tasks', path: '/dashboard/tasks', badge: null },
-  { icon: Calendar, label: 'Calendar', path: '/dashboard/calendar' },
-  { icon: Users, label: 'Clients', path: '/dashboard/clients', badge: '18' },
-  { icon: BarChart3, label: 'Reporting', path: '/dashboard/reporting' },
+  { icon: CheckSquare, label: 'My Tasks', path: '/dashboard/tasks' },
 ];
 
 export default function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: SidebarProps) {
@@ -96,11 +90,6 @@ export default function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose
                 {!collapsed && (
                   <>
                     <span className="flex-1">{item.label}</span>
-                    {item.badge && (
-                      <span className="bg-primary text-primary-foreground text-xs font-bold px-2 py-0.5 rounded-full">
-                        {item.badge}
-                      </span>
-                    )}
                   </>
                 )}
               </Link>

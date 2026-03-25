@@ -4,6 +4,7 @@ import TaskCard from '@/components/TaskCard';
 import TaskDialog from '@/components/TaskDialog';
 import type { Task } from '@/types';
 import { Plus, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface Column {
   id: 'todo' | 'doing' | 'done';
@@ -60,7 +61,12 @@ export default function KanbanBoard() {
 
   const confirmDelete = async () => {
     if (deleteConfirm) {
-      await deleteTask(deleteConfirm._id);
+      try {
+        await deleteTask(deleteConfirm._id);
+        toast.success('Task deleted successfully');
+      } catch {
+        toast.error('Failed to delete task');
+      }
       setDeleteConfirm(null);
     }
   };
@@ -70,9 +76,12 @@ export default function KanbanBoard() {
       setDialogLoading(true);
       try {
         await updateTask(updateConfirm.taskId, updateConfirm.data);
+        toast.success('Task updated successfully');
         setUpdateConfirm(null);
         setDialogOpen(false);
         setEditingTask(null);
+      } catch {
+        toast.error('Failed to update task');
       } finally {
         setDialogLoading(false);
       }
@@ -86,7 +95,8 @@ export default function KanbanBoard() {
     deadline?: string;
   }) => {
     if (editingTask && editingTask._id) {
-      // Show update confirmation popup
+      // Close the edit dialog first, then show update confirmation popup
+      setDialogOpen(false);
       setUpdateConfirm({
         taskId: editingTask._id,
         taskTitle: data.title,
@@ -97,8 +107,11 @@ export default function KanbanBoard() {
       setDialogLoading(true);
       try {
         await createTask(data);
+        toast.success('Task created successfully');
         setDialogOpen(false);
         setEditingTask(null);
+      } catch {
+        toast.error('Failed to create task');
       } finally {
         setDialogLoading(false);
       }

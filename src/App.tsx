@@ -1,10 +1,12 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { Toaster } from '@/components/ui/sonner';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import DashboardLayout from '@/layouts/DashboardLayout';
 import LandingPage from '@/pages/LandingPage';
 import LoginPage from '@/pages/LoginPage';
 import RegisterPage from '@/pages/RegisterPage';
 import DashboardPage from '@/pages/DashboardPage';
+import TasksPage from '@/pages/TasksPage';
 
 function App() {
   return (
@@ -25,9 +27,12 @@ function App() {
           }
         >
           <Route index element={<DashboardPage />} />
-          {/* Future nested routes will go here */}
+          <Route path="tasks" element={<TasksPage />} />
         </Route>
       </Routes>
+
+      {/* Toast notifications */}
+      <Toaster position="top-right" richColors closeButton />
     </Router>
   );
 }
