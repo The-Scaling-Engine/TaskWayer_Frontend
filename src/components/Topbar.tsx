@@ -28,9 +28,17 @@ export default function Topbar({ sidebarCollapsed }: TopbarProps) {
 
 
         {/* User Avatar */}
-        <div className="w-9 h-9 rounded-full bg-primary/20 flex items-center justify-center text-primary text-sm font-bold ml-1">
-          {user?.email?.charAt(0).toUpperCase() || 'U'}
-        </div>
+        {user?.avatar ? (
+          <img
+            src={user.avatar}
+            alt={user?.name || user?.email || 'User'}
+            className="w-9 h-9 rounded-full object-cover ml-1"
+          />
+        ) : (
+          <div className="w-9 h-9 rounded-full bg-primary/20 flex items-center justify-center text-primary text-sm font-bold ml-1">
+            {user?.name?.charAt(0).toUpperCase() || user?.email?.charAt(0).toUpperCase() || 'U'}
+          </div>
+        )}
       </div>
     </header>
   );

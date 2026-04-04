@@ -102,11 +102,24 @@ export default function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose
           {/* User info */}
           {!collapsed && (
             <div className="flex items-center gap-3 px-3 py-2">
-              <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary text-sm font-bold">
-                {user?.email?.charAt(0).toUpperCase() || 'U'}
-              </div>
+              {user?.avatar ? (
+                <img
+                  src={user.avatar}
+                  alt={user.name || user.email || 'User'}
+                  className="w-8 h-8 rounded-full object-cover shrink-0"
+                />
+              ) : (
+                <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary text-sm font-bold shrink-0">
+                  {user?.name?.charAt(0).toUpperCase() || user?.email?.charAt(0).toUpperCase() || 'U'}
+                </div>
+              )}
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-foreground truncate">{user?.email || 'User'}</p>
+                {user?.name && (
+                  <p className="text-sm font-medium text-foreground truncate">{user.name}</p>
+                )}
+                <p className={`text-sm ${user?.name ? 'text-muted-foreground' : 'font-medium text-foreground'} truncate`}>
+                  {user?.email || 'User'}
+                </p>
               </div>
             </div>
           )}
