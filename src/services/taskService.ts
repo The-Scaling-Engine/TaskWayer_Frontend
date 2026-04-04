@@ -1,10 +1,12 @@
 import api from './api';
-import type { Task, TasksResponse } from '@/types';
+import type { Task, TasksResponse, TaskStatsResponse } from '@/types';
 
 export interface CreateTaskData {
   title: string;
   description?: string;
   status?: 'todo' | 'doing' | 'done';
+  priority?: 'low' | 'medium' | 'high';
+  tags?: string[];
   deadline?: string;
 }
 
@@ -12,13 +14,17 @@ export interface UpdateTaskData {
   title?: string;
   description?: string;
   status?: 'todo' | 'doing' | 'done';
+  priority?: 'low' | 'medium' | 'high';
+  tags?: string[];
   deadline?: string;
 }
 
 export const taskService = {
   getTasks: async (params?: {
     status?: string;
+    priority?: string;
     search?: string;
+    tag?: string;
     page?: number;
     limit?: number;
     sortBy?: string;
@@ -40,6 +46,11 @@ export const taskService = {
 
   deleteTask: async (id: string): Promise<{ success: boolean; message: string }> => {
     const response = await api.delete(`/tasks/${id}`);
+    return response.data;
+  },
+
+  getStats: async (): Promise<TaskStatsResponse> => {
+    const response = await api.get<TaskStatsResponse>('/tasks/stats');
     return response.data;
   },
 };

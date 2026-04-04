@@ -3,40 +3,37 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { useAuthStore } from '@/store/authStore';
 import { authService } from '@/services/authService';
-import { Mail, Lock, Eye, EyeOff, CheckSquare, Briefcase, Lightbulb, Home, FolderKanban, ListTodo, FileText, Bot } from 'lucide-react';
+import { Mail, CheckSquare, Briefcase, Lightbulb, Home, FolderKanban, ListTodo, FileText, Bot, ArrowLeft } from 'lucide-react';
 
-export default function LoginPage() {
+export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const login = useAuthStore((s) => s.login);
   const navigate = useNavigate();
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError('');
+    setSuccess('');
 
-    if (!email || !password) {
-      setError('Please enter both email and password');
+    if (!email) {
+      setError('Please enter your email address');
       return;
     }
 
     setLoading(true);
     try {
-      const res = await authService.login({ email, password });
-      if (res.success && res.data.token) {
-        login(res.data.token, { _id: res.data.id, email: res.data.email });
-        navigate('/dashboard');
+      const res = await authService.forgotPassword(email);
+      if (res.success) {
+        setSuccess(res.message || 'Password reset link has been sent to your email. Please check your inbox.');
       }
     } catch (err: unknown) {
       if (err && typeof err === 'object' && 'response' in err) {
         const axiosErr = err as { response?: { data?: { message?: string } } };
-        setError(axiosErr.response?.data?.message || 'Login failed');
+        setError(axiosErr.response?.data?.message || 'Failed to send reset email');
       } else {
         setError('Network error. Please try again.');
       }
@@ -45,7 +42,6 @@ export default function LoginPage() {
     }
   };
 
-  // Honeycomb items for left panel decoration
   const honeycombItems = [
     { icon: ListTodo, label: 'Task', delay: '0s' },
     { icon: CheckSquare, label: 'Task', delay: '0.1s' },
@@ -66,12 +62,10 @@ export default function LoginPage() {
           background: 'linear-gradient(135deg, #F4DFDE 0%, #E5B7B9 40%, #BDCCCF 70%, #034D36 100%)'
         }}
       >
-        {/* Floating decorative circles */}
         <div className="absolute top-10 left-10 w-32 h-32 rounded-full bg-white/10 blur-2xl animate-pulse" />
         <div className="absolute bottom-20 right-20 w-48 h-48 rounded-full bg-[#034D36]/20 blur-3xl animate-pulse" style={{ animationDelay: '1s' }} />
 
         <div className="relative z-10 flex flex-col items-center px-12">
-          {/* Logo */}
           <div className="flex items-center gap-3 mb-12">
             <div className="w-12 h-12 bg-[#034D36] rounded-xl flex items-center justify-center shadow-lg">
               <CheckSquare className="text-white" size={28} />
@@ -79,7 +73,6 @@ export default function LoginPage() {
             <span className="text-3xl font-bold text-[#034D36] tracking-tight">MicroDo</span>
           </div>
 
-          {/* Honeycomb Grid */}
           <div className="grid grid-cols-3 gap-3 mb-10">
             {honeycombItems.map((item, i) => {
               const Icon = item.icon;
@@ -99,7 +92,6 @@ export default function LoginPage() {
             })}
           </div>
 
-          {/* Robot Mascot */}
           <div className="flex items-center justify-center">
             <div className="w-20 h-20 bg-[#034D36] rounded-full flex items-center justify-center shadow-xl">
               <Bot size={40} className="text-white hover:text-[#10BA41] transition-colors cursor-pointer" onClick={() => navigate('/')}/>
@@ -108,7 +100,7 @@ export default function LoginPage() {
         </div>
       </div>
 
-      {/* Right Panel - Login Form */}
+      {/* Right Panel - Forgot Password Form */}
       <div className="w-full lg:w-1/2 flex items-center justify-center p-8">
         <div className="w-full max-w-md space-y-8">
           {/* Mobile Logo */}
@@ -119,9 +111,20 @@ export default function LoginPage() {
             <span className="text-2xl font-bold text-foreground tracking-tight">MicroDo</span>
           </div>
 
+          {/* Back to Login */}
+          <Link
+            to="/login"
+            className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <ArrowLeft size={16} />
+            Back to login
+          </Link>
+
           <div>
-            <h1 className="text-4xl font-bold text-foreground">Login</h1>
-            <p className="text-muted-foreground mt-2">Welcome back! Sign in to continue.</p>
+            <h1 className="text-4xl font-bold text-foreground">Forgot Password</h1>
+            <p className="text-muted-foreground mt-2">
+              Enter your email and we'll send you a link to reset your password.
+            </p>
           </div>
 
           {/* Error Message */}
@@ -131,72 +134,59 @@ export default function LoginPage() {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-5">
-            {/* Email */}
-            <div className="space-y-2">
-              <Label htmlFor="email" className="text-sm font-medium text-foreground">Email</Label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="you@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="pl-10 h-12 rounded-xl"
-                  autoComplete="email"
-                />
+          {/* Success Message */}
+          {success && (
+            <div className="bg-green-500/10 border border-green-500/30 text-green-600 rounded-xl px-4 py-3 text-sm font-medium">
+              {success}
+            </div>
+          )}
+
+          {!success ? (
+            <form onSubmit={handleSubmit} className="space-y-5">
+              {/* Email */}
+              <div className="space-y-2">
+                <Label htmlFor="forgot-email" className="text-sm font-medium text-foreground">Email</Label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
+                  <Input
+                    id="forgot-email"
+                    type="email"
+                    placeholder="you@example.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="pl-10 h-12 rounded-xl"
+                    autoComplete="email"
+                    autoFocus
+                  />
+                </div>
               </div>
+
+              {/* Submit Button */}
+              <Button
+                type="submit"
+                disabled={loading}
+                className="w-full h-12 rounded-xl text-base font-semibold bg-[#FE812C] hover:bg-[#e5732a] text-white shadow-lg shadow-[#FE812C]/25 transition-all duration-200"
+              >
+                {loading ? (
+                  <span className="flex items-center gap-2">
+                    <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Sending...
+                  </span>
+                ) : (
+                  'Send Reset Link'
+                )}
+              </Button>
+            </form>
+          ) : (
+            <div className="space-y-4">
+              <Button
+                asChild
+                className="w-full h-12 rounded-xl text-base font-semibold bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg transition-all duration-200"
+              >
+                <Link to="/login">Return to Login</Link>
+              </Button>
             </div>
-
-            {/* Password */}
-            <div className="space-y-2">
-              <Label htmlFor="password" className="text-sm font-medium text-foreground">Password</Label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
-                <Input
-                  id="password"
-                  type={showPassword ? 'text' : 'password'}
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="pl-10 pr-10 h-12 rounded-xl"
-                  autoComplete="current-password"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                </button>
-              </div>
-            </div>
-
-
-            {/* Forgot Password */}
-            <div className="flex justify-end">
-              <Link to="/forgot-password" className="text-sm text-primary hover:underline font-medium">
-                Forgot password?
-              </Link>
-            </div>
-
-            {/* Submit Button */}
-            <Button
-              type="submit"
-              disabled={loading}
-              className="w-full h-12 rounded-xl text-base font-semibold bg-[#FE812C] hover:bg-[#e5732a] text-white shadow-lg shadow-[#FE812C]/25 transition-all duration-200"
-            >
-              {loading ? (
-                <span className="flex items-center gap-2">
-                  <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  Signing in...
-                </span>
-              ) : (
-                'Log In'
-              )}
-            </Button>
-          </form>
+          )}
 
           {/* Divider */}
           <div className="relative">
