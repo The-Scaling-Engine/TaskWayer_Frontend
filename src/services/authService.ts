@@ -19,4 +19,12 @@ export const authService = {
     );
     return response.data;
   },
+
+  resetPassword: async (token: string, password: string): Promise<AuthResponse> => {
+    const response = await api.post<AuthResponse>('/auth/reset-password', {
+      token,
+      password,
+    });
+    return response.data;
+  },
 };
