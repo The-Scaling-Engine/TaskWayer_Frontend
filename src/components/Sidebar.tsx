@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
   CheckSquare,
+  Settings,
   LogOut,
   ChevronLeft,
   Menu,
@@ -20,6 +21,7 @@ interface SidebarProps {
 const navItems = [
   { icon: LayoutDashboard, label: 'Overview', path: '/dashboard' },
   { icon: CheckSquare, label: 'My Tasks', path: '/dashboard/tasks' },
+  { icon: Settings, label: 'Settings', path: '/dashboard/settings' },
 ];
 
 export default function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: SidebarProps) {
@@ -101,7 +103,11 @@ export default function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose
         <div className="p-3 border-t border-border space-y-1">
           {/* User info */}
           {!collapsed && (
-            <div className="flex items-center gap-3 px-3 py-2">
+            <Link
+              to="/dashboard/profile"
+              onClick={onMobileClose}
+              className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-muted transition-colors cursor-pointer"
+            >
               {user?.avatar ? (
                 <img
                   src={user.avatar}
@@ -121,7 +127,7 @@ export default function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose
                   {user?.email || 'User'}
                 </p>
               </div>
-            </div>
+            </Link>
           )}
 
           {/* Logout */}

@@ -27,4 +27,15 @@ export const authService = {
     });
     return response.data;
   },
+
+  changePassword: async (
+    currentPassword: string,
+    newPassword: string
+  ): Promise<{ success: boolean; message: string }> => {
+    const response = await api.put<{ success: boolean; message: string }>(
+      '/auth/change-password',
+      { currentPassword, newPassword }
+    );
+    return response.data;
+  },
 };
