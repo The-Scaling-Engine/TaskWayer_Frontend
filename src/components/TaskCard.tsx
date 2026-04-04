@@ -58,6 +58,26 @@ export default function TaskCard({ task, onEdit, onDelete }: TaskCardProps) {
         </p>
       )}
 
+      {/* Priority & Tags */}
+      {(task.priority || (task.tags && task.tags.length > 0)) && (
+        <div className="flex flex-wrap items-center gap-1.5 mb-3">
+          {task.priority && (
+            <Badge variant="outline" className={`text-[10px] uppercase font-bold tracking-wider px-1.5 py-0 border ${
+              task.priority === 'high' ? 'text-red-500 border-red-500/30 bg-red-500/10' :
+              task.priority === 'medium' ? 'text-amber-500 border-amber-500/30 bg-amber-500/10' :
+              'text-emerald-500 border-emerald-500/30 bg-emerald-500/10'
+            }`}>
+              {task.priority}
+            </Badge>
+          )}
+          {task.tags?.map((tag, idx) => (
+            <Badge key={idx} variant="secondary" className="text-[10px] font-medium bg-secondary/50 text-secondary-foreground hover:bg-secondary/70 h-5 px-1.5">
+              {tag}
+            </Badge>
+          ))}
+        </div>
+      )}
+
       {/* Footer: Deadline */}
       {task.deadline && (
         <div className="flex items-center gap-1.5 text-xs text-muted-foreground">

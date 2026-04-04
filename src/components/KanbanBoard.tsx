@@ -20,6 +20,8 @@ interface PendingUpdate {
     description: string;
     status: 'todo' | 'doing' | 'done';
     deadline?: string;
+    priority?: 'low' | 'medium' | 'high';
+    tags?: string[];
   };
 }
 
@@ -101,6 +103,8 @@ const KanbanBoard = forwardRef<KanbanBoardRef>((_props, ref) => {
     description: string;
     status: 'todo' | 'doing' | 'done';
     deadline?: string;
+    priority?: 'low' | 'medium' | 'high';
+    tags?: string[];
   }) => {
     if (editingTask && editingTask._id) {
       // Close the edit dialog first, then show update confirmation popup
@@ -189,7 +193,7 @@ const KanbanBoard = forwardRef<KanbanBoardRef>((_props, ref) => {
         open={dialogOpen}
         onClose={() => { setDialogOpen(false); setEditingTask(null); }}
         onSubmit={handleSubmit}
-        task={editingTask && editingTask._id ? editingTask : null}
+        task={editingTask}
         loading={dialogLoading}
       />
 

@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useState, useEffect, type FormEvent } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -27,6 +27,8 @@ interface TaskDialogProps {
     description: string;
     status: 'todo' | 'doing' | 'done';
     deadline?: string;
+    priority?: 'low' | 'medium' | 'high';
+    tags?: string[];
   }) => void;
   task?: Task | null;
   loading?: boolean;
@@ -37,14 +39,31 @@ export default function TaskDialog({ open, onClose, onSubmit, task, loading }: T
   const [description, setDescription] = useState(task?.description || '');
   const [status, setStatus] = useState<'todo' | 'doing' | 'done'>(task?.status || 'todo');
   const [deadline, setDeadline] = useState(task?.deadline?.split('T')[0] || '');
+  const [priority, setPriority] = useState<'low' | 'medium' | 'high'>(task?.priority || 'medium');
+  const [tagsInput, setTagsInput] = useState(task?.tags?.join(', ') || '');
   const [error, setError] = useState('');
 
-  // Reset form when task changes
+  // Sync state when task prop changes (e.g. clicking create on a column)
+  useEffect(() => {
+    if (open) {
+      setTitle(task?.title || '');
+      setDescription(task?.description || '');
+      setStatus(task?.status || 'todo');
+      setDeadline(task?.deadline?.split('T')[0] || '');
+      setPriority(task?.priority || 'medium');
+      setTagsInput(task?.tags?.join(', ') || '');
+      setError('');
+    }
+  }, [task, open]);
+
+  // Reset form when closing
   const resetForm = () => {
-    setTitle(task?.title || '');
-    setDescription(task?.description || '');
-    setStatus(task?.status || 'todo');
-    setDeadline(task?.deadline?.split('T')[0] || '');
+    setTitle('');
+    setDescription('');
+    setStatus('todo');
+    setDeadline('');
+    setPriority('medium');
+    setTagsInput('');
     setError('');
   };
 
@@ -54,11 +73,14 @@ export default function TaskDialog({ open, onClose, onSubmit, task, loading }: T
       setError('Title is required');
       return;
     }
+    
     onSubmit({
       title: title.trim(),
       description: description.trim(),
       status,
       deadline: deadline || undefined,
+      priority,
+      tags: tagsInput.split(',').map(t => t.trim()).filter(Boolean),
     });
   };
 
@@ -75,7 +97,7 @@ export default function TaskDialog({ open, onClose, onSubmit, task, loading }: T
       <DialogContent className="sm:max-w-[480px] rounded-2xl">
         <DialogHeader>
           <DialogTitle className="text-xl font-bold">
-            {task ? 'Edit Task' : 'Create New Task'}
+            {task?._id ? 'Edit Task' : 'Create New Task'}
           </DialogTitle>
         </DialogHeader>
 
@@ -88,7 +110,7 @@ export default function TaskDialog({ open, onClose, onSubmit, task, loading }: T
           )}
 
           {/* Title */}
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             <Label htmlFor="task-title">Title</Label>
             <Input
               id="task-title"
@@ -101,20 +123,20 @@ export default function TaskDialog({ open, onClose, onSubmit, task, loading }: T
           </div>
 
           {/* Description */}
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             <Label htmlFor="task-desc">Description</Label>
             <Textarea
               id="task-desc"
               placeholder="Add a description (optional)..."
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="rounded-xl min-h-[100px] resize-none"
+              className="rounded-xl min-h-[80px] resize-none"
             />
           </div>
 
-          {/* Status & Deadline Row */}
+          {/* Status & Priority Row */}
           <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               <Label>Status</Label>
               <Select value={status} onValueChange={(v) => setStatus(v as 'todo' | 'doing' | 'done')}>
                 <SelectTrigger className="rounded-xl">
@@ -128,13 +150,42 @@ export default function TaskDialog({ open, onClose, onSubmit, task, loading }: T
               </Select>
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-1.5">
+              <Label>Priority</Label>
+              <Select value={priority} onValueChange={(v) => setPriority(v as 'low' | 'medium' | 'high')}>
+                <SelectTrigger className="rounded-xl">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="low">Low</SelectItem>
+                  <SelectItem value="medium">Medium</SelectItem>
+                  <SelectItem value="high">High</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {/* Deadline & Tags Row */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1.5">
               <Label htmlFor="task-deadline">Deadline</Label>
               <Input
                 id="task-deadline"
                 type="date"
                 value={deadline}
                 onChange={(e) => setDeadline(e.target.value)}
+                className="rounded-xl"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="task-tags">Tags (comma-separated)</Label>
+              <Input
+                id="task-tags"
+                type="text"
+                placeholder="bug, feature, etc."
+                value={tagsInput}
+                onChange={(e) => setTagsInput(e.target.value)}
                 className="rounded-xl"
               />
             </div>
@@ -149,7 +200,7 @@ export default function TaskDialog({ open, onClose, onSubmit, task, loading }: T
               disabled={loading}
               className="rounded-xl bg-[#FE812C] hover:bg-[#e5732a] text-white"
             >
-              {loading ? 'Saving...' : task ? 'Update Task' : 'Create Task'}
+              {loading ? 'Saving...' : task?._id ? 'Update Task' : 'Create Task'}
             </Button>
           </DialogFooter>
         </form>

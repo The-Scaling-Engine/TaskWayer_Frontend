@@ -85,15 +85,25 @@ export default function TasksPage() {
           </select>
 
           <select
-            value={params.sortBy ? `${params.sortBy}-${params.order}` : ''}
+            value={params.sortBy && params.sortBy !== 'priority' ? `${params.sortBy}-${params.order}` : ''}
             onChange={handleSortChange}
             className="px-3 py-2 bg-card border border-border rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 appearance-none min-w-[150px] font-medium"
           >
-            <option value="">Default Sort</option>
+            <option value="">Sort by Date</option>
             <option value="createdAt-desc">Newest First</option>
             <option value="createdAt-asc">Oldest First</option>
             <option value="deadline-asc">Deadline (Earliest)</option>
             <option value="deadline-desc">Deadline (Latest)</option>
+          </select>
+
+          <select
+            value={params.sortBy === 'priority' ? `priority-${params.order}` : ''}
+            onChange={handleSortChange}
+            className="px-3 py-2 bg-card border border-border rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 appearance-none min-w-[150px] font-medium"
+          >
+            <option value="">Sort by Priority</option>
+            <option value="priority-desc">Priority (High to Low)</option>
+            <option value="priority-asc">Priority (Low to High)</option>
           </select>
         </div>
       </div>
