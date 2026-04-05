@@ -102,7 +102,7 @@ export default function RegisterPage() {
       </div>
 
       {/* Centered Form Card */}
-      <div className="relative z-10 w-full max-w-[420px] px-6 animate-float-card">
+      <div className="relative z-10 w-full max-w-[420px] px-6 animate-[fade-in-up_0.8s_ease-out_forwards]">
         <div className="relative bg-white/10 dark:bg-black/30 backdrop-blur-xl border border-white/20 rounded-[2rem] p-8 lg:p-10 shadow-[0_0_40px_rgba(16,186,65,0.15)] overflow-hidden">
           
           {/* Card Inner Glow & Reflection */}
@@ -244,9 +244,9 @@ export default function RegisterPage() {
           0%, 100% { transform: translate(0, 0) scale(1); }
           50% { transform: translate(50px, -40px) scale(0.95); }
         }
-        @keyframes float-card {
-          0%, 100% { transform: translateY(0); }
-          50% { transform: translateY(-8px); }
+        @keyframes fade-in-up {
+          from { opacity: 0; transform: translateY(20px); }
+          to { opacity: 1; transform: translateY(0); }
         }
         .animate-float {
           animation: float 20s ease-in-out infinite;
@@ -256,9 +256,6 @@ export default function RegisterPage() {
         }
         .animate-float-delayed {
           animation: float-delayed 22s ease-in-out infinite 2s;
-        }
-        .animate-float-card {
-          animation: float-card 8s ease-in-out infinite;
         }
       `}</style>
     </div>

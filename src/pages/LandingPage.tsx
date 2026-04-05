@@ -9,7 +9,7 @@ export default function LandingPage() {
     <div className="min-h-screen bg-background text-foreground overflow-hidden flex flex-col">
       <Navbar />
 
-      <main className="flex-1 flex flex-col">
+      <main className="flex-1 flex flex-col animate-[fade-in_1s_ease-out_forwards]">
         <Hero />
         <Features />
         <CTA />
@@ -22,6 +22,10 @@ export default function LandingPage() {
         @keyframes float {
           0%, 100% { transform: translateY(0px); }
           50% { transform: translateY(-12px); }
+        }
+        @keyframes fade-in {
+          from { opacity: 0; }
+          to { opacity: 1; }
         }
       `}</style>
     </div>
