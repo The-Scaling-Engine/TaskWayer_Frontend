@@ -1,11 +1,9 @@
 import { useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { useAuthStore } from '@/store/authStore';
 import { authService } from '@/services/authService';
-import { Mail, Lock, Eye, EyeOff, CheckSquare, Briefcase, Lightbulb, Home, FolderKanban, ListTodo, FileText, Bot } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, CheckSquare } from 'lucide-react';
+import ThemeToggle from '@/components/ThemeToggle'; // Keep if we want users to toggle, though cursorrule says top-left logo. Let's put theme toggle top-right.
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -45,178 +43,186 @@ export default function LoginPage() {
     }
   };
 
-  // Honeycomb items for left panel decoration
-  const honeycombItems = [
-    { icon: ListTodo, label: 'Task', delay: '0s' },
-    { icon: CheckSquare, label: 'Task', delay: '0.1s' },
-    { icon: FileText, label: 'List', delay: '0.2s' },
-    { icon: Briefcase, label: 'Work', delay: '0.3s' },
-    { icon: FolderKanban, label: 'Projects', delay: '0.4s' },
-    { icon: Home, label: 'Home', delay: '0.5s' },
-    { icon: Lightbulb, label: 'Idea', delay: '0.6s' },
-    { icon: ListTodo, label: 'Done', delay: '0.7s' },
-    { icon: FolderKanban, label: 'Projects', delay: '0.8s' },
-  ];
-
   return (
-    <div className="min-h-screen flex bg-background">
-      {/* Left Panel - Brand Illustration */}
-      <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden items-center justify-center"
-        style={{
-          background: 'linear-gradient(135deg, #F4DFDE 0%, #E5B7B9 40%, #BDCCCF 70%, #034D36 100%)'
-        }}
+    <div className="relative min-h-screen flex items-center justify-center bg-[#0d1611] text-foreground overflow-hidden">
+      
+      {/* Background Floating Blobs */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div 
+          className="absolute top-[-10%] right-[-5%] w-[40vw] h-[40vw] max-w-[600px] max-h-[600px] opacity-70 animate-float-slow"
+          style={{
+            background: 'radial-gradient(ellipse at 50% 50%, #10BA41 0%, #034D36 50%, transparent 70%)',
+            borderRadius: '60% 40% 50% 50% / 40% 60% 40% 60%',
+            filter: 'blur(40px)',
+          }}
+        />
+        <div 
+          className="absolute bottom-[-20%] left-[-10%] w-[50vw] h-[50vw] max-w-[700px] max-h-[700px] opacity-60 animate-float-delayed"
+          style={{
+            background: 'radial-gradient(ellipse at 50% 50%, #10BA41 0%, #034D36 60%, transparent 70%)',
+            borderRadius: '40% 60% 70% 30% / 50% 40% 60% 50%',
+            filter: 'blur(50px)',
+          }}
+        />
+        <div 
+          className="absolute top-[20%] right-[20%] w-[20vw] h-[20vw] max-w-[300px] max-h-[300px] opacity-80 animate-float"
+          style={{
+            background: 'radial-gradient(ellipse at 50% 50%, #84cc16 0%, #10BA41 50%, transparent 70%)',
+            borderRadius: '50% 50% 40% 60% / 60% 40% 50% 50%',
+            filter: 'blur(30px)',
+          }}
+        />
+      </div>
+
+      {/* Top Left Logo */}
+      <div 
+        className="absolute top-6 left-6 flex items-center gap-2.5 cursor-pointer z-50 group"
+        onClick={() => navigate('/')}
       >
-        {/* Floating decorative circles */}
-        <div className="absolute top-10 left-10 w-32 h-32 rounded-full bg-white/10 blur-2xl animate-pulse" />
-        <div className="absolute bottom-20 right-20 w-48 h-48 rounded-full bg-[#034D36]/20 blur-3xl animate-pulse" style={{ animationDelay: '1s' }} />
-
-        <div className="relative z-10 flex flex-col items-center px-12">
-          {/* Logo */}
-          <div className="flex items-center gap-3 mb-12">
-            <div className="w-12 h-12 bg-[#034D36] rounded-xl flex items-center justify-center shadow-lg">
-              <CheckSquare className="text-white" size={28} />
-            </div>
-            <span className="text-3xl font-bold text-[#034D36] tracking-tight">MicroDo</span>
-          </div>
-
-          {/* Honeycomb Grid */}
-          <div className="grid grid-cols-3 gap-3 mb-10">
-            {honeycombItems.map((item, i) => {
-              const Icon = item.icon;
-              return (
-                <div
-                  key={i}
-                  className="group w-24 h-24 bg-white/30 backdrop-blur-sm border border-white/40 rounded-2xl flex flex-col items-center justify-center gap-1.5 hover:bg-white/50 hover:scale-110 transition-all duration-300 cursor-pointer shadow-sm"
-                  style={{
-                    clipPath: 'polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)',
-                    animationDelay: item.delay,
-                  }}
-                >
-                  <Icon size={20} className="text-[#034D36] group-hover:text-[#10BA41] transition-colors" />
-                  <span className="text-[10px] font-semibold text-[#034D36]/80">{item.label}</span>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Robot Mascot */}
-          <div className="flex items-center justify-center">
-            <div className="w-20 h-20 bg-[#034D36] rounded-full flex items-center justify-center shadow-xl">
-              <Bot size={40} className="text-white hover:text-[#10BA41] transition-colors cursor-pointer" onClick={() => navigate('/')}/>
-            </div>
-          </div>
+        <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-white/10 backdrop-blur-md border border-white/20 group-hover:bg-white/20 transition-colors">
+          <CheckSquare className="text-emerald-400" size={18} />
         </div>
+        <span className="text-xl font-bold tracking-tight text-white group-hover:text-emerald-300 transition-colors">MicroDo</span>
       </div>
 
-      {/* Right Panel - Login Form */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center p-8">
-        <div className="w-full max-w-md space-y-8">
-          {/* Mobile Logo */}
-          <div className="flex items-center gap-3 lg:hidden justify-center mb-4">
-            <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center">
-              <CheckSquare className="text-primary-foreground" size={22} />
-            </div>
-            <span className="text-2xl font-bold text-foreground tracking-tight">MicroDo</span>
-          </div>
+      {/* Top Right Controls */}
+      <div className="absolute top-6 right-6 z-50">
+        <ThemeToggle />
+      </div>
 
-          <div>
-            <h1 className="text-4xl font-bold text-foreground">Login</h1>
-            <p className="text-muted-foreground mt-2">Welcome back! Sign in to continue.</p>
-          </div>
+      {/* Centered Form Card */}
+      <div className="relative z-10 w-full max-w-[420px] px-6 animate-float-card">
+        <div className="relative bg-white/10 dark:bg-black/30 backdrop-blur-xl border border-white/20 rounded-[2rem] p-8 lg:p-10 shadow-[0_0_40px_rgba(16,186,65,0.15)] overflow-hidden">
+          
+          {/* Card Inner Glow & Reflection */}
+          <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent pointer-events-none" />
+          <div className="absolute top-0 left-0 right-0 h-1/3 bg-gradient-to-b from-white/5 to-transparent pointer-events-none" />
 
-          {/* Error Message */}
-          {error && (
-            <div className="bg-destructive/10 border border-destructive/30 text-destructive rounded-xl px-4 py-3 text-sm font-medium">
-              {error}
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit} className="space-y-5">
-            {/* Email */}
-            <div className="space-y-2">
-              <Label htmlFor="email" className="text-sm font-medium text-foreground">Email</Label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="you@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="pl-10 h-12 rounded-xl"
-                  autoComplete="email"
-                />
-              </div>
-            </div>
-
-            {/* Password */}
-            <div className="space-y-2">
-              <Label htmlFor="password" className="text-sm font-medium text-foreground">Password</Label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
-                <Input
-                  id="password"
-                  type={showPassword ? 'text' : 'password'}
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="pl-10 pr-10 h-12 rounded-xl"
-                  autoComplete="current-password"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                </button>
-              </div>
-            </div>
-
-
-            {/* Forgot Password */}
-            <div className="flex justify-end">
-              <Link to="/forgot-password" className="text-sm text-primary hover:underline font-medium">
-                Forgot password?
-              </Link>
-            </div>
-
-            {/* Submit Button */}
-            <Button
-              type="submit"
-              disabled={loading}
-              className="w-full h-12 rounded-xl text-base font-semibold bg-[#FE812C] hover:bg-[#e5732a] text-white shadow-lg shadow-[#FE812C]/25 transition-all duration-200"
-            >
-              {loading ? (
-                <span className="flex items-center gap-2">
-                  <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  Signing in...
+          <div className="relative z-10">
+            {/* Header */}
+            <div className="mb-8">
+              <h1 className="text-4xl font-bold mb-2">
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-200 via-yellow-400 to-amber-500">
+                  Login
                 </span>
-              ) : (
-                'Log In'
-              )}
-            </Button>
-          </form>
+              </h1>
+              <p className="text-sm text-zinc-300">Welcome back! Sign in to continue.</p>
+            </div>
 
-          {/* Divider */}
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center">
-              <span className="w-full border-t border-border" />
+            {/* Error handling */}
+            {error && (
+              <div className="mb-6 bg-red-500/10 border border-red-500/30 text-red-200 rounded-xl px-4 py-3 text-sm">
+                {error}
+              </div>
+            )}
+
+            {/* Form */}
+            <form onSubmit={handleSubmit} className="space-y-6">
+              
+              {/* Email */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-zinc-300 tracking-wide uppercase">Email</label>
+                <div className="relative group">
+                  <div className="absolute inset-0 bg-gradient-to-r from-emerald-400/50 to-emerald-500/50 rounded-xl blur-md opacity-0 group-focus-within:opacity-100 transition-opacity duration-300" />
+                  <div className="relative">
+                    <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" size={18} />
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="Email"
+                      className="w-full h-12 pl-11 pr-4 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-zinc-500 focus:outline-none focus:border-emerald-400/50 focus:bg-white/10 transition-all duration-300"
+                      required
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Password */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-zinc-300 tracking-wide uppercase">Password</label>
+                <div className="relative group">
+                  <div className="absolute inset-0 bg-gradient-to-r from-emerald-400/50 to-emerald-500/50 rounded-xl blur-md opacity-0 group-focus-within:opacity-100 transition-opacity duration-300" />
+                  <div className="relative">
+                    <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" size={18} />
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="Password"
+                      className="w-full h-12 pl-11 pr-11 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-zinc-500 focus:outline-none focus:border-emerald-400/50 focus:bg-white/10 transition-all duration-300"
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-white transition-colors"
+                    >
+                      {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Submit Button */}
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full h-12 mt-4 rounded-full font-bold text-black text-sm lg:text-base tracking-wide
+                  bg-gradient-to-r from-emerald-400 via-green-400 to-amber-200
+                  hover:scale-[1.02] hover:shadow-[0_0_20px_rgba(16,186,65,0.4)]
+                  active:scale-[0.98]
+                  transition-all duration-300 disabled:opacity-70 disabled:hover:scale-100"
+              >
+                {loading ? 'Signing in...' : 'Log In'}
+              </button>
+
+            </form>
+
+            <div className="mt-8 text-center">
+              <p className="text-sm text-zinc-400">
+                Don't have an account?{' '}
+                <Link to="/register" className="text-amber-200 hover:text-amber-100 font-semibold transition-colors">
+                  Sign up
+                </Link>
+              </p>
             </div>
-            <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-background px-3 text-muted-foreground">or</span>
-            </div>
+            
           </div>
-
-          {/* Sign Up Link */}
-          <p className="text-center text-sm text-muted-foreground">
-            Don't have an account?{' '}
-            <Link to="/register" className="text-primary font-semibold hover:underline">
-              Sign up
-            </Link>
-          </p>
         </div>
       </div>
+
+      <style>{`
+        @keyframes float {
+          0%, 100% { transform: translate(0, 0) scale(1) rotate(0deg); }
+          33% { transform: translate(30px, -50px) scale(1.1) rotate(5deg); }
+          66% { transform: translate(-20px, 20px) scale(0.9) rotate(-5deg); }
+        }
+        @keyframes float-slow {
+          0%, 100% { transform: translate(0, 0) scale(1); }
+          50% { transform: translate(-40px, 30px) scale(1.05); }
+        }
+        @keyframes float-delayed {
+          0%, 100% { transform: translate(0, 0) scale(1); }
+          50% { transform: translate(50px, -40px) scale(0.95); }
+        }
+        @keyframes float-card {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-8px); }
+        }
+        .animate-float {
+          animation: float 20s ease-in-out infinite;
+        }
+        .animate-float-slow {
+          animation: float-slow 25s ease-in-out infinite;
+        }
+        .animate-float-delayed {
+          animation: float-delayed 22s ease-in-out infinite 2s;
+        }
+        .animate-float-card {
+          animation: float-card 8s ease-in-out infinite;
+        }
+      `}</style>
     </div>
   );
 }
