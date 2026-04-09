@@ -7,6 +7,8 @@ export interface User {
   email: string;
   name?: string;
   avatar?: string;
+  role?: 'USER' | 'ADMIN';
+  status?: 'ACTIVE' | 'BANNED';
   createdAt?: string;
 }
 
@@ -96,4 +98,47 @@ export interface TaskStatsResponse {
 export interface ApiError {
   success: boolean;
   message: string;
+}
+
+// ============================================
+// ADMIN TYPES
+// ============================================
+export interface AdminDashboardStats {
+  totalUsers: number;
+  bannedUsers: number;
+  totalTasks: number;
+}
+
+export interface AdminUser {
+  id: string;
+  email: string;
+  role: 'USER' | 'ADMIN';
+  status: 'ACTIVE' | 'BANNED';
+  createdAt?: string;
+}
+
+export interface AdminUsersResponse {
+  success: boolean;
+  data: {
+    users: AdminUser[];
+    pagination: {
+      currentPage: number;
+      totalPages: number;
+      totalUsers: number;
+      limit: number;
+    }
+  }
+}
+
+// ============================================
+// CHART MOCK TYPES
+// ============================================
+export interface RevenueDataPoint {
+  date: string;
+  revenue: number;
+}
+
+export interface UserGrowthPoint {
+  date: string;
+  totalUsers: number;
 }
