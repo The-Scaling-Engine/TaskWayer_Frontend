@@ -65,7 +65,7 @@ export default function AdminUsersPage() {
 
   const toggleUserStatus = async (user: AdminUser) => {
     // Prevent banning self
-    if (user.id === currentUser?._id) {
+    if (user._id === currentUser?._id) {
       toast.error('You cannot change your own status');
       return;
     }
@@ -73,16 +73,16 @@ export default function AdminUsersPage() {
     const isBanning = user.status === 'ACTIVE';
     try {
       if (isBanning) {
-        await adminService.banUser(user.id);
+        await adminService.banUser(user._id);
         toast.success(`User ${user.email} has been banned`);
       } else {
-        await adminService.unbanUser(user.id);
+        await adminService.unbanUser(user._id);
         toast.success(`User ${user.email} has been unbanned`);
       }
       
       // Update local state without full refetch to be optimistically responsive
       setUsers(prev => prev.map(u => 
-        u.id === user.id ? { ...u, status: isBanning ? 'BANNED' : 'ACTIVE' } : u
+        u._id === user._id ? { ...u, status: isBanning ? 'BANNED' : 'ACTIVE' } : u
       ));
     } catch (err) {
       console.error(err);
@@ -155,15 +155,15 @@ export default function AdminUsersPage() {
                 </tr>
               ) : (
                 users.map((user) => (
-                  <tr key={user.id} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
+                  <tr key={user._id} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold shrink-0">
-                          {user.email.charAt(0).toUpperCase()}
+                          {user.email ? user.email.charAt(0).toUpperCase() : 'U'}
                         </div>
                         <div>
-                          <p className="font-medium text-foreground">{user.email}</p>
-                          <p className="text-xs text-muted-foreground mt-0.5">ID: {user.id.slice(-6)}</p>
+                          <p className="font-medium text-foreground">{user.email || 'Unknown User'}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">ID: {user._id ? user._id.slice(-6) : 'N/A'}</p>
                         </div>
                       </div>
                     </td>
@@ -194,13 +194,13 @@ export default function AdminUsersPage() {
                       }) : 'N/A'}
                     </td>
                     <td className="px-6 py-4 text-right">
-                      {user.id !== currentUser?._id && user.role !== 'ADMIN' && (
+                      {user._id !== currentUser?._id && user.role !== 'ADMIN' && (
                         <button
                           onClick={() => toggleUserStatus(user)}
                           className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                             user.status === 'ACTIVE'
-                              ? 'text-destructive bg-destructive/10 hover:bg-destructive hover:text-destructive-foreground'
-                              : 'text-primary bg-primary/10 hover:bg-primary hover:text-primary-foreground'
+                              ? 'text-destructive bg-destructive/10 hover:bg-destructive hover:text-white'
+                              : 'text-primary bg-primary/10 hover:bg-primary hover:text-white'
                           }`}
                         >
                           {user.status === 'ACTIVE' ? (

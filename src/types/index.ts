@@ -111,7 +111,7 @@ export interface AdminDashboardStats {
 }
 
 export interface AdminUser {
-  id: string;
+  _id: string;
   email: string;
   role: 'USER' | 'ADMIN';
   status: 'ACTIVE' | 'BANNED';
