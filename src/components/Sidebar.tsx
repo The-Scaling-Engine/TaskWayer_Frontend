@@ -78,7 +78,7 @@ export default function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose
 
         {/* Navigation */}
         <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
-          {navItems.map((item) => {
+          {user?.role !== 'ADMIN' && navItems.map((item) => {
             const Icon = item.icon;
             const active = isActive(item.path);
             return (
