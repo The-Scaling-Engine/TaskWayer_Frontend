@@ -8,6 +8,7 @@ import {
   LogOut,
   ChevronLeft,
   Menu,
+  Users
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -26,6 +27,7 @@ const navItems = [
 
 const adminNavItems = [
   { icon: LayoutDashboard, label: 'Admin Panel', path: '/dashboard/admin' },
+  { icon: Users, label: 'Manage Users', path: '/dashboard/admin/users' },
 ];
 
 export default function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: SidebarProps) {

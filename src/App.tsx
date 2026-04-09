@@ -12,6 +12,7 @@ import ResetPasswordPage from '@/pages/ResetPasswordPage';
 import SettingsPage from '@/pages/SettingsPage';
 import ProfilePage from '@/pages/ProfilePage';
 import AdminDashboardPage from '@/pages/AdminDashboardPage';
+import AdminUsersPage from '@/pages/AdminUsersPage';
 import AdminRoute from '@/components/AdminRoute';
 
 function App() {
@@ -45,6 +46,14 @@ function App() {
             element={
               <AdminRoute>
                 <AdminDashboardPage />
+              </AdminRoute>
+            } 
+          />
+          <Route 
+            path="admin/users" 
+            element={
+              <AdminRoute>
+                <AdminUsersPage />
               </AdminRoute>
             } 
           />
