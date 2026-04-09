@@ -11,6 +11,8 @@ import ForgotPasswordPage from '@/pages/ForgotPasswordPage';
 import ResetPasswordPage from '@/pages/ResetPasswordPage';
 import SettingsPage from '@/pages/SettingsPage';
 import ProfilePage from '@/pages/ProfilePage';
+import AdminDashboardPage from '@/pages/AdminDashboardPage';
+import AdminRoute from '@/components/AdminRoute';
 
 function App() {
   return (
@@ -36,6 +38,16 @@ function App() {
           <Route path="tasks" element={<TasksPage />} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="profile" element={<ProfilePage />} />
+
+          {/* Admin Routes */}
+          <Route 
+            path="admin" 
+            element={
+              <AdminRoute>
+                <AdminDashboardPage />
+              </AdminRoute>
+            } 
+          />
         </Route>
       </Routes>
 

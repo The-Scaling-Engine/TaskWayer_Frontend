@@ -24,6 +24,10 @@ const navItems = [
   { icon: Settings, label: 'Settings', path: '/dashboard/settings' },
 ];
 
+const adminNavItems = [
+  { icon: LayoutDashboard, label: 'Admin Panel', path: '/dashboard/admin' },
+];
+
 export default function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: SidebarProps) {
   const { user, logout } = useAuthStore();
   const navigate = useNavigate();
@@ -97,6 +101,39 @@ export default function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose
               </Link>
             );
           })}
+
+          {user?.role === 'ADMIN' && (
+            <>
+              <div className={cn("mt-4 mb-2", collapsed ? "text-center" : "px-3")}>
+                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  {collapsed ? "Adm" : "Administration"}
+                </span>
+              </div>
+              {adminNavItems.map((item) => {
+                const Icon = item.icon;
+                const active = isActive(item.path);
+                return (
+                  <Link
+                    key={item.path}
+                    to={item.path}
+                    onClick={onMobileClose}
+                    className={cn(
+                      'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200',
+                      active
+                        ? 'bg-[#FE812C]/10 text-[#FE812C]'
+                        : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                      collapsed && 'justify-center px-2'
+                    )}
+                  >
+                    <Icon size={20} className="shrink-0" />
+                    {!collapsed && (
+                      <span className="flex-1">{item.label}</span>
+                    )}
+                  </Link>
+                );
+              })}
+            </>
+          )}
         </nav>
 
         {/* Footer */}

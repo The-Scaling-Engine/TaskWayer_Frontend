@@ -62,6 +62,7 @@ export interface AuthResponse {
     email: string;
     token?: string;
     createdAt?: string;
+    role?: 'USER' | 'ADMIN';
   };
 }
 

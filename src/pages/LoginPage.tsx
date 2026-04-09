@@ -28,8 +28,12 @@ export default function LoginPage() {
     try {
       const res = await authService.login({ email, password });
       if (res.success && res.data.token) {
-        login(res.data.token, { _id: res.data.id, email: res.data.email });
-        navigate('/dashboard');
+        login(res.data.token, { _id: res.data.id, email: res.data.email, role: res.data.role });
+        if (res.data.role === 'ADMIN') {
+          navigate('/dashboard/admin');
+        } else {
+          navigate('/dashboard');
+        }
       }
     } catch (err: unknown) {
       if (err && typeof err === 'object' && 'response' in err) {
