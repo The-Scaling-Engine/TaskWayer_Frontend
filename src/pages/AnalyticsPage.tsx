@@ -13,7 +13,9 @@ import {
   Tooltip,
   Legend,
 } from 'recharts';
-import { CheckSquare, Clock, TrendingUp, AlertTriangle, Loader2, BarChart2, Timer } from 'lucide-react';
+import { CheckSquare, Clock, TrendingUp, AlertTriangle, Loader2, BarChart2, Timer, RefreshCw, Grid } from 'lucide-react';
+
+const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 type Range = '7D' | '30D' | '90D';
 
@@ -56,17 +58,16 @@ export default function AnalyticsPage() {
   const [timeData, setTimeData] = useState<AnalyticsTimeEntry | null>(null);
   const [heatmap, setHeatmap] = useState<AnalyticsHeatmapEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [timeRefreshing, setTimeRefreshing] = useState(false);
   const [range, setRange] = useState<Range>('30D');
 
   const fetchRangeData = useCallback(async (r: Range) => {
     try {
       const params = getRangeDates(r);
-      const [compRes, trendRes] = await Promise.all([
-        analyticsService.getCompletion(params),
-        analyticsService.getTrends(params),
-      ]);
-      setCompletion(compRes.success && Array.isArray(compRes.data) ? compRes.data : []);
-      setTrends(trendRes.success && Array.isArray(trendRes.data) ? trendRes.data : []);
+      const trendRes = await analyticsService.getTrends(params);
+      const series = trendRes.success && Array.isArray(trendRes.data?.series) ? trendRes.data.series : [];
+      setTrends(series);
+      setCompletion(series.map(t => ({ date: t.date, completed: t.completed, total: t.created })));
     } catch {
       setCompletion([]);
       setTrends([]);
@@ -77,15 +78,16 @@ export default function AnalyticsPage() {
     const init = async () => {
       setLoading(true);
       try {
+        const defaultRange = getRangeDates('90D');
         const [summaryRes, timeRes, heatmapRes] = await Promise.allSettled([
           analyticsService.getSummary(),
-          analyticsService.getTimeTracking(),
-          analyticsService.getHeatmap(),
+          analyticsService.getTimeTracking(defaultRange),
+          analyticsService.getHeatmap(defaultRange),
         ]);
         if (summaryRes.status === 'fulfilled' && summaryRes.value.success) setSummary(summaryRes.value.data);
         if (timeRes.status === 'fulfilled' && timeRes.value.success) setTimeData(timeRes.value.data);
         if (heatmapRes.status === 'fulfilled' && heatmapRes.value.success) {
-          setHeatmap(Array.isArray(heatmapRes.value.data) ? heatmapRes.value.data : []);
+          setHeatmap(Array.isArray(heatmapRes.value.data?.heatmap) ? heatmapRes.value.data.heatmap : []);
         }
       } catch {
         // silent fail – widgets show empty state
@@ -101,7 +103,20 @@ export default function AnalyticsPage() {
     if (!loading) fetchRangeData(range);
   }, [range, fetchRangeData]);
 
-  const heatmapMax = Math.max(...heatmap.map((h) => h.count), 1);
+  const refreshTimeData = async () => {
+    setTimeRefreshing(true);
+    try {
+      const res = await analyticsService.getTimeTracking(getRangeDates('90D'));
+      if (res.success) setTimeData(res.data);
+    } catch {
+      // silent fail
+    } finally {
+      setTimeRefreshing(false);
+    }
+  };
+
+  const heatmapMax = Math.max(...heatmap.map((b) => b.total), 1);
+  const heatmapByDay = Array.from({ length: 7 }, (_, d) => heatmap.filter(b => b.dayOfWeek === d));
 
   return (
     <div className="space-y-6">
@@ -243,24 +258,34 @@ export default function AnalyticsPage() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Time tracking summary */}
             <div className="bg-card rounded-2xl border border-border p-6 shadow-sm">
-              <div className="flex items-center gap-2 mb-4">
-                <Timer size={16} className="text-muted-foreground" />
-                <h3 className="text-base font-semibold text-foreground">Time Tracking</h3>
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <Timer size={16} className="text-muted-foreground" />
+                  <h3 className="text-base font-semibold text-foreground">Time Tracking</h3>
+                </div>
+                <button
+                  onClick={refreshTimeData}
+                  disabled={timeRefreshing}
+                  className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-50"
+                  title="Refresh"
+                >
+                  <RefreshCw size={14} className={timeRefreshing ? 'animate-spin' : ''} />
+                </button>
               </div>
-              {!timeData ? (
+              {!timeData || timeData.summary.sessionCount === 0 ? (
                 <p className="text-sm text-muted-foreground">No time tracking data yet.</p>
               ) : (
                 <div className="grid grid-cols-3 gap-4">
                   <div className="text-center">
-                    <p className="text-2xl font-bold text-primary">{formatSeconds(timeData.totalSeconds)}</p>
+                    <p className="text-2xl font-bold text-primary">{formatSeconds(timeData.summary.totalDurationSeconds)}</p>
                     <p className="text-xs text-muted-foreground mt-1">Total time</p>
                   </div>
                   <div className="text-center">
-                    <p className="text-2xl font-bold text-[#FE812C]">{timeData.sessionCount}</p>
+                    <p className="text-2xl font-bold text-[#FE812C]">{timeData.summary.sessionCount}</p>
                     <p className="text-xs text-muted-foreground mt-1">Sessions</p>
                   </div>
                   <div className="text-center">
-                    <p className="text-2xl font-bold text-emerald-500">{formatSeconds(timeData.avgSessionSeconds)}</p>
+                    <p className="text-2xl font-bold text-emerald-500">{formatSeconds(timeData.summary.averageSessionSeconds ?? 0)}</p>
                     <p className="text-xs text-muted-foreground mt-1">Avg session</p>
                   </div>
                 </div>
@@ -271,26 +296,41 @@ export default function AnalyticsPage() {
             <div className="bg-card rounded-2xl border border-border p-6 shadow-sm">
               <div className="mb-4">
                 <h3 className="text-base font-semibold text-foreground">Activity Heatmap</h3>
-                <p className="text-xs text-muted-foreground">Task completions by day</p>
+                <p className="text-xs text-muted-foreground">Tasks by day of week &amp; hour (UTC)</p>
               </div>
               {heatmap.length === 0 ? (
                 <div className="flex items-center justify-center py-8 text-muted-foreground">
+                  <Grid size={28} className="opacity-30 mr-2" />
                   <span className="text-sm">No activity data yet.</span>
                 </div>
               ) : (
-                <div className="flex flex-wrap gap-1">
-                  {heatmap.slice(-63).map((entry) => {
-                    const intensity = entry.count / heatmapMax;
-                    const opacity = entry.count === 0 ? 0.08 : 0.2 + intensity * 0.8;
-                    return (
-                      <div
-                        key={entry.date}
-                        title={`${entry.date}: ${entry.count} tasks`}
-                        className="w-4 h-4 rounded-sm cursor-default"
-                        style={{ backgroundColor: `rgba(16, 186, 65, ${opacity})` }}
-                      />
-                    );
-                  })}
+                <div className="overflow-x-auto">
+                  <div className="flex flex-col gap-0.5 min-w-max">
+                    {heatmapByDay.map((dayBuckets, d) => (
+                      <div key={d} className="flex items-center gap-[3px]">
+                        <span className="text-[9px] text-muted-foreground w-6 shrink-0 select-none">{DAY_LABELS[d]}</span>
+                        {dayBuckets.map((bucket) => {
+                          const opacity = bucket.total === 0 ? 0.07 : 0.2 + (bucket.total / heatmapMax) * 0.8;
+                          return (
+                            <div
+                              key={bucket.hour}
+                              title={`${DAY_LABELS[d]} ${String(bucket.hour).padStart(2, '0')}:00 — ${bucket.total} tasks`}
+                              className="w-[13px] h-[11px] rounded-[2px] cursor-default shrink-0"
+                              style={{ backgroundColor: `rgba(16, 186, 65, ${opacity})` }}
+                            />
+                          );
+                        })}
+                      </div>
+                    ))}
+                    <div className="flex items-center gap-[3px] mt-0.5">
+                      <span className="w-6 shrink-0" />
+                      {Array.from({ length: 24 }, (_, h) => (
+                        <span key={h} className="text-[8px] text-muted-foreground w-[13px] text-center shrink-0 leading-none select-none">
+                          {h % 6 === 0 ? String(h) : ''}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               )}
             </div>

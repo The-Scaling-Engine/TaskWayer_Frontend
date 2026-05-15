@@ -1,6 +1,16 @@
 import type { Task } from '@/types';
 import { Badge } from '@/components/ui/badge';
-import { Pencil, Trash2, Calendar, MessageSquare } from 'lucide-react';
+import { Pencil, Trash2, Calendar, MessageSquare, Square } from 'lucide-react';
+import { useTimeTrackingStore } from '@/store/timeTrackingStore';
+import { toast } from 'sonner';
+
+function formatElapsed(seconds: number): string {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
 
 interface TaskCardProps {
   task: Task;
@@ -24,6 +34,18 @@ const statusLabels: Record<string, string> = {
 
 export default function TaskCard({ task, onEdit, onDelete, onComment, commentCount: commentCountProp }: TaskCardProps) {
   const commentCount = commentCountProp ?? task._count?.comments ?? 0;
+  const { activeSession, elapsedSeconds, stopTracking } = useTimeTrackingStore();
+  const isTracking = activeSession?.taskId === task._id;
+
+  const handleStopTimer = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      await stopTracking();
+      toast.success('Timer stopped');
+    } catch {
+      toast.error('Failed to stop timer');
+    }
+  };
 
   return (
     <div className="bg-card border border-border rounded-xl p-4 shadow-sm hover:shadow-md hover:border-primary/20 transition-all duration-200 group cursor-pointer">
@@ -112,6 +134,19 @@ export default function TaskCard({ task, onEdit, onDelete, onComment, commentCou
           </div>
         )}
       </div>
+
+      {/* Floating timer – shown when this task is being tracked */}
+      {isTracking && (
+        <div className="flex justify-end mt-2">
+          <button
+            onClick={handleStopTimer}
+            className="flex items-center gap-1.5 px-2.5 py-1 bg-destructive/10 text-destructive rounded-lg text-xs font-semibold hover:bg-destructive hover:text-white transition-colors animate-pulse"
+          >
+            <Square size={11} />
+            {formatElapsed(elapsedSeconds)}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

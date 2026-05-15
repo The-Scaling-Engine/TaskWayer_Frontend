@@ -132,16 +132,16 @@ export default function CommentDialog({ open, onClose, task, onCountUpdate }: Co
   return (
     <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) onClose(); }}>
       <DialogContent className="sm:max-w-[500px] rounded-2xl">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 font-bold">
+        <DialogHeader className="pr-8">
+          <div className="flex items-center gap-2">
             <MessageSquare size={17} className="text-muted-foreground shrink-0" />
-            <span className="line-clamp-1 flex-1">{task.title}</span>
+            <DialogTitle className="font-bold line-clamp-1 flex-1">{task.title}</DialogTitle>
             {activeComments.length > 0 && (
               <span className="text-sm font-normal text-muted-foreground shrink-0">
                 ({activeComments.length})
               </span>
             )}
-          </DialogTitle>
+          </div>
         </DialogHeader>
 
         {/* Comment list */}

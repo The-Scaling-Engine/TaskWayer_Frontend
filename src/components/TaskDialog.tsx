@@ -18,6 +18,17 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import type { Task } from '@/types';
+import { useTimeTrackingStore } from '@/store/timeTrackingStore';
+import { toast } from 'sonner';
+import { Play, Square, Loader2 as TimerLoader } from 'lucide-react';
+
+function formatElapsed(seconds: number): string {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
 
 interface TaskDialogProps {
   open: boolean;
@@ -35,6 +46,29 @@ interface TaskDialogProps {
 }
 
 export default function TaskDialog({ open, onClose, onSubmit, task, loading }: TaskDialogProps) {
+  const { activeSession, elapsedSeconds, loading: timerLoading, startTracking, stopTracking } = useTimeTrackingStore();
+
+  const isThisTaskTracked = !!task?._id && activeSession?.taskId === task._id;
+  const isOtherTaskTracked = !!activeSession && !isThisTaskTracked;
+
+  const handleTimerToggle = async () => {
+    if (isThisTaskTracked) {
+      try {
+        await stopTracking();
+        toast.success('Timer stopped');
+      } catch {
+        toast.error('Failed to stop timer');
+      }
+    } else if (task?._id) {
+      try {
+        await startTracking(task._id);
+        toast.success('Timer started');
+      } catch {
+        toast.error('Failed to start timer');
+      }
+    }
+  };
+
   const [title, setTitle] = useState(task?.title || '');
   const [description, setDescription] = useState(task?.description || '');
   const [status, setStatus] = useState<'todo' | 'doing' | 'done'>(task?.status || 'todo');
@@ -103,10 +137,36 @@ export default function TaskDialog({ open, onClose, onSubmit, task, loading }: T
       }}
     >
       <DialogContent className="sm:max-w-[480px] rounded-2xl">
-        <DialogHeader>
-          <DialogTitle className="text-xl font-bold">
-            {task?._id ? 'Edit Task' : 'Create New Task'}
-          </DialogTitle>
+        <DialogHeader className="pr-8">
+          <div className="flex items-center gap-3 flex-wrap">
+            <DialogTitle className="text-xl font-bold flex-1">
+              {task?._id ? 'Edit Task' : 'Create New Task'}
+            </DialogTitle>
+
+            {/* Timer button – edit mode only */}
+            {task?._id && (
+              <button
+                type="button"
+                onClick={handleTimerToggle}
+                disabled={timerLoading || isOtherTaskTracked}
+                title={isOtherTaskTracked ? 'Another task is being tracked' : undefined}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0 ${
+                  isThisTaskTracked
+                    ? 'bg-destructive/10 text-destructive hover:bg-destructive hover:text-white'
+                    : 'bg-primary/10 text-primary hover:bg-primary hover:text-white'
+                }`}
+              >
+                {timerLoading ? (
+                  <TimerLoader size={13} className="animate-spin" />
+                ) : isThisTaskTracked ? (
+                  <Square size={13} />
+                ) : (
+                  <Play size={13} />
+                )}
+                {isThisTaskTracked ? formatElapsed(elapsedSeconds) : 'Start Timer'}
+              </button>
+            )}
+          </div>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4 mt-2">

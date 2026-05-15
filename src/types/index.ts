@@ -325,18 +325,26 @@ export interface AnalyticsTrend {
 }
 
 export interface AnalyticsHeatmapEntry {
-  date: string;
-  count: number;
+  dayOfWeek: number;
+  hour: number;
+  created: number;
+  completed: number;
+  total: number;
 }
 
 export interface AnalyticsTimeEntry {
-  totalSeconds: number;
-  sessionCount: number;
-  avgSessionSeconds: number;
-  taskBreakdown?: Array<{
+  timezone: string;
+  period: { startDate: string; endDate: string };
+  summary: {
+    totalDurationSeconds: number;
+    sessionCount: number;
+    averageSessionSeconds: number | null;
+  };
+  byTask: Array<{
     taskId: string;
     title: string;
-    totalSeconds: number;
+    totalDurationSeconds: number;
+    sessionCount: number;
   }>;
 }
 

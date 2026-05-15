@@ -4,16 +4,18 @@ import Sidebar from '@/components/Sidebar';
 import Topbar from '@/components/Topbar';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/store/authStore';
+import { useTimeTrackingStore } from '@/store/timeTrackingStore';
 
 export default function DashboardLayout() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const fetchProfile = useAuthStore((s) => s.fetchProfile);
+  const fetchActiveSession = useTimeTrackingStore((s) => s.fetchActiveSession);
 
-  // Fetch full user profile on dashboard load
   useEffect(() => {
     fetchProfile();
-  }, [fetchProfile]);
+    fetchActiveSession();
+  }, [fetchProfile, fetchActiveSession]);
 
   return (
     <div className="min-h-screen bg-background">

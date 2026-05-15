@@ -18,12 +18,7 @@ export const analyticsService = {
     return response.data;
   },
 
-  getCompletion: async (params: DateRangeParams): Promise<{ success: boolean; data: AnalyticsCompletion[] }> => {
-    const response = await api.get('/analytics/completion', { params });
-    return response.data;
-  },
-
-  getTrends: async (params: DateRangeParams): Promise<{ success: boolean; data: AnalyticsTrend[] }> => {
+  getTrends: async (params: DateRangeParams): Promise<{ success: boolean; data: { timezone: string; period: { startDate: string; endDate: string }; series: AnalyticsTrend[] } }> => {
     const response = await api.get('/analytics/trends', { params });
     return response.data;
   },
@@ -33,7 +28,7 @@ export const analyticsService = {
     return response.data;
   },
 
-  getHeatmap: async (params?: DateRangeParams): Promise<{ success: boolean; data: AnalyticsHeatmapEntry[] }> => {
+  getHeatmap: async (params?: DateRangeParams): Promise<{ success: boolean; data: { timezone: string; period: { startDate: string; endDate: string }; heatmap: AnalyticsHeatmapEntry[]; summary: { peakDayOfWeek: number | null; peakHour: number | null; totalCreated: number; totalCompleted: number } } }> => {
     const response = await api.get('/analytics/heatmap', { params });
     return response.data;
   },
