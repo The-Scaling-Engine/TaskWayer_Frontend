@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { invitationService } from '@/services/invitationService';
+import { useAuthStore } from '@/store/authStore';
 import { CheckCircle, XCircle, Loader2, Mail } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -12,6 +13,7 @@ export default function InvitationPage() {
   const [searchParams] = useSearchParams();
   const token = searchParams.get('token');
   const navigate = useNavigate();
+  const { isAuthenticated, fetchProfile } = useAuthStore();
   const [accepting, setAccepting] = useState(false);
   const [rejecting, setRejecting] = useState(false);
   const [done, setDone] = useState<'accepted' | 'rejected' | null>(null);
@@ -22,8 +24,14 @@ export default function InvitationPage() {
     try {
       await invitationService.acceptInvitation(token);
       setDone('accepted');
-      toast.success('Invitation accepted! Redirecting to login...');
-      setTimeout(() => navigate('/login'), 2000);
+      if (isAuthenticated) {
+        await fetchProfile();
+        toast.success('Invitation accepted! You have joined the department.');
+        setTimeout(() => navigate('/dashboard'), 1500);
+      } else {
+        toast.success('Invitation accepted! Please log in to continue.');
+        setTimeout(() => navigate('/login'), 2000);
+      }
     } catch (err) {
       toast.error(beMsg(err, 'Failed to accept invitation. It may have expired or already been used.'));
     } finally {
@@ -71,7 +79,9 @@ export default function InvitationPage() {
           </h1>
           <p className="text-muted-foreground mt-2 text-sm">
             {done === 'accepted'
-              ? 'You have joined the department. Please log in to continue.'
+              ? isAuthenticated
+                ? 'You have joined the department. Redirecting to dashboard...'
+                : 'You have joined the department. Please log in to continue.'
               : done === 'rejected'
               ? 'You have declined this invitation.'
               : "You've been invited to join a department on MicroDo."}
@@ -80,7 +90,9 @@ export default function InvitationPage() {
 
         {done === 'accepted' ? (
           <div className="flex flex-col items-center gap-2 text-emerald-500">
-            <p className="text-sm font-medium">Redirecting to login...</p>
+            <p className="text-sm font-medium">
+              {isAuthenticated ? 'Redirecting to dashboard...' : 'Redirecting to login...'}
+            </p>
           </div>
         ) : done === 'rejected' ? (
           <div className="flex flex-col items-center gap-2 text-muted-foreground">
