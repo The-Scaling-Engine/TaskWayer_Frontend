@@ -57,6 +57,10 @@ export default function AdminDepartmentsPage() {
   // ── Remove member confirm ─────────────────────────────────────
   const [removeMemberConfirm, setRemoveMemberConfirm] = useState<{ userId: string; label: string } | null>(null);
 
+  // ── Transfer ownership confirm ────────────────────────────────
+  const [transferOwnerConfirm, setTransferOwnerConfirm] = useState<{ userId: string; label: string } | null>(null);
+  const [transferOwnerLoading, setTransferOwnerLoading] = useState(false);
+
   // ── Members modal refreshing ──────────────────────────────────
   const [membersRefreshing, setMembersRefreshing] = useState(false);
 
@@ -206,16 +210,44 @@ export default function AdminDepartmentsPage() {
   };
 
   // ── Change role ───────────────────────────────────────────────
-  const handleChangeRole = async (userId: string, newRole: string) => {
+  const handleChangeRole = (userId: string, newRole: string) => {
     if (!selectedDept) return;
+    if (newRole === 'OWNER') {
+      const member = members.find(m => m.userId === userId);
+      const label = member?.profile?.name ?? member?.profile?.email ?? userId;
+      setTransferOwnerConfirm({ userId, label });
+      return;
+    }
+    void (async () => {
+      try {
+        await departmentService.changeMemberRole(selectedDept.id, userId, { role: newRole });
+        setMembers(prev => prev.map(m =>
+          m.userId === userId ? { ...m, role: newRole as DepartmentMemberRole } : m
+        ));
+        toast.success('Role updated');
+      } catch (err) {
+        toast.error(beMsg(err, 'Failed to update role'));
+      }
+    })();
+  };
+
+  // ── Transfer ownership ────────────────────────────────────────
+  const handleTransferOwnership = async () => {
+    if (!selectedDept || !transferOwnerConfirm) return;
+    setTransferOwnerLoading(true);
     try {
-      await departmentService.changeMemberRole(selectedDept.id, userId, { role: newRole });
-      setMembers(prev => prev.map(m =>
-        m.userId === userId ? { ...m, role: newRole as DepartmentMemberRole } : m
-      ));
-      toast.success('Role updated');
+      await departmentService.transferOwnership(selectedDept.id, { newOwnerId: transferOwnerConfirm.userId });
+      setMembers(prev => prev.map(m => {
+        if (m.userId === transferOwnerConfirm.userId) return { ...m, role: 'OWNER' as DepartmentMemberRole };
+        if (m.role === 'OWNER') return { ...m, role: 'MEMBER' as DepartmentMemberRole };
+        return m;
+      }));
+      toast.success(`Ownership transferred to ${transferOwnerConfirm.label}`);
+      setTransferOwnerConfirm(null);
     } catch (err) {
-      toast.error(beMsg(err, 'Failed to update role'));
+      toast.error(beMsg(err, 'Failed to transfer ownership'));
+    } finally {
+      setTransferOwnerLoading(false);
     }
   };
 
@@ -573,6 +605,7 @@ export default function AdminDepartmentsPage() {
                                 className={`text-xs font-semibold px-2 py-1 rounded-full border cursor-pointer outline-none bg-transparent ${ROLE_COLORS[member.role] ?? ''}`}
                               >
                                 <option value="OWNER">OWNER</option>
+                                <option value="ADMIN">ADMIN</option>
                                 <option value="MEMBER">MEMBER</option>
                                 <option value="VIEWER">VIEWER</option>
                               </select>
@@ -809,9 +842,9 @@ export default function AdminDepartmentsPage() {
                   onChange={(e) => setInviteRole(e.target.value)}
                   className="w-full bg-muted/50 border border-border focus:border-primary/50 rounded-xl px-3 py-2 text-sm outline-none cursor-pointer"
                 >
+                  <option value="ADMIN">ADMIN</option>
                   <option value="MEMBER">MEMBER</option>
                   <option value="VIEWER">VIEWER</option>
-                  <option value="OWNER">OWNER</option>
                 </select>
               </div>
             </div>
@@ -827,6 +860,42 @@ export default function AdminDepartmentsPage() {
               >
                 {inviteLoading ? <Loader2 size={14} className="animate-spin" /> : <Mail size={14} />}
                 {inviteLoading ? 'Sending...' : 'Send Invitation'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Transfer Ownership Confirm Dialog */}
+      {transferOwnerConfirm && (
+        <div className="fixed inset-0 z-[65] flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-card border border-border rounded-2xl p-6 max-w-sm w-full shadow-xl space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-[#FE812C]/10 flex items-center justify-center shrink-0">
+                <Users size={18} className="text-[#FE812C]" />
+              </div>
+              <h3 className="text-lg font-bold text-foreground">Transfer Ownership</h3>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Transfer ownership of <span className="font-semibold text-foreground">{selectedDept?.name}</span> to{' '}
+              <span className="font-semibold text-foreground">{transferOwnerConfirm.label}</span>?
+            </p>
+            <p className="text-xs text-muted-foreground bg-muted/50 rounded-xl px-3 py-2">
+              The current OWNER will be demoted to <span className="font-semibold">MEMBER</span>.
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setTransferOwnerConfirm(null)}
+                disabled={transferOwnerLoading}
+                className="px-4 py-2 rounded-xl text-sm font-medium text-muted-foreground hover:bg-muted transition-colors disabled:opacity-50"
+              >Cancel</button>
+              <button
+                onClick={handleTransferOwnership}
+                disabled={transferOwnerLoading}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium text-white bg-[#FE812C] hover:bg-[#e5732a] disabled:opacity-60 transition-colors"
+              >
+                {transferOwnerLoading ? <Loader2 size={14} className="animate-spin" /> : null}
+                {transferOwnerLoading ? 'Transferring...' : 'Transfer'}
               </button>
             </div>
           </div>
@@ -889,8 +958,8 @@ export default function AdminDepartmentsPage() {
                   onChange={(e) => setAddMemberRole(e.target.value)}
                   className="w-full bg-muted/50 border border-border focus:border-primary/50 rounded-xl px-3 py-2 text-sm outline-none cursor-pointer"
                 >
+                  <option value="ADMIN">ADMIN</option>
                   <option value="MEMBER">MEMBER</option>
-                  <option value="OWNER">OWNER</option>
                   <option value="VIEWER">VIEWER</option>
                 </select>
               </div>
