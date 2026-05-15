@@ -27,6 +27,10 @@ export default function AdminUsersPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
 
+  // Confirm dialog state
+  const [confirmAction, setConfirmAction] = useState<{ user: AdminUser; action: 'ban' | 'unban' } | null>(null);
+  const [actionLoading, setActionLoading] = useState(false);
+
   // Debounce search query
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -63,30 +67,39 @@ export default function AdminUsersPage() {
     fetchUsers();
   }, [fetchUsers]);
 
-  const toggleUserStatus = async (user: AdminUser) => {
-    // Prevent banning self
-    if (user._id === currentUser?._id) {
+  const handleToggleClick = (user: AdminUser) => {
+    const userId = user.id ?? user._id;
+    if (userId === currentUser?.id || userId === currentUser?._id) {
       toast.error('You cannot change your own status');
       return;
     }
+    setConfirmAction({ user, action: user.status === 'ACTIVE' ? 'ban' : 'unban' });
+  };
 
-    const isBanning = user.status === 'ACTIVE';
+  const confirmToggleStatus = async () => {
+    if (!confirmAction) return;
+    const { user, action } = confirmAction;
+    const userId = user.id ?? user._id;
+    if (!userId) return;
+
+    setActionLoading(true);
     try {
-      if (isBanning) {
-        await adminService.banUser(user._id);
+      if (action === 'ban') {
+        await adminService.banUser(userId);
         toast.success(`User ${user.email} has been banned`);
       } else {
-        await adminService.unbanUser(user._id);
+        await adminService.unbanUser(userId);
         toast.success(`User ${user.email} has been unbanned`);
       }
-      
-      // Update local state without full refetch to be optimistically responsive
-      setUsers(prev => prev.map(u => 
-        u._id === user._id ? { ...u, status: isBanning ? 'BANNED' : 'ACTIVE' } : u
+      setUsers(prev => prev.map(u =>
+        (u.id ?? u._id) === userId ? { ...u, status: action === 'ban' ? 'BANNED' : 'ACTIVE' } : u
       ));
+      setConfirmAction(null);
     } catch (err) {
       console.error(err);
-      toast.error(`Failed to ${isBanning ? 'ban' : 'unban'} user`);
+      toast.error(`Failed to ${action} user`);
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -155,7 +168,7 @@ export default function AdminUsersPage() {
                 </tr>
               ) : (
                 users.map((user) => (
-                  <tr key={user._id} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
+                  <tr key={user.id ?? user._id} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold shrink-0">
@@ -163,7 +176,7 @@ export default function AdminUsersPage() {
                         </div>
                         <div>
                           <p className="font-medium text-foreground">{user.email || 'Unknown User'}</p>
-                          <p className="text-xs text-muted-foreground mt-0.5">ID: {user._id ? user._id.slice(-6) : 'N/A'}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">ID: {(user.id ?? user._id)?.slice(-6) ?? 'N/A'}</p>
                         </div>
                       </div>
                     </td>
@@ -194,9 +207,9 @@ export default function AdminUsersPage() {
                       }) : 'N/A'}
                     </td>
                     <td className="px-6 py-4 text-right">
-                      {user._id !== currentUser?._id && user.role !== 'ADMIN' && (
+                      {(user.id ?? user._id) !== (currentUser?.id ?? currentUser?._id) && user.role !== 'ADMIN' && (
                         <button
-                          onClick={() => toggleUserStatus(user)}
+                          onClick={() => handleToggleClick(user)}
                           className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                             user.status === 'ACTIVE'
                               ? 'text-destructive bg-destructive/10 hover:bg-destructive hover:text-white'
@@ -247,6 +260,41 @@ export default function AdminUsersPage() {
           </div>
         )}
       </div>
+
+      {/* Confirm Ban/Unban Dialog */}
+      {confirmAction && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50">
+          <div className="bg-card border border-border rounded-2xl p-6 max-w-sm w-full mx-4 shadow-xl space-y-4">
+            <h3 className="text-lg font-bold text-foreground">
+              {confirmAction.action === 'ban' ? 'Ban User' : 'Restore User'}
+            </h3>
+            <p className="text-sm text-muted-foreground">
+              Are you sure you want to {confirmAction.action === 'ban' ? 'ban' : 'restore'}{' '}
+              <span className="font-medium text-foreground">{confirmAction.user.email}</span>?
+              {confirmAction.action === 'ban' && ' They will lose access to the platform.'}
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setConfirmAction(null)}
+                className="px-4 py-2 rounded-xl text-sm font-medium text-muted-foreground hover:bg-muted transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmToggleStatus}
+                disabled={actionLoading}
+                className={`px-4 py-2 rounded-xl text-sm font-medium text-white transition-colors disabled:opacity-60 ${
+                  confirmAction.action === 'ban'
+                    ? 'bg-destructive hover:bg-destructive/90'
+                    : 'bg-primary hover:bg-primary/90'
+                }`}
+              >
+                {actionLoading ? 'Processing...' : confirmAction.action === 'ban' ? 'Ban User' : 'Restore User'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
