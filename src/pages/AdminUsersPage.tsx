@@ -3,14 +3,15 @@ import { useAuthStore } from '@/store/authStore';
 import { adminService } from '@/services/adminService';
 import type { AdminUser } from '@/types';
 import { toast } from 'sonner';
-import { 
-  Users, 
-  Search, 
-  ShieldAlert, 
-  ShieldCheck, 
-  ChevronLeft, 
+import {
+  Users,
+  Search,
+  ShieldAlert,
+  ShieldCheck,
+  ChevronLeft,
   ChevronRight,
-  Loader2
+  Loader2,
+  RefreshCw,
 } from 'lucide-react';
 
 export default function AdminUsersPage() {
@@ -111,7 +112,15 @@ export default function AdminUsersPage() {
           <h1 className="text-3xl font-bold text-foreground">User Management</h1>
           <p className="text-muted-foreground mt-1">Manage accounts, roles, and platform access</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={fetchUsers}
+            disabled={loading}
+            className="p-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted border border-border transition-colors disabled:opacity-50"
+            title="Refresh"
+          >
+            <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+          </button>
           <div className="bg-primary/10 text-primary px-4 py-2 rounded-xl text-sm font-semibold flex items-center gap-2">
             <Users size={18} />
             {totalUsers} Total Accounts

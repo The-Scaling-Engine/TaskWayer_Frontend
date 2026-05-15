@@ -1,11 +1,13 @@
 import { useEffect, useState, useCallback } from 'react';
 import { adminService } from '@/services/adminService';
 import { departmentService } from '@/services/departmentService';
-import type { DepartmentWithMembers, DepartmentMember, DepartmentMemberRole } from '@/types';
+import { invitationService } from '@/services/invitationService';
+import type { DepartmentWithMembers, DepartmentMember, DepartmentMemberRole, DepartmentInvitation } from '@/types';
 import { toast } from 'sonner';
 import {
   Building2, Plus, Pencil, Trash2, Users, Loader2,
   X, Search, ChevronLeft, ChevronRight, UserPlus, UserMinus,
+  Mail, Clock, RefreshCw,
 } from 'lucide-react';
 
 type BE_ERROR = { response?: { data?: { message?: string } } };
@@ -44,6 +46,20 @@ export default function AdminDepartmentsPage() {
   const [forceDelete, setForceDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
+  // ── Invitations ──────────────────────────────────────────────
+  const [invitations, setInvitations] = useState<DepartmentInvitation[]>([]);
+  const [invitationsLoading, setInvitationsLoading] = useState(false);
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteRole, setInviteRole] = useState('MEMBER');
+  const [inviteLoading, setInviteLoading] = useState(false);
+
+  // ── Remove member confirm ─────────────────────────────────────
+  const [removeMemberConfirm, setRemoveMemberConfirm] = useState<{ userId: string; label: string } | null>(null);
+
+  // ── Members modal refreshing ──────────────────────────────────
+  const [membersRefreshing, setMembersRefreshing] = useState(false);
+
   // ── Add member dialog ────────────────────────────────────────
   const [addMemberOpen, setAddMemberOpen] = useState(false);
   const [memberSearch, setMemberSearch] = useState('');
@@ -76,6 +92,8 @@ export default function AdminDepartmentsPage() {
   // ── Load members for selected dept ───────────────────────────
   const loadMembers = async (dept: DepartmentWithMembers) => {
     setSelectedDept(dept);
+    setMembers([]);
+    setInvitations([]);
     setMembersLoading(true);
     try {
       const res = await departmentService.getMembers(dept.id, { limit: 50 });
@@ -84,6 +102,30 @@ export default function AdminDepartmentsPage() {
       toast.error(beMsg(err, 'Failed to load members'));
     } finally {
       setMembersLoading(false);
+    }
+    // load invitations in background
+    setInvitationsLoading(true);
+    try {
+      const invRes = await invitationService.getInvitations(dept.id);
+      if (invRes.success) setInvitations(invRes.data);
+    } catch { /* silent */ } finally {
+      setInvitationsLoading(false);
+    }
+  };
+
+  // ── Refresh members modal data ───────────────────────────────
+  const refreshMembers = async () => {
+    if (!selectedDept) return;
+    setMembersRefreshing(true);
+    try {
+      const [membersRes, invRes] = await Promise.all([
+        departmentService.getMembers(selectedDept.id, { limit: 50 }),
+        invitationService.getInvitations(selectedDept.id),
+      ]);
+      if (membersRes.success) setMembers(membersRes.data);
+      if (invRes.success) setInvitations(invRes.data);
+    } catch { /* silent */ } finally {
+      setMembersRefreshing(false);
     }
   };
 
@@ -145,8 +187,9 @@ export default function AdminDepartmentsPage() {
   };
 
   // ── Remove member ─────────────────────────────────────────────
-  const handleRemoveMember = async (userId: string, label: string) => {
-    if (!selectedDept) return;
+  const handleRemoveMember = async () => {
+    if (!selectedDept || !removeMemberConfirm) return;
+    const { userId, label } = removeMemberConfirm;
     try {
       await departmentService.removeMember(selectedDept.id, userId);
       setMembers(prev => prev.filter(m => m.userId !== userId));
@@ -156,6 +199,7 @@ export default function AdminDepartmentsPage() {
           : d
       ));
       toast.success(`Removed ${label}`);
+      setRemoveMemberConfirm(null);
     } catch (err) {
       toast.error(beMsg(err, 'Failed to remove member'));
     }
@@ -175,13 +219,57 @@ export default function AdminDepartmentsPage() {
     }
   };
 
+  // ── Invite by Email ───────────────────────────────────────────
+  const closeInviteDialog = () => {
+    setInviteOpen(false);
+    setInviteEmail('');
+    setInviteRole('MEMBER');
+  };
+
+  const handleSendInvite = async () => {
+    if (!selectedDept || !inviteEmail.trim()) { toast.error('Email is required'); return; }
+    setInviteLoading(true);
+    try {
+      await invitationService.sendInvitation(selectedDept.id, {
+        email: inviteEmail.trim(),
+        role: inviteRole,
+      });
+      toast.success('Invitation sent');
+      closeInviteDialog();
+      // refresh invitations list
+      const invRes = await invitationService.getInvitations(selectedDept.id);
+      if (invRes.success) setInvitations(invRes.data);
+    } catch (err) {
+      toast.error(beMsg(err, 'Failed to send invitation'));
+    } finally {
+      setInviteLoading(false);
+    }
+  };
+
+  const handleCancelInvitation = async (invitationId: string) => {
+    if (!selectedDept) return;
+    try {
+      await invitationService.cancelInvitation(selectedDept.id, invitationId);
+      setInvitations(prev => prev.filter(i => i.id !== invitationId));
+      toast.success('Invitation cancelled');
+    } catch (err) {
+      toast.error(beMsg(err, 'Failed to cancel invitation'));
+    }
+  };
+
   // ── Close members modal on Escape ───────────────────────────
   useEffect(() => {
     if (!selectedDept) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setSelectedDept(null); };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (inviteOpen) { closeInviteDialog(); return; }
+        if (addMemberOpen) { closeAddMember(); return; }
+        setSelectedDept(null);
+      }
+    };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [selectedDept]);
+  }, [selectedDept, inviteOpen, addMemberOpen]);
 
   // ── Member search (debounced) ────────────────────────────────
   useEffect(() => {
@@ -253,12 +341,22 @@ export default function AdminDepartmentsPage() {
             {totalDepts > 0 && <span className="ml-2 text-xs font-medium text-primary">({totalDepts} total)</span>}
           </p>
         </div>
-        <button
-          onClick={openCreate}
-          className="flex items-center gap-2 px-4 py-2 bg-[#FE812C] hover:bg-[#e5732a] text-white rounded-xl text-sm font-semibold transition-colors shrink-0"
-        >
-          <Plus size={16} /> New Department
-        </button>
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            onClick={fetchDepartments}
+            disabled={loading}
+            className="p-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted border border-border transition-colors disabled:opacity-50"
+            title="Refresh"
+          >
+            <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+          </button>
+          <button
+            onClick={openCreate}
+            className="flex items-center gap-2 px-4 py-2 bg-[#FE812C] hover:bg-[#e5732a] text-white rounded-xl text-sm font-semibold transition-colors"
+          >
+            <Plus size={16} /> New Department
+          </button>
+        </div>
       </div>
 
       {/* Departments Table */}
@@ -378,7 +476,7 @@ export default function AdminDepartmentsPage() {
           tabIndex={-1}
         >
           <div
-            className="bg-card border border-border rounded-2xl shadow-xl w-full max-w-2xl max-h-[80vh] flex flex-col"
+            className="bg-card border border-border rounded-2xl shadow-xl w-full max-w-3xl max-h-[85vh] flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Modal header */}
@@ -393,6 +491,20 @@ export default function AdminDepartmentsPage() {
                 )}
               </div>
               <div className="flex items-center gap-2 shrink-0">
+                <button
+                  onClick={refreshMembers}
+                  disabled={membersRefreshing}
+                  className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-50"
+                  title="Refresh"
+                >
+                  <RefreshCw size={14} className={membersRefreshing ? 'animate-spin' : ''} />
+                </button>
+                <button
+                  onClick={() => setInviteOpen(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground rounded-xl text-xs font-semibold transition-colors"
+                >
+                  <Mail size={13} /> Invite by Email
+                </button>
                 <button
                   onClick={() => setAddMemberOpen(true)}
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 text-primary hover:bg-primary hover:text-white rounded-xl text-xs font-semibold transition-colors"
@@ -415,7 +527,7 @@ export default function AdminDepartmentsPage() {
                   <Loader2 className="animate-spin text-primary mx-auto" size={22} />
                 </div>
               ) : members.length === 0 ? (
-                <div className="py-12 text-center text-muted-foreground text-sm">
+                <div className="py-8 text-center text-muted-foreground text-sm">
                   No active members yet.
                 </div>
               ) : (
@@ -472,7 +584,7 @@ export default function AdminDepartmentsPage() {
                           <td className="px-6 py-3 text-right">
                             {member.role !== 'OWNER' && (
                               <button
-                                onClick={() => handleRemoveMember(member.userId, member.profile?.email ?? member.userId)}
+                                onClick={() => setRemoveMemberConfirm({ userId: member.userId, label: member.profile?.name ?? member.profile?.email ?? member.userId })}
                                 className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium text-destructive bg-destructive/10 hover:bg-destructive hover:text-white transition-colors"
                               >
                                 <UserMinus size={11} /> Remove
@@ -485,6 +597,67 @@ export default function AdminDepartmentsPage() {
                   </table>
                 </div>
               )}
+
+              {/* Pending Invitations section */}
+              <div className="border-t border-border px-6 py-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <Mail size={14} className="text-muted-foreground" />
+                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    Pending Invitations
+                  </span>
+                  {!invitationsLoading && invitations.length > 0 && (
+                    <span className="ml-1 px-1.5 py-0.5 bg-muted rounded-full text-xs text-muted-foreground font-medium">
+                      {invitations.length}
+                    </span>
+                  )}
+                </div>
+                {invitationsLoading ? (
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground py-2">
+                    <Loader2 size={12} className="animate-spin" /> Loading...
+                  </div>
+                ) : invitations.length === 0 ? (
+                  <p className="text-xs text-muted-foreground py-1">No pending invitations.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {invitations.map((inv) => {
+                      const expiresAt = new Date(inv.expiresAt);
+                      const daysLeft = Math.ceil((expiresAt.getTime() - Date.now()) / 86400000);
+                      const expired = daysLeft <= 0;
+                      return (
+                        <div
+                          key={inv.id}
+                          className="flex items-center justify-between gap-3 px-3 py-2 bg-muted/40 rounded-xl"
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <div className="w-7 h-7 rounded-full bg-muted flex items-center justify-center shrink-0">
+                              <Mail size={12} className="text-muted-foreground" />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-xs font-medium text-foreground truncate">{inv.email}</p>
+                              <div className="flex items-center gap-1.5 mt-0.5">
+                                <span className={`inline-flex px-1.5 py-0.5 rounded-full text-[10px] font-semibold border ${ROLE_COLORS[inv.role] ?? ''}`}>
+                                  {inv.role}
+                                </span>
+                                <span className={`flex items-center gap-0.5 text-[10px] ${expired ? 'text-destructive' : 'text-muted-foreground'}`}>
+                                  <Clock size={9} />
+                                  {expired ? 'Expired' : `${daysLeft}d left`}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => handleCancelInvitation(inv.id)}
+                            className="shrink-0 p-1 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                            title="Cancel invitation"
+                          >
+                            <X size={13} />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -576,6 +749,84 @@ export default function AdminDepartmentsPage() {
                 className="px-4 py-2 rounded-xl text-sm font-medium text-white bg-destructive hover:bg-destructive/90 disabled:opacity-60 transition-colors"
               >
                 {deleting ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Remove Member Confirm Dialog */}
+      {removeMemberConfirm && (
+        <div className="fixed inset-0 z-[65] flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-card border border-border rounded-2xl p-6 max-w-sm w-full shadow-xl space-y-4">
+            <h3 className="text-lg font-bold text-foreground">Remove Member</h3>
+            <p className="text-sm text-muted-foreground">
+              Are you sure you want to remove{' '}
+              <span className="font-semibold text-foreground">{removeMemberConfirm.label}</span>{' '}
+              from this department?
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setRemoveMemberConfirm(null)}
+                className="px-4 py-2 rounded-xl text-sm font-medium text-muted-foreground hover:bg-muted transition-colors"
+              >Cancel</button>
+              <button
+                onClick={handleRemoveMember}
+                className="px-4 py-2 rounded-xl text-sm font-medium text-white bg-destructive hover:bg-destructive/90 transition-colors"
+              >Remove</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Invite by Email Dialog */}
+      {inviteOpen && selectedDept && (
+        <div className="fixed inset-0 z-[65] flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-card border border-border rounded-2xl p-6 max-w-md w-full shadow-xl space-y-4">
+            <h3 className="text-lg font-bold text-foreground">
+              Invite to <span className="text-[#FE812C]">{selectedDept.name}</span>
+            </h3>
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-semibold text-muted-foreground mb-1 block">Email Address *</label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={14} />
+                  <input
+                    type="email"
+                    value={inviteEmail}
+                    onChange={(e) => setInviteEmail(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleSendInvite()}
+                    placeholder="user@example.com"
+                    className="w-full bg-muted/50 border border-border focus:border-primary/50 focus:bg-background rounded-xl pl-9 pr-3 py-2 text-sm outline-none transition-all"
+                    autoFocus
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-muted-foreground mb-1 block">Role</label>
+                <select
+                  value={inviteRole}
+                  onChange={(e) => setInviteRole(e.target.value)}
+                  className="w-full bg-muted/50 border border-border focus:border-primary/50 rounded-xl px-3 py-2 text-sm outline-none cursor-pointer"
+                >
+                  <option value="MEMBER">MEMBER</option>
+                  <option value="VIEWER">VIEWER</option>
+                  <option value="OWNER">OWNER</option>
+                </select>
+              </div>
+            </div>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={closeInviteDialog}
+                className="px-4 py-2 rounded-xl text-sm font-medium text-muted-foreground hover:bg-muted transition-colors"
+              >Cancel</button>
+              <button
+                onClick={handleSendInvite}
+                disabled={inviteLoading || !inviteEmail.trim()}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium text-white bg-primary hover:bg-primary/90 disabled:opacity-60 transition-colors"
+              >
+                {inviteLoading ? <Loader2 size={14} className="animate-spin" /> : <Mail size={14} />}
+                {inviteLoading ? 'Sending...' : 'Send Invitation'}
               </button>
             </div>
           </div>

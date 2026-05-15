@@ -9,7 +9,8 @@ import {
   UserX,
   CheckSquare,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  RefreshCw,
 } from 'lucide-react';
 
 export default function AdminDashboardPage() {
@@ -20,42 +21,42 @@ export default function AdminDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  useEffect(() => {
-    const fetchDashboardData = async () => {
-      setLoading(true);
-      setError('');
-      try {
-        const [statsRes, usersRes] = await Promise.all([
-          adminService.getDashboard(),
-          // Fetch up to 50 latest users to show trends over recent signups
-          adminService.getUsers({ limit: 50 })
-        ]);
+  const fetchDashboardData = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const [statsRes, usersRes] = await Promise.all([
+        adminService.getDashboard(),
+        adminService.getUsers({ limit: 50 })
+      ]);
+      if (statsRes.success) setStats(statsRes.data);
+      if (usersRes.success) setRecentUsers(usersRes.data.users);
+    } catch (err) {
+      console.error(err);
+      setError('Failed to load admin dashboard data');
+    } finally {
+      setLoading(false);
+    }
+  };
 
-        if (statsRes.success) {
-          setStats(statsRes.data);
-        }
-        if (usersRes.success) {
-          setRecentUsers(usersRes.data.users);
-        }
-      } catch (err) {
-        console.error(err);
-        setError('Failed to load admin dashboard data');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchDashboardData();
-  }, []);
+  useEffect(() => { fetchDashboardData(); }, []);
 
   return (
     <div className="space-y-6">
       {/* Welcome Header */}
-      <div>
-        <h1 className="text-3xl font-bold text-foreground">
-          Admin Dashboard
-        </h1>
-        <p className="text-muted-foreground mt-1">Platform overview and user statistics for {user?.name || user?.email}</p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-foreground">Admin Dashboard</h1>
+          <p className="text-muted-foreground mt-1">Platform overview and user statistics for {user?.name || user?.email}</p>
+        </div>
+        <button
+          onClick={fetchDashboardData}
+          disabled={loading}
+          className="self-start sm:self-auto p-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted border border-border transition-colors disabled:opacity-50"
+          title="Refresh"
+        >
+          <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+        </button>
       </div>
 
       {loading ? (
