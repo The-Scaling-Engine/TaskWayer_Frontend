@@ -73,7 +73,17 @@ export default function TaskDialog({ open, onClose, onSubmit, task, loading }: T
       setError('Title is required');
       return;
     }
-    
+
+    if (deadline) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const selected = new Date(deadline + 'T00:00:00');
+      if (selected < today) {
+        setError('Deadline cannot be in the past');
+        return;
+      }
+    }
+
     onSubmit({
       title: title.trim(),
       description: description.trim(),

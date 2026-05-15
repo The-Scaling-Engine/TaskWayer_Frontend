@@ -35,12 +35,20 @@ export const taskService = {
   },
 
   createTask: async (data: CreateTaskData): Promise<{ success: boolean; data: Task }> => {
-    const response = await api.post('/tasks', data);
+    const payload = {
+      ...data,
+      deadline: data.deadline ? `${data.deadline}T00:00:00.000Z` : undefined,
+    };
+    const response = await api.post('/tasks', payload);
     return response.data;
   },
 
   updateTask: async (id: string, data: UpdateTaskData): Promise<{ success: boolean; data: Task }> => {
-    const response = await api.put(`/tasks/${id}`, data);
+    const payload = {
+      ...data,
+      deadline: data.deadline ? `${data.deadline}T00:00:00.000Z` : data.deadline,
+    };
+    const response = await api.put(`/tasks/${id}`, payload);
     return response.data;
   },
 

@@ -52,29 +52,17 @@ export const useTaskStore = create<TaskState>((set, get) => ({
   },
 
   createTask: async (data: CreateTaskData) => {
-    try {
-      await taskService.createTask(data);
-      get().fetchTasks();
-    } catch {
-      set({ error: 'Failed to create task' });
-    }
+    await taskService.createTask(data);
+    get().fetchTasks();
   },
 
   updateTask: async (id: string, data: UpdateTaskData) => {
-    try {
-      await taskService.updateTask(id, data);
-      get().fetchTasks();
-    } catch {
-      set({ error: 'Failed to update task' });
-    }
+    await taskService.updateTask(id, data);
+    get().fetchTasks();
   },
 
   deleteTask: async (id: string) => {
-    try {
-      await taskService.deleteTask(id);
-      get().fetchTasks();
-    } catch {
-      set({ error: 'Failed to delete task' });
-    }
+    await taskService.deleteTask(id);
+    get().fetchTasks();
   },
 }));
