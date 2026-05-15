@@ -10,6 +10,7 @@ import {
   Menu,
   Users,
   BarChart2,
+  Building2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -30,6 +31,7 @@ const navItems = [
 const adminNavItems = [
   { icon: LayoutDashboard, label: 'Admin Panel', path: '/dashboard/admin' },
   { icon: Users, label: 'Manage Users', path: '/dashboard/admin/users' },
+  { icon: Building2, label: 'Departments', path: '/dashboard/admin/departments' },
 ];
 
 export default function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: SidebarProps) {
@@ -44,6 +46,7 @@ export default function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose
 
   const isActive = (path: string) => {
     if (path === '/dashboard') return location.pathname === '/dashboard';
+    if (path === '/dashboard/admin') return location.pathname === '/dashboard/admin';
     return location.pathname.startsWith(path);
   };
 

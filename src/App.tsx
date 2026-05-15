@@ -15,6 +15,7 @@ import AdminDashboardPage from '@/pages/AdminDashboardPage';
 import AdminUsersPage from '@/pages/AdminUsersPage';
 import AnalyticsPage from '@/pages/AnalyticsPage';
 import AdminRoute from '@/components/AdminRoute';
+import AdminDepartmentsPage from '@/pages/AdminDepartmentsPage';
 
 function App() {
   return (
@@ -51,13 +52,21 @@ function App() {
               </AdminRoute>
             } 
           />
-          <Route 
-            path="admin/users" 
+          <Route
+            path="admin/users"
             element={
               <AdminRoute>
                 <AdminUsersPage />
               </AdminRoute>
-            } 
+            }
+          />
+          <Route
+            path="admin/departments"
+            element={
+              <AdminRoute>
+                <AdminDepartmentsPage />
+              </AdminRoute>
+            }
           />
         </Route>
       </Routes>

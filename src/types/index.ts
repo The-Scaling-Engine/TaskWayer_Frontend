@@ -257,28 +257,44 @@ export interface DepartmentMember {
   role: DepartmentMemberRole;
   status: DepartmentMemberStatus;
   joinedAt: string;
-  user?: {
+  invitedBy?: string | null;
+  profile?: {
     id: string;
-    name: string;
     email: string;
-    avatar?: string;
+    name: string | null;
+    username: string | null;
+    avatar: string | null;
+    jobTitle?: string | null;
   };
+}
+
+export interface DepartmentWithMembers extends Department {
+  memberships: DepartmentMember[];
+  hasMoreMembers: boolean;
 }
 
 export interface DepartmentsResponse {
   success: boolean;
-  data: Department[];
-  pagination?: {
-    currentPage: number;
-    totalPages: number;
-    total: number;
+  count: number;
+  data: DepartmentWithMembers[];
+  pagination: {
+    page: number;
     limit: number;
+    total: number;
+    totalPages: number;
   };
 }
 
 export interface DepartmentMembersResponse {
   success: boolean;
+  count: number;
   data: DepartmentMember[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
 }
 
 // ============================================
