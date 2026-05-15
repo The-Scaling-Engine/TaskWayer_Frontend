@@ -1,20 +1,21 @@
 // ============================================
-// USER (matches backend User model exactly)
-// Source: MicroDo_Backend/src/models/User.ts
+// USER
 // ============================================
 export interface User {
   _id: string;
+  id?: string;
   email: string;
   name?: string;
   avatar?: string;
-  role?: 'USER' | 'ADMIN';
+  username?: string;
+  jobTitle?: string;
+  role?: 'USER' | 'ADMIN' | 'DEPT_MANAGER' | 'DEPT_MEMBER';
   status?: 'ACTIVE' | 'BANNED';
   createdAt?: string;
 }
 
 // ============================================
-// TASK (matches backend Task model exactly)
-// Source: MicroDo_Backend/src/models/Task.ts
+// TASK
 // ============================================
 export interface Task {
   _id: string;
@@ -24,14 +25,16 @@ export interface Task {
   priority: 'low' | 'medium' | 'high';
   tags: string[];
   deadline?: string;
+  completedAt?: string;
+  departmentId?: string;
   userId: string;
   createdAt: string;
   updatedAt: string;
+  __v?: number;
 }
 
 // ============================================
-// TASK STATS (matches GET /tasks/stats response)
-// Source: MicroDo_Backend/src/controllers/taskController.ts L267-L299
+// TASK STATS
 // ============================================
 export interface TaskStats {
   total: number;
@@ -41,8 +44,7 @@ export interface TaskStats {
 }
 
 // ============================================
-// AUTH REQUESTS & RESPONSES
-// Source: MicroDo_Backend/src/controllers/authController.ts
+// AUTH
 // ============================================
 export interface LoginRequest {
   email: string;
@@ -59,16 +61,16 @@ export interface AuthResponse {
   message: string;
   data: {
     id: string;
+    _id?: string;
     email: string;
     token?: string;
     createdAt?: string;
-    role?: 'USER' | 'ADMIN';
+    role?: 'USER' | 'ADMIN' | 'DEPT_MANAGER' | 'DEPT_MEMBER';
   };
 }
 
 // ============================================
-// TASKS RESPONSE (matches GET /tasks response)
-// Source: MicroDo_Backend/src/controllers/taskController.ts L123-L135
+// TASKS RESPONSE
 // ============================================
 export interface TasksResponse {
   success: boolean;
@@ -84,10 +86,6 @@ export interface TasksResponse {
   data: Task[];
 }
 
-// ============================================
-// TASK STATS RESPONSE (matches GET /tasks/stats response)
-// Source: MicroDo_Backend/src/controllers/taskController.ts L288-L291
-// ============================================
 export interface TaskStatsResponse {
   success: boolean;
   data: TaskStats;
@@ -102,7 +100,7 @@ export interface ApiError {
 }
 
 // ============================================
-// ADMIN TYPES
+// ADMIN
 // ============================================
 export interface AdminDashboardStats {
   totalUsers: number;
@@ -112,8 +110,10 @@ export interface AdminDashboardStats {
 
 export interface AdminUser {
   _id: string;
+  id?: string;
   email: string;
-  role: 'USER' | 'ADMIN';
+  name?: string;
+  role: 'USER' | 'ADMIN' | 'DEPT_MANAGER' | 'DEPT_MEMBER';
   status: 'ACTIVE' | 'BANNED';
   createdAt?: string;
 }
@@ -127,12 +127,218 @@ export interface AdminUsersResponse {
       totalPages: number;
       totalUsers: number;
       limit: number;
-    }
-  }
+    };
+  };
 }
 
 // ============================================
-// CHART MOCK TYPES
+// COMMENTS
+// ============================================
+export interface Comment {
+  id: string;
+  taskId: string;
+  authorId: string;
+  author: {
+    id: string;
+    name: string;
+    avatar?: string;
+  };
+  content: string;
+  parentId?: string;
+  replies?: Comment[];
+  createdAt: string;
+  updatedAt: string;
+  deletedAt?: string;
+}
+
+export interface CommentsResponse {
+  success: boolean;
+  data: Comment[];
+  pagination: {
+    currentPage: number;
+    totalPages: number;
+    total: number;
+    limit: number;
+    hasNextPage: boolean;
+    hasPrevPage: boolean;
+  };
+}
+
+// ============================================
+// NOTIFICATIONS
+// ============================================
+export type NotificationType =
+  | 'TASK_ASSIGNED'
+  | 'COMMENT_ADDED'
+  | 'MENTIONED_IN_COMMENT'
+  | 'TASK_UPDATED'
+  | 'DEADLINE_SOON';
+
+export interface Notification {
+  id: string;
+  userId: string;
+  type: NotificationType;
+  title: string;
+  message: string;
+  payload?: Record<string, unknown>;
+  entityType?: string;
+  entityId?: string;
+  readAt?: string;
+  createdAt: string;
+}
+
+export interface NotificationsResponse {
+  success: boolean;
+  data: Notification[];
+  pagination: {
+    currentPage: number;
+    totalPages: number;
+    total: number;
+    limit: number;
+    hasNextPage: boolean;
+    hasPrevPage: boolean;
+  };
+}
+
+// ============================================
+// TIME TRACKING
+// ============================================
+export interface TimeTrackingSession {
+  id: string;
+  taskId: string;
+  profileId: string;
+  startedAt: string;
+  stoppedAt?: string;
+  durationSeconds?: number;
+  task?: {
+    id: string;
+    title: string;
+  };
+}
+
+export interface TimeSessionsResponse {
+  success: boolean;
+  data: TimeTrackingSession[];
+  pagination: {
+    currentPage: number;
+    totalPages: number;
+    total: number;
+    limit: number;
+    hasNextPage: boolean;
+    hasPrevPage: boolean;
+  };
+}
+
+// ============================================
+// DEPARTMENTS
+// ============================================
+export type DepartmentMemberRole = 'OWNER' | 'ADMIN' | 'MEMBER' | 'VIEWER';
+export type DepartmentMemberStatus = 'PENDING' | 'ACTIVE' | 'REMOVED';
+
+export interface Department {
+  id: string;
+  name: string;
+  description?: string;
+  createdAt: string;
+  updatedAt: string;
+  _count?: {
+    members: number;
+    tasks: number;
+  };
+}
+
+export interface DepartmentMember {
+  id: string;
+  userId: string;
+  departmentId: string;
+  role: DepartmentMemberRole;
+  status: DepartmentMemberStatus;
+  joinedAt: string;
+  user?: {
+    id: string;
+    name: string;
+    email: string;
+    avatar?: string;
+  };
+}
+
+export interface DepartmentsResponse {
+  success: boolean;
+  data: Department[];
+  pagination?: {
+    currentPage: number;
+    totalPages: number;
+    total: number;
+    limit: number;
+  };
+}
+
+export interface DepartmentMembersResponse {
+  success: boolean;
+  data: DepartmentMember[];
+}
+
+// ============================================
+// INVITATIONS
+// ============================================
+export interface DepartmentInvitation {
+  id: string;
+  departmentId: string;
+  email: string;
+  role: DepartmentMemberRole;
+  token: string;
+  invitedBy: string;
+  expiresAt: string;
+  acceptedAt?: string;
+}
+
+export interface InvitationsResponse {
+  success: boolean;
+  data: DepartmentInvitation[];
+}
+
+// ============================================
+// ANALYTICS
+// ============================================
+export interface AnalyticsSummary {
+  totalTasks: number;
+  completedTasks: number;
+  pendingTasks: number;
+  inProgressTasks: number;
+  completionRate: number;
+  overdueTasksCount: number;
+}
+
+export interface AnalyticsCompletion {
+  date: string;
+  completed: number;
+  total: number;
+}
+
+export interface AnalyticsTrend {
+  date: string;
+  created: number;
+  completed: number;
+}
+
+export interface AnalyticsHeatmapEntry {
+  date: string;
+  count: number;
+}
+
+export interface AnalyticsTimeEntry {
+  totalSeconds: number;
+  sessionCount: number;
+  avgSessionSeconds: number;
+  taskBreakdown?: Array<{
+    taskId: string;
+    title: string;
+    totalSeconds: number;
+  }>;
+}
+
+// ============================================
+// CHART TYPES (giữ lại cho backward compat)
 // ============================================
 export interface RevenueDataPoint {
   date: string;
