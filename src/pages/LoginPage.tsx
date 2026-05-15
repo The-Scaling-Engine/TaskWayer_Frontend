@@ -29,7 +29,11 @@ export default function LoginPage() {
       const res = await authService.login({ email, password });
       if (res.success && res.data.token) {
         login(res.data.token, { _id: res.data.id, email: res.data.email, role: res.data.role });
-        if (res.data.role === 'ADMIN') {
+        const pendingInvitation = sessionStorage.getItem('pending_invitation');
+        if (pendingInvitation) {
+          sessionStorage.removeItem('pending_invitation');
+          navigate(pendingInvitation);
+        } else if (res.data.role === 'ADMIN') {
           navigate('/dashboard/admin');
         } else {
           navigate('/dashboard');

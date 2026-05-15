@@ -79,24 +79,36 @@ export default function InvitationPage() {
           </h1>
           <p className="text-muted-foreground mt-2 text-sm">
             {done === 'accepted'
-              ? isAuthenticated
-                ? 'You have joined the department. Redirecting to dashboard...'
-                : 'You have joined the department. Please log in to continue.'
+              ? 'You have joined the department. Redirecting to dashboard...'
               : done === 'rejected'
               ? 'You have declined this invitation.'
+              : !isAuthenticated
+              ? 'Please log in to accept this invitation.'
               : "You've been invited to join a department on MicroDo."}
           </p>
         </div>
 
         {done === 'accepted' ? (
           <div className="flex flex-col items-center gap-2 text-emerald-500">
-            <p className="text-sm font-medium">
-              {isAuthenticated ? 'Redirecting to dashboard...' : 'Redirecting to login...'}
-            </p>
+            <p className="text-sm font-medium">Redirecting to dashboard...</p>
           </div>
         ) : done === 'rejected' ? (
           <div className="flex flex-col items-center gap-2 text-muted-foreground">
             <p className="text-sm font-medium">Redirecting to home...</p>
+          </div>
+        ) : !isAuthenticated ? (
+          <div className="flex flex-col gap-3">
+            <button
+              onClick={() => {
+                sessionStorage.setItem('pending_invitation', `/invitations/accept?token=${token}`);
+                navigate('/login');
+              }}
+              className="w-full py-3 rounded-xl bg-primary text-white font-semibold text-sm hover:bg-primary/90 transition-colors flex items-center justify-center gap-2"
+            >
+              <CheckCircle size={16} />
+              Log in to Accept Invitation
+            </button>
+            <p className="text-xs text-muted-foreground">You need to be logged in to accept this invitation.</p>
           </div>
         ) : (
           <div className="flex flex-col gap-3">
