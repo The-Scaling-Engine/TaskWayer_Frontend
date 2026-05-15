@@ -5,6 +5,8 @@ export interface UpdateProfileData {
   name?: string;
   email?: string;
   avatar?: string;
+  username?: string;
+  jobTitle?: string;
 }
 
 export const userService = {

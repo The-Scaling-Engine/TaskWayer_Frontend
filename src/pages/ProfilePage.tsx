@@ -12,7 +12,7 @@ import {
 import { useAuthStore } from '@/store/authStore';
 import { userService } from '@/services/userService';
 import { toast } from 'sonner';
-import { User as UserIcon, Mail, Image as ImageIcon, Loader2, Camera } from 'lucide-react';
+import { User as UserIcon, Mail, Image as ImageIcon, Loader2, Camera, AtSign, Briefcase } from 'lucide-react';
 
 export default function ProfilePage() {
   const { user, updateUser } = useAuthStore();
@@ -20,6 +20,8 @@ export default function ProfilePage() {
   const [name, setName] = useState(user?.name || '');
   const email = user?.email || '';
   const [avatar, setAvatar] = useState(user?.avatar || '');
+  const [username, setUsername] = useState(user?.username || '');
+  const [jobTitle, setJobTitle] = useState(user?.jobTitle || '');
   
   // Local state for the avatar dialog
   const [isAvatarDialogOpen, setIsAvatarDialogOpen] = useState(false);
@@ -32,7 +34,7 @@ export default function ProfilePage() {
 
     setProfileLoading(true);
     try {
-      const res = await userService.updateProfile({ name, email, avatar: avatar || undefined });
+      const res = await userService.updateProfile({ name, email, avatar: avatar || undefined, username: username || undefined, jobTitle: jobTitle || undefined });
       if (res.success) {
         updateUser(res.data);
         toast.success(res.message || 'Profile updated successfully');
@@ -59,7 +61,7 @@ export default function ProfilePage() {
   const updateProfileWithNewAvatar = async (newAvatar: string) => {
     setProfileLoading(true);
     try {
-      const res = await userService.updateProfile({ name, email, avatar: newAvatar || undefined });
+      const res = await userService.updateProfile({ name, email, avatar: newAvatar || undefined, username: username || undefined, jobTitle: jobTitle || undefined });
       if (res.success) {
         updateUser(res.data);
         toast.success('Avatar updated successfully');
@@ -124,6 +126,39 @@ export default function ProfilePage() {
                 placeholder="Your display name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
+                className="pl-9 h-11 rounded-lg bg-accent/5 focus-visible:ring-1"
+              />
+            </div>
+          </div>
+
+          {/* Username */}
+          <div className="space-y-1.5">
+            <Label htmlFor="profile-username" className="text-xs font-medium text-foreground">Username</Label>
+            <div className="relative">
+              <AtSign className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
+              <Input
+                id="profile-username"
+                type="text"
+                placeholder="@username"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                className="pl-9 h-11 rounded-lg bg-accent/5 focus-visible:ring-1"
+              />
+            </div>
+            <p className="text-[10px] text-muted-foreground">3–30 characters, letters, numbers and underscores only.</p>
+          </div>
+
+          {/* Job Title */}
+          <div className="space-y-1.5">
+            <Label htmlFor="profile-jobtitle" className="text-xs font-medium text-foreground">Job Title</Label>
+            <div className="relative">
+              <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
+              <Input
+                id="profile-jobtitle"
+                type="text"
+                placeholder="e.g. Software Engineer"
+                value={jobTitle}
+                onChange={(e) => setJobTitle(e.target.value)}
                 className="pl-9 h-11 rounded-lg bg-accent/5 focus-visible:ring-1"
               />
             </div>
