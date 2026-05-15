@@ -1,15 +1,62 @@
+import { useEffect, useRef, useState } from 'react';
 import { useAuthStore } from '@/store/authStore';
+import { useNotificationStore } from '@/store/notificationStore';
 import { Link } from 'react-router-dom';
-
 import { cn } from '@/lib/utils';
 import ThemeToggle from '@/components/ThemeToggle';
+import { Bell, CheckCheck, BellOff } from 'lucide-react';
 
 interface TopbarProps {
   sidebarCollapsed: boolean;
 }
 
+function formatRelativeTime(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const minutes = Math.floor(diff / 60000);
+  if (minutes < 1) return 'just now';
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
+
 export default function Topbar({ sidebarCollapsed }: TopbarProps) {
   const user = useAuthStore((s) => s.user);
+  const { notifications, unreadCount, loading, fetchNotifications, fetchUnreadCount, markAsRead, markAllAsRead } =
+    useNotificationStore();
+
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Fetch unread count on mount and poll every 30s
+  useEffect(() => {
+    fetchUnreadCount();
+    const interval = setInterval(fetchUnreadCount, 30000);
+    return () => clearInterval(interval);
+  }, [fetchUnreadCount]);
+
+  // Fetch full list when dropdown opens
+  useEffect(() => {
+    if (dropdownOpen) {
+      fetchNotifications();
+    }
+  }, [dropdownOpen, fetchNotifications]);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const handleNotificationClick = (id: string, readAt?: string) => {
+    if (!readAt) markAsRead(id);
+  };
 
   return (
     <header
@@ -26,7 +73,76 @@ export default function Topbar({ sidebarCollapsed }: TopbarProps) {
         {/* Theme Toggle */}
         <ThemeToggle />
 
+        {/* Notification Bell */}
+        <div className="relative" ref={dropdownRef}>
+          <button
+            onClick={() => setDropdownOpen((v) => !v)}
+            className="relative w-9 h-9 flex items-center justify-center rounded-full hover:bg-muted transition-colors"
+          >
+            <Bell size={18} className="text-foreground" />
+            {unreadCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] bg-destructive text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1">
+                {unreadCount > 99 ? '99+' : unreadCount}
+              </span>
+            )}
+          </button>
 
+          {dropdownOpen && (
+            <div className="absolute right-0 mt-2 w-80 bg-card border border-border rounded-2xl shadow-xl overflow-hidden z-50">
+              {/* Header */}
+              <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+                <span className="text-sm font-semibold text-foreground">Notifications</span>
+                {unreadCount > 0 && (
+                  <button
+                    onClick={markAllAsRead}
+                    className="flex items-center gap-1 text-xs text-primary hover:text-primary/80 transition-colors font-medium"
+                  >
+                    <CheckCheck size={14} />
+                    Mark all read
+                  </button>
+                )}
+              </div>
+
+              {/* List */}
+              <div className="max-h-[360px] overflow-y-auto">
+                {loading ? (
+                  <div className="flex items-center justify-center py-8 text-muted-foreground text-sm">
+                    Loading...
+                  </div>
+                ) : notifications.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-10 gap-2 text-muted-foreground">
+                    <BellOff size={28} className="opacity-40" />
+                    <span className="text-sm">No notifications yet</span>
+                  </div>
+                ) : (
+                  notifications.map((n) => (
+                    <button
+                      key={n.id}
+                      onClick={() => handleNotificationClick(n.id, n.readAt)}
+                      className={cn(
+                        'w-full text-left px-4 py-3 border-b border-border/50 last:border-0 hover:bg-muted/50 transition-colors',
+                        !n.readAt && 'bg-primary/5'
+                      )}
+                    >
+                      <div className="flex items-start gap-2">
+                        {!n.readAt && (
+                          <span className="mt-1.5 w-2 h-2 rounded-full bg-primary shrink-0" />
+                        )}
+                        <div className={cn('flex-1 min-w-0', n.readAt && 'pl-4')}>
+                          <p className={cn('text-xs leading-snug text-foreground', !n.readAt && 'font-semibold')}>
+                            {n.title}
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{n.message}</p>
+                          <p className="text-[10px] text-muted-foreground/70 mt-1">{formatRelativeTime(n.createdAt)}</p>
+                        </div>
+                      </div>
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* User Avatar */}
         <Link to="/dashboard/profile" className="block cursor-pointer hover:opacity-80 transition-opacity">
