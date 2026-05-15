@@ -1,11 +1,13 @@
 import type { Task } from '@/types';
 import { Badge } from '@/components/ui/badge';
-import { Pencil, Trash2, Calendar } from 'lucide-react';
+import { Pencil, Trash2, Calendar, MessageSquare } from 'lucide-react';
 
 interface TaskCardProps {
   task: Task;
   onEdit: (task: Task) => void;
   onDelete: (task: Task) => void;
+  onComment: (task: Task) => void;
+  commentCount?: number;
 }
 
 const statusColors: Record<string, string> = {
@@ -20,7 +22,9 @@ const statusLabels: Record<string, string> = {
   done: 'Done',
 };
 
-export default function TaskCard({ task, onEdit, onDelete }: TaskCardProps) {
+export default function TaskCard({ task, onEdit, onDelete, onComment, commentCount: commentCountProp }: TaskCardProps) {
+  const commentCount = commentCountProp ?? task._count?.comments ?? 0;
+
   return (
     <div className="bg-card border border-border rounded-xl p-4 shadow-sm hover:shadow-md hover:border-primary/20 transition-all duration-200 group cursor-pointer">
       {/* Header: Status Badge + Actions */}
@@ -29,6 +33,20 @@ export default function TaskCard({ task, onEdit, onDelete }: TaskCardProps) {
           {statusLabels[task.status]}
         </Badge>
         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          {/* Comment icon with count */}
+          <button
+            onClick={(e) => { e.stopPropagation(); onComment(task); }}
+            className="relative p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+            title="Comments"
+          >
+            <MessageSquare size={14} />
+            {commentCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 min-w-[14px] h-[14px] bg-primary text-white text-[9px] font-bold rounded-full flex items-center justify-center px-0.5 leading-none">
+                {commentCount > 99 ? '99+' : commentCount}
+              </span>
+            )}
+          </button>
+
           <button
             onClick={(e) => { e.stopPropagation(); onEdit(task); }}
             className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
@@ -78,13 +96,22 @@ export default function TaskCard({ task, onEdit, onDelete }: TaskCardProps) {
         </div>
       )}
 
-      {/* Footer: Deadline */}
-      {task.deadline && (
-        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          <Calendar size={12} />
-          <span>{new Date(task.deadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
-        </div>
-      )}
+      {/* Footer: Deadline + comment count (always visible) */}
+      <div className="flex items-center justify-between">
+        {task.deadline ? (
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Calendar size={12} />
+            <span>{new Date(task.deadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+          </div>
+        ) : <div />}
+
+        {commentCount > 0 && (
+          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+            <MessageSquare size={11} />
+            <span>{commentCount}</span>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

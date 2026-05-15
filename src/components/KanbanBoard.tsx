@@ -2,6 +2,7 @@ import { useEffect, useState, forwardRef, useImperativeHandle } from 'react';
 import { useTaskStore } from '@/store/taskStore';
 import TaskCard from '@/components/TaskCard';
 import TaskDialog from '@/components/TaskDialog';
+import CommentDialog from '@/components/CommentDialog';
 import type { Task } from '@/types';
 import { Plus, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -43,6 +44,8 @@ const KanbanBoard = forwardRef<KanbanBoardRef>((_props, ref) => {
   const [dialogLoading, setDialogLoading] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<Task | null>(null);
   const [updateConfirm, setUpdateConfirm] = useState<PendingUpdate | null>(null);
+  const [commentTask, setCommentTask] = useState<Task | null>(null);
+  const [commentCounts, setCommentCounts] = useState<Record<string, number>>({});
 
   useEffect(() => {
     fetchTasks();
@@ -179,6 +182,8 @@ const KanbanBoard = forwardRef<KanbanBoardRef>((_props, ref) => {
                       task={task}
                       onEdit={handleEdit}
                       onDelete={handleDelete}
+                      onComment={(t) => setCommentTask(t)}
+                      commentCount={commentCounts[task._id]}
                     />
                   ))
                 )}
@@ -222,6 +227,18 @@ const KanbanBoard = forwardRef<KanbanBoardRef>((_props, ref) => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Comment Dialog */}
+      {commentTask && (
+        <CommentDialog
+          open={!!commentTask}
+          onClose={() => setCommentTask(null)}
+          task={commentTask}
+          onCountUpdate={(taskId, count) =>
+            setCommentCounts((prev) => ({ ...prev, [taskId]: count }))
+          }
+        />
       )}
 
       {/* Delete Confirmation Dialog */}

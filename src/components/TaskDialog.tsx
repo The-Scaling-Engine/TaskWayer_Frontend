@@ -43,7 +43,6 @@ export default function TaskDialog({ open, onClose, onSubmit, task, loading }: T
   const [tagsInput, setTagsInput] = useState(task?.tags?.join(', ') || '');
   const [error, setError] = useState('');
 
-  // Sync state when task prop changes (e.g. clicking create on a column)
   useEffect(() => {
     if (open) {
       setTitle(task?.title || '');
@@ -56,7 +55,6 @@ export default function TaskDialog({ open, onClose, onSubmit, task, loading }: T
     }
   }, [task, open]);
 
-  // Reset form when closing
   const resetForm = () => {
     setTitle('');
     setDescription('');
@@ -112,14 +110,12 @@ export default function TaskDialog({ open, onClose, onSubmit, task, loading }: T
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4 mt-2">
-          {/* Error */}
           {error && (
             <div className="bg-destructive/10 border border-destructive/30 text-destructive rounded-xl px-3 py-2 text-sm">
               {error}
             </div>
           )}
 
-          {/* Title */}
           <div className="space-y-1.5">
             <Label htmlFor="task-title">Title</Label>
             <Input
@@ -132,7 +128,6 @@ export default function TaskDialog({ open, onClose, onSubmit, task, loading }: T
             />
           </div>
 
-          {/* Description */}
           <div className="space-y-1.5">
             <Label htmlFor="task-desc">Description</Label>
             <Textarea
@@ -144,7 +139,6 @@ export default function TaskDialog({ open, onClose, onSubmit, task, loading }: T
             />
           </div>
 
-          {/* Status & Priority Row */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label>Status</Label>
@@ -175,7 +169,6 @@ export default function TaskDialog({ open, onClose, onSubmit, task, loading }: T
             </div>
           </div>
 
-          {/* Deadline & Tags Row */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label htmlFor="task-deadline">Deadline</Label>

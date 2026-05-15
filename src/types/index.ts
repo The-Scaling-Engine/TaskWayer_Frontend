@@ -31,6 +31,7 @@ export interface Task {
   createdAt: string;
   updatedAt: string;
   __v?: number;
+  _count?: { comments: number };
 }
 
 // ============================================
@@ -140,27 +141,29 @@ export interface Comment {
   authorId: string;
   author: {
     id: string;
-    name: string;
-    avatar?: string;
+    name: string | null;
+    username?: string | null;
+    avatar?: string | null;
   };
   content: string;
-  parentId?: string;
+  parentId?: string | null;
   replies?: Comment[];
+  totalReplies?: number;
+  hasMoreReplies?: boolean;
   createdAt: string;
   updatedAt: string;
-  deletedAt?: string;
+  deletedAt?: string | null;
 }
 
 export interface CommentsResponse {
   success: boolean;
+  count: number;
   data: Comment[];
   pagination: {
-    currentPage: number;
-    totalPages: number;
-    total: number;
+    page: number;
     limit: number;
-    hasNextPage: boolean;
-    hasPrevPage: boolean;
+    total: number;
+    totalPages: number;
   };
 }
 
