@@ -6,6 +6,9 @@ import type {
   Department,
   DepartmentWithMembers,
   DepartmentsResponse,
+  AdminAnalyticsSummary,
+  AdminAnalyticsDepartmentsResponse,
+  AnalyticsTrend,
 } from '@/types';
 
 export const adminService = {
@@ -71,6 +74,28 @@ export const adminService = {
     data: { departmentId: string }
   ): Promise<{ success: boolean; message: string }> => {
     const response = await api.delete(`/admin/users/${userId}/department`, { data });
+    return response.data;
+  },
+
+  // ── Admin Analytics ──────────────────────────────────────────
+
+  getAdminAnalyticsSummary: async (): Promise<{ success: boolean; data: AdminAnalyticsSummary }> => {
+    const response = await api.get('/admin/analytics/summary');
+    return response.data;
+  },
+
+  getAdminAnalyticsTrends: async (params: { startDate: string; endDate: string }): Promise<{ success: boolean; data: { series: AnalyticsTrend[] } }> => {
+    const response = await api.get('/admin/analytics/trends', { params });
+    return response.data;
+  },
+
+  getAdminAnalyticsTime: async (params?: { startDate?: string; endDate?: string }): Promise<{ success: boolean; data: { summary: { totalDurationSeconds: number; sessionCount: number; averageSessionSeconds: number | null } } }> => {
+    const response = await api.get('/admin/analytics/time', { params });
+    return response.data;
+  },
+
+  getAdminAnalyticsDepartments: async (params?: { page?: number; limit?: number }): Promise<{ success: boolean; data: AdminAnalyticsDepartmentsResponse }> => {
+    const response = await api.get('/admin/analytics/departments', { params });
     return response.data;
   },
 };

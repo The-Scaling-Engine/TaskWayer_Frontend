@@ -365,6 +365,31 @@ export interface AnalyticsTimeEntry {
 }
 
 // ============================================
+// ADMIN ANALYTICS
+// ============================================
+export interface AdminAnalyticsSummary {
+  timezone: string;
+  users: { total: number; active: number; banned: number; };
+  tasks: { total: number; todo: number; doing: number; done: number; overdue: number; dueSoon: number; createdToday: number; };
+  departments: { total: number; };
+  comments: { total: number; };
+}
+
+export interface AdminAnalyticsDeptItem {
+  id: string;
+  name: string;
+  tasks: { total: number; };
+  members: { active: number; };
+}
+
+export interface AdminAnalyticsDepartmentsResponse {
+  page: number;
+  limit: number;
+  total: number;
+  departments: AdminAnalyticsDeptItem[];
+}
+
+// ============================================
 // CHART TYPES (giữ lại cho backward compat)
 // ============================================
 export interface RevenueDataPoint {
