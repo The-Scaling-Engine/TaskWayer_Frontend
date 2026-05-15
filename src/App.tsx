@@ -13,6 +13,7 @@ import SettingsPage from '@/pages/SettingsPage';
 import ProfilePage from '@/pages/ProfilePage';
 import AdminDashboardPage from '@/pages/AdminDashboardPage';
 import AdminUsersPage from '@/pages/AdminUsersPage';
+import AnalyticsPage from '@/pages/AnalyticsPage';
 import AdminRoute from '@/components/AdminRoute';
 
 function App() {
@@ -37,6 +38,7 @@ function App() {
         >
           <Route index element={<DashboardPage />} />
           <Route path="tasks" element={<TasksPage />} />
+          <Route path="analytics" element={<AnalyticsPage />} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="profile" element={<ProfilePage />} />
 

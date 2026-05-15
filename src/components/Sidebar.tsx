@@ -8,7 +8,8 @@ import {
   LogOut,
   ChevronLeft,
   Menu,
-  Users
+  Users,
+  BarChart2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -22,6 +23,7 @@ interface SidebarProps {
 const navItems = [
   { icon: LayoutDashboard, label: 'Overview', path: '/dashboard' },
   { icon: CheckSquare, label: 'My Tasks', path: '/dashboard/tasks' },
+  { icon: BarChart2, label: 'Analytics', path: '/dashboard/analytics' },
   { icon: Settings, label: 'Settings', path: '/dashboard/settings' },
 ];
 
