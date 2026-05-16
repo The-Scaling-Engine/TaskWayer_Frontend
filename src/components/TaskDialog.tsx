@@ -78,7 +78,7 @@ export default function TaskDialog({ open, onClose, onSubmit, task, loading }: T
   const [deadline, setDeadline] = useState(task?.deadline?.split('T')[0] || '');
   const [priority, setPriority] = useState<'low' | 'medium' | 'high'>(task?.priority || 'medium');
   const [tagsInput, setTagsInput] = useState(task?.tags?.join(', ') || '');
-  const [departmentId, setDepartmentId] = useState(task?.departmentId || '');
+  const [departmentId, setDepartmentId] = useState(task?.departmentId || '__none__');
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -89,7 +89,7 @@ export default function TaskDialog({ open, onClose, onSubmit, task, loading }: T
       setDeadline(task?.deadline?.split('T')[0] || '');
       setPriority(task?.priority || 'medium');
       setTagsInput(task?.tags?.join(', ') || '');
-      setDepartmentId(task?.departmentId || '');
+      setDepartmentId(task?.departmentId || '__none__');
       setError('');
     }
   }, [task, open]);
@@ -101,7 +101,7 @@ export default function TaskDialog({ open, onClose, onSubmit, task, loading }: T
     setDeadline('');
     setPriority('medium');
     setTagsInput('');
-    setDepartmentId('');
+    setDepartmentId('__none__');
     setError('');
   };
 
@@ -129,7 +129,7 @@ export default function TaskDialog({ open, onClose, onSubmit, task, loading }: T
       deadline: deadline || undefined,
       priority,
       tags: tagsInput.split(',').map(t => t.trim()).filter(Boolean),
-      departmentId: departmentId || undefined,
+      departmentId: departmentId === '__none__' ? undefined : departmentId || undefined,
     });
   };
 
@@ -269,7 +269,7 @@ export default function TaskDialog({ open, onClose, onSubmit, task, loading }: T
                   <SelectValue placeholder="None (Personal)" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">None (Personal)</SelectItem>
+                  <SelectItem value="__none__">None (Personal)</SelectItem>
                   {allMemberships.map((m) => (
                     <SelectItem key={m.id} value={m.department.id}>
                       {m.department.name}
