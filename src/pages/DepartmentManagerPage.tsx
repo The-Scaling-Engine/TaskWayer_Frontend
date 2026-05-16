@@ -688,7 +688,7 @@ export default function DepartmentManagerPage() {
 
       {/* ── Member Detail Panel (Step 10.6) ── */}
       {detailMember && (
-        <div className="fixed inset-0 z-50 flex">
+        <div className="fixed inset-0 z-[45] flex">
           {/* Backdrop */}
           <div className="flex-1 bg-black/30" onClick={() => setDetailMember(null)} />
           {/* Panel */}
@@ -814,13 +814,8 @@ export default function DepartmentManagerPage() {
                                 {task.title}
                               </p>
                               <button
-                                onClick={() => setCommentTask(commentTask?._id === task._id ? null : task)}
-                                className={cn(
-                                  'shrink-0 p-1 rounded-lg transition-colors',
-                                  commentTask?._id === task._id
-                                    ? 'text-primary bg-primary/10'
-                                    : 'text-muted-foreground hover:text-primary hover:bg-primary/10'
-                                )}
+                                onClick={() => setCommentTask(task)}
+                                className="shrink-0 p-1 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
                                 title="Comments"
                               >
                                 <MessageSquare size={13} />
