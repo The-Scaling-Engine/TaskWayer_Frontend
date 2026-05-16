@@ -26,6 +26,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   logout: () => {
     localStorage.removeItem('microdo_token');
     localStorage.removeItem('microdo_user');
+    localStorage.removeItem('microdo_task_dept_map');
     set({ token: null, user: null, isAuthenticated: false });
   },
 
