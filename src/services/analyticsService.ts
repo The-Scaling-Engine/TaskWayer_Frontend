@@ -1,7 +1,6 @@
 import api from './api';
 import type {
   AnalyticsSummary,
-  AnalyticsCompletion,
   AnalyticsTrend,
   AnalyticsTimeEntry,
   AnalyticsHeatmapEntry,

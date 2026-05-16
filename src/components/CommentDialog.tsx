@@ -52,21 +52,23 @@ export default function CommentDialog({ open, onClose, task, onCountUpdate }: Co
   useEffect(() => { commentsRef.current = comments; }, [comments]);
 
   // Fetch comments + join task room when dialog opens
+  const taskId = task._id || task.id || '';
+
   useEffect(() => {
-    if (open && task._id) {
+    if (open && taskId) {
       setCommentsLoading(true);
       commentService
-        .getComments(task._id)
+        .getComments(taskId)
         .then((res) => {
           if (res.success) {
             setComments(res.data);
-            onCountUpdate?.(task._id, res.count);
+            onCountUpdate?.(taskId, res.count);
           }
         })
         .catch(() => toast.error('Failed to load comments'))
         .finally(() => setCommentsLoading(false));
 
-      joinTask(task._id);
+      joinTask(taskId);
     }
     if (!open) {
       setComments([]);
@@ -74,14 +76,14 @@ export default function CommentDialog({ open, onClose, task, onCountUpdate }: Co
       setEditingId(null);
       setDeleteConfirmId(null);
     }
-  }, [open, task._id, joinTask]);
+  }, [open, taskId, joinTask]);
 
   // Real-time comment events
   useEffect(() => {
     if (!socket || !open) return;
 
     const handleCreated = (data: { commentId: string; taskId: string; content: string; authorId: string; authorName: string | null; parentId: string | null; createdAt: string }) => {
-      if (data.taskId !== task._id) return;
+      if (data.taskId !== taskId) return;
       // Deduplicate: skip if already added optimistically by the current user
       if (commentsRef.current.some((c) => c.id === data.commentId)) return;
       const newComment: Comment = {
@@ -92,28 +94,29 @@ export default function CommentDialog({ open, onClose, task, onCountUpdate }: Co
         content: data.content,
         parentId: data.parentId,
         createdAt: data.createdAt,
+        updatedAt: data.createdAt,
       };
       setComments((prev) => {
         const updated = [...prev, newComment];
-        onCountUpdate?.(task._id, updated.filter((c) => !c.deletedAt).length);
+        onCountUpdate?.(taskId, updated.filter((c) => !c.deletedAt).length);
         return updated;
       });
     };
 
     const handleUpdated = (data: { commentId: string; taskId: string; content: string; updatedAt: string }) => {
-      if (data.taskId !== task._id) return;
+      if (data.taskId !== taskId) return;
       setComments((prev) => prev.map((c) =>
         c.id === data.commentId ? { ...c, content: data.content, updatedAt: data.updatedAt } : c
       ));
     };
 
     const handleDeleted = (data: { commentId: string; taskId: string }) => {
-      if (data.taskId !== task._id) return;
+      if (data.taskId !== taskId) return;
       setComments((prev) => {
         const updated = prev.map((c) =>
           c.id === data.commentId ? { ...c, deletedAt: new Date().toISOString(), content: '[deleted]' } : c
         );
-        onCountUpdate?.(task._id, updated.filter((c) => !c.deletedAt).length);
+        onCountUpdate?.(taskId, updated.filter((c) => !c.deletedAt).length);
         return updated;
       });
     };
@@ -127,7 +130,7 @@ export default function CommentDialog({ open, onClose, task, onCountUpdate }: Co
       socket.off('comment:updated', handleUpdated);
       socket.off('comment:deleted', handleDeleted);
     };
-  }, [socket, open, task._id, onCountUpdate]);
+  }, [socket, open, taskId, onCountUpdate]);
 
   const activeComments = comments.filter((c) => !c.deletedAt);
 
@@ -135,7 +138,7 @@ export default function CommentDialog({ open, onClose, task, onCountUpdate }: Co
     if (!commentInput.trim()) return;
     setCommentSubmitting(true);
     try {
-      const res = await commentService.createComment(task._id, { content: commentInput.trim() });
+      const res = await commentService.createComment(taskId, { content: commentInput.trim() });
       if (res.success) {
         // Inject current user info if BE response has incomplete author
         const comment = res.data;
@@ -150,7 +153,7 @@ export default function CommentDialog({ open, onClose, task, onCountUpdate }: Co
         const updated = [...comments, comment];
         setComments(updated);
         setCommentInput('');
-        onCountUpdate?.(task._id, updated.filter((c) => !c.deletedAt).length);
+        onCountUpdate?.(taskId, updated.filter((c) => !c.deletedAt).length);
       }
     } catch {
       toast.error('Failed to send comment');
@@ -180,7 +183,7 @@ export default function CommentDialog({ open, onClose, task, onCountUpdate }: Co
       );
       setComments(updated);
       setDeleteConfirmId(null);
-      onCountUpdate?.(task._id, updated.filter((c) => !c.deletedAt).length);
+      onCountUpdate?.(taskId, updated.filter((c) => !c.deletedAt).length);
     } catch {
       toast.error('Failed to delete comment');
     }

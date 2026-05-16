@@ -65,7 +65,7 @@ export default function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose
       {/* Sidebar */}
       <aside
         className={cn(
-          'fixed top-0 left-0 h-full z-50 bg-card border-r border-border flex flex-col transition-all duration-300 ease-in-out',
+          'fixed top-0 left-0 h-full z-[42] bg-card border-r border-border flex flex-col transition-all duration-300 ease-in-out',
           collapsed ? 'w-20' : 'w-64',
           mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
         )}

@@ -79,7 +79,7 @@ export default function DepartmentManagerPage() {
   const [members, setMembers] = useState<DepartmentMember[]>([]);
   const [membersLoading, setMembersLoading] = useState(false);
   const [invitations, setInvitations] = useState<DepartmentInvitation[]>([]);
-  const [invitationsLoading, setInvitationsLoading] = useState(false);
+  const [, setInvitationsLoading] = useState(false);
   const [removeMemberConfirm, setRemoveMemberConfirm] = useState<{ userId: string; label: string } | null>(null);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
@@ -471,8 +471,8 @@ export default function DepartmentManagerPage() {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-border bg-muted/30">
-                        {['Member', 'Role', 'Todo', 'Doing', 'Done', 'Overdue', 'Session'].map((h, i) => (
-                          <th key={h} className={cn('px-3 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider', i === 0 ? 'px-5 text-left' : i < 2 ? 'text-left' : 'text-center')}>{h}</th>
+                        {['Member', 'Job Title', 'Role', 'Todo', 'Doing', 'Done', 'Overdue', 'Session'].map((h, i) => (
+                          <th key={h} className={cn('px-3 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider', i === 0 ? 'px-5 text-left' : i < 3 ? 'text-left' : 'text-center')}>{h}</th>
                         ))}
                       </tr>
                     </thead>
@@ -494,9 +494,12 @@ export default function DepartmentManagerPage() {
                               )}
                               <div className="min-w-0">
                                 <p className="font-medium text-foreground truncate">{m.profile.name || m.profile.email}</p>
-                                {m.profile.jobTitle && <p className="text-xs text-muted-foreground truncate">{m.profile.jobTitle}</p>}
+                                {m.profile.username && <p className="text-xs text-muted-foreground truncate">@{m.profile.username}</p>}
                               </div>
                             </div>
+                          </td>
+                          <td className="px-3 py-3">
+                            <p className="text-xs text-muted-foreground truncate max-w-[120px]">{m.profile.jobTitle || '—'}</p>
                           </td>
                           <td className="px-3 py-3">
                             <span className={cn('text-[10px] font-bold px-1.5 py-0.5 rounded-full border', ROLE_COLORS[m.role] ?? 'bg-muted text-muted-foreground border-border')}>{m.role}</span>
@@ -705,7 +708,9 @@ export default function DepartmentManagerPage() {
                 )}
                 <div className="min-w-0">
                   <p className="font-semibold text-foreground text-sm truncate">{detailMember.profile.name || detailMember.profile.email}</p>
-                  <p className="text-xs text-muted-foreground truncate">{detailMember.profile.jobTitle || detailMember.profile.email}</p>
+                  <p className="text-xs text-muted-foreground truncate">
+                    {detailMember.profile.username ? `@${detailMember.profile.username}` : (detailMember.profile.jobTitle || detailMember.profile.email)}
+                  </p>
                 </div>
               </div>
               <button onClick={() => setDetailMember(null)} className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0">
@@ -800,8 +805,9 @@ export default function DepartmentManagerPage() {
                     <div className="space-y-2">
                       {memberTasks.map((task) => {
                         const overdue = isOverdue(task.deadline) && task.status !== 'done';
+                        const taskKey = task._id || task.id || '';
                         return (
-                          <div key={task._id} className={cn('bg-card border rounded-xl p-3 space-y-1.5', overdue ? 'border-destructive/30 bg-destructive/5' : 'border-border')}>
+                          <div key={taskKey} className={cn('bg-card border rounded-xl p-3 space-y-1.5', overdue ? 'border-destructive/30 bg-destructive/5' : 'border-border')}>
                             <div className="flex items-start gap-2">
                               <span className={cn('shrink-0 mt-0.5 text-[10px] font-bold uppercase px-1.5 py-0.5 rounded-md', {
                                 'bg-red-500/10 text-red-500': task.priority === 'high',
