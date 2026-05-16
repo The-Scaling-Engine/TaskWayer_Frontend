@@ -8,8 +8,9 @@ import { adminService } from '@/services/adminService';
 import { toast } from 'sonner';
 import {
   Building2, ChevronDown, RefreshCw, Loader2, Users, Clock, AlertTriangle, Zap,
-  ChevronLeft, ChevronRight, X, UserPlus, UserMinus, Mail, Search, Play,
+  ChevronLeft, ChevronRight, X, UserPlus, UserMinus, Mail, Search, Play, MessageSquare,
 } from 'lucide-react';
+import CommentDialog from '@/components/CommentDialog';
 import { cn } from '@/lib/utils';
 import type {
   MyDepartmentMembership, MemberWorkload, DepartmentMember, DepartmentMemberRole,
@@ -71,6 +72,7 @@ export default function DepartmentManagerPage() {
   const [memberTasks, setMemberTasks] = useState<Task[]>([]);
   const [memberTasksLoading, setMemberTasksLoading] = useState(false);
   const [memberTaskFilter, setMemberTaskFilter] = useState<'all' | 'todo' | 'doing' | 'done'>('all');
+  const [commentTask, setCommentTask] = useState<Task | null>(null);
   const [elapsed, setElapsed] = useState(0);
 
   // ── Member Management (Step 10.7) ─────────────────────────────────────────
@@ -811,6 +813,18 @@ export default function DepartmentManagerPage() {
                               <p className={cn('text-sm font-medium flex-1 min-w-0', task.status === 'done' ? 'line-through text-muted-foreground' : 'text-foreground')}>
                                 {task.title}
                               </p>
+                              <button
+                                onClick={() => setCommentTask(commentTask?._id === task._id ? null : task)}
+                                className={cn(
+                                  'shrink-0 p-1 rounded-lg transition-colors',
+                                  commentTask?._id === task._id
+                                    ? 'text-primary bg-primary/10'
+                                    : 'text-muted-foreground hover:text-primary hover:bg-primary/10'
+                                )}
+                                title="Comments"
+                              >
+                                <MessageSquare size={13} />
+                              </button>
                             </div>
                             <div className="flex items-center gap-2">
                               <span className={cn('text-[10px] font-semibold px-1.5 py-0.5 rounded-md', {
@@ -930,6 +944,15 @@ export default function DepartmentManagerPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Comment dialog — opened from member detail panel Tasks tab */}
+      {commentTask && (
+        <CommentDialog
+          open={true}
+          onClose={() => setCommentTask(null)}
+          task={commentTask}
+        />
       )}
 
       {/* Transfer ownership */}
