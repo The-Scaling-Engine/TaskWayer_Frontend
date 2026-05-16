@@ -23,6 +23,7 @@ interface PendingUpdate {
     deadline?: string;
     priority?: 'low' | 'medium' | 'high';
     tags?: string[];
+    departmentId?: string;
   };
 }
 
@@ -108,6 +109,7 @@ const KanbanBoard = forwardRef<KanbanBoardRef>((_props, ref) => {
     deadline?: string;
     priority?: 'low' | 'medium' | 'high';
     tags?: string[];
+    departmentId?: string;
   }) => {
     if (editingTask && editingTask._id) {
       // Close the edit dialog first, then show update confirmation popup

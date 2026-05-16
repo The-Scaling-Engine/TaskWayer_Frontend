@@ -7,6 +7,10 @@ interface DepartmentStore {
   loading: boolean;
   hasFetched: boolean;
   fetchMyDepartments: () => Promise<void>;
+
+  allMemberships: MyDepartmentMembership[];
+  fetchAllMemberships: () => Promise<void>;
+
   reset: () => void;
 }
 
@@ -14,6 +18,8 @@ export const useDepartmentStore = create<DepartmentStore>((set) => ({
   myDepartments: [],
   loading: false,
   hasFetched: false,
+
+  allMemberships: [],
 
   fetchMyDepartments: async () => {
     set({ loading: true });
@@ -32,5 +38,17 @@ export const useDepartmentStore = create<DepartmentStore>((set) => ({
     }
   },
 
-  reset: () => set({ myDepartments: [], loading: false, hasFetched: false }),
+  fetchAllMemberships: async () => {
+    try {
+      const res = await departmentService.getUserMemberships();
+      if (res.success) {
+        const active = res.data.filter((m) => m.status === 'ACTIVE');
+        set({ allMemberships: active });
+      }
+    } catch {
+      // silent
+    }
+  },
+
+  reset: () => set({ myDepartments: [], loading: false, hasFetched: false, allMemberships: [] }),
 }));

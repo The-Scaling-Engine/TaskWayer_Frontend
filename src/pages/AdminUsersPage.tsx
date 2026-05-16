@@ -12,6 +12,7 @@ import {
   ChevronRight,
   Loader2,
   RefreshCw,
+  X,
 } from 'lucide-react';
 
 export default function AdminUsersPage() {
@@ -31,6 +32,10 @@ export default function AdminUsersPage() {
   // Confirm dialog state
   const [confirmAction, setConfirmAction] = useState<{ user: AdminUser; action: 'ban' | 'unban' } | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
+
+  // Date filter (client-side)
+  const [joinedFrom, setJoinedFrom] = useState('');
+  const [joinedTo, setJoinedTo] = useState('');
 
   // Debounce search query
   useEffect(() => {
@@ -104,6 +109,15 @@ export default function AdminUsersPage() {
     }
   };
 
+  const filteredUsers = users.filter((u) => {
+    if (!joinedFrom && !joinedTo) return true;
+    if (!u.createdAt) return true;
+    const joined = new Date(u.createdAt);
+    const matchesFrom = !joinedFrom || joined >= new Date(joinedFrom);
+    const matchesTo = !joinedTo || joined <= new Date(joinedTo + 'T23:59:59');
+    return matchesFrom && matchesTo;
+  });
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -129,16 +143,43 @@ export default function AdminUsersPage() {
       </div>
 
       {/* Toolbar */}
-      <div className="bg-card border border-border rounded-2xl p-4 flex items-center justify-between shadow-sm">
-        <div className="relative w-full max-w-md group">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground group-focus-within:text-primary transition-colors" size={18} />
-          <input 
-            type="text" 
-            placeholder="Search by email address..." 
+      <div className="bg-card border border-border rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center gap-3 shadow-sm">
+        <div className="relative flex-1 min-w-0 group">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground group-focus-within:text-primary transition-colors" size={16} />
+          <input
+            type="text"
+            placeholder="Search by email address..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-muted/50 border border-border focus:border-primary/50 focus:bg-background rounded-xl pl-10 pr-4 py-2 text-sm text-foreground placeholder:text-muted-foreground transition-all outline-none"
+            className="w-full bg-muted/50 border border-border focus:border-primary/50 focus:bg-background rounded-xl pl-9 pr-4 py-2 text-sm text-foreground placeholder:text-muted-foreground transition-all outline-none"
           />
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <span className="text-xs text-muted-foreground whitespace-nowrap">Joined:</span>
+          <input
+            type="date"
+            value={joinedFrom}
+            onChange={(e) => setJoinedFrom(e.target.value)}
+            className="bg-muted/50 border border-border focus:border-primary/50 rounded-xl px-2.5 py-2 text-xs outline-none transition-all"
+            title="From date"
+          />
+          <span className="text-xs text-muted-foreground">–</span>
+          <input
+            type="date"
+            value={joinedTo}
+            onChange={(e) => setJoinedTo(e.target.value)}
+            className="bg-muted/50 border border-border focus:border-primary/50 rounded-xl px-2.5 py-2 text-xs outline-none transition-all"
+            title="To date"
+          />
+          {(joinedFrom || joinedTo) && (
+            <button
+              onClick={() => { setJoinedFrom(''); setJoinedTo(''); }}
+              className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+              title="Clear date filter"
+            >
+              <X size={14} />
+            </button>
+          )}
         </div>
       </div>
 
@@ -169,14 +210,14 @@ export default function AdminUsersPage() {
                     {error}
                   </td>
                 </tr>
-              ) : users.length === 0 ? (
+              ) : filteredUsers.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="px-6 py-12 text-center text-muted-foreground">
-                    No users found matching your search.
+                    No users found matching your filters.
                   </td>
                 </tr>
               ) : (
-                users.map((user) => (
+                filteredUsers.map((user) => (
                   <tr key={user.id ?? user._id} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">

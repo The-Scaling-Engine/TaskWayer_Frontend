@@ -64,6 +64,11 @@ export default function AdminDepartmentsPage() {
   // ── Members modal refreshing ──────────────────────────────────
   const [membersRefreshing, setMembersRefreshing] = useState(false);
 
+  // ── Search & date filter (client-side) ───────────────────────
+  const [deptSearch, setDeptSearch] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+
   // ── Add member dialog ────────────────────────────────────────
   const [addMemberOpen, setAddMemberOpen] = useState(false);
   const [memberSearch, setMemberSearch] = useState('');
@@ -361,6 +366,14 @@ export default function AdminDepartmentsPage() {
     }
   };
 
+  const filteredDepts = departments.filter((d) => {
+    const matchesSearch = !deptSearch.trim() || d.name.toLowerCase().includes(deptSearch.toLowerCase());
+    const created = new Date(d.createdAt);
+    const matchesFrom = !dateFrom || created >= new Date(dateFrom);
+    const matchesTo = !dateTo || created <= new Date(dateTo + 'T23:59:59');
+    return matchesSearch && matchesFrom && matchesTo;
+  });
+
   // ─────────────────────────────────────────────────────────────
   return (
     <div className="space-y-6">
@@ -391,6 +404,47 @@ export default function AdminDepartmentsPage() {
         </div>
       </div>
 
+      {/* Search & Filter toolbar */}
+      <div className="bg-card border border-border rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center gap-3 shadow-sm">
+        <div className="relative flex-1 min-w-0 group">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground group-focus-within:text-primary transition-colors" size={16} />
+          <input
+            type="text"
+            placeholder="Search department name..."
+            value={deptSearch}
+            onChange={(e) => setDeptSearch(e.target.value)}
+            className="w-full bg-muted/50 border border-border focus:border-primary/50 focus:bg-background rounded-xl pl-9 pr-3 py-2 text-sm outline-none transition-all"
+          />
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <span className="text-xs text-muted-foreground whitespace-nowrap">Created:</span>
+          <input
+            type="date"
+            value={dateFrom}
+            onChange={(e) => setDateFrom(e.target.value)}
+            className="bg-muted/50 border border-border focus:border-primary/50 rounded-xl px-2.5 py-2 text-xs outline-none transition-all"
+            title="From date"
+          />
+          <span className="text-xs text-muted-foreground">–</span>
+          <input
+            type="date"
+            value={dateTo}
+            onChange={(e) => setDateTo(e.target.value)}
+            className="bg-muted/50 border border-border focus:border-primary/50 rounded-xl px-2.5 py-2 text-xs outline-none transition-all"
+            title="To date"
+          />
+          {(deptSearch || dateFrom || dateTo) && (
+            <button
+              onClick={() => { setDeptSearch(''); setDateFrom(''); setDateTo(''); }}
+              className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+              title="Clear filters"
+            >
+              <X size={14} />
+            </button>
+          )}
+        </div>
+      </div>
+
       {/* Departments Table */}
       <div className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
@@ -411,12 +465,12 @@ export default function AdminDepartmentsPage() {
                   <Loader2 className="animate-spin text-primary mx-auto mb-2" size={24} />
                   <p className="text-muted-foreground">Loading departments...</p>
                 </td></tr>
-              ) : departments.length === 0 ? (
+              ) : filteredDepts.length === 0 ? (
                 <tr><td colSpan={6} className="px-6 py-16 text-center">
                   <Building2 size={32} className="mx-auto text-muted-foreground/30 mb-3" />
-                  <p className="text-muted-foreground">No departments yet. Create your first one.</p>
+                  <p className="text-muted-foreground">{departments.length === 0 ? 'No departments yet. Create your first one.' : 'No departments match your filters.'}</p>
                 </td></tr>
-              ) : departments.map((dept) => (
+              ) : filteredDepts.map((dept) => (
                 <tr
                   key={dept.id}
                   className={`border-b border-border last:border-0 transition-colors ${
@@ -508,7 +562,7 @@ export default function AdminDepartmentsPage() {
           tabIndex={-1}
         >
           <div
-            className="bg-card border border-border rounded-2xl shadow-xl w-full max-w-3xl max-h-[85vh] flex flex-col"
+            className="bg-card border border-border rounded-2xl shadow-xl w-full max-w-4xl max-h-[85vh] flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Modal header */}
@@ -567,42 +621,44 @@ export default function AdminDepartmentsPage() {
                   <table className="w-full text-sm text-left">
                     <thead className="bg-muted/50 text-muted-foreground text-xs uppercase tracking-wider border-b border-border sticky top-0">
                       <tr>
-                        <th className="px-6 py-3 font-semibold">Member</th>
-                        <th className="px-6 py-3 font-semibold">Role</th>
-                        <th className="px-6 py-3 font-semibold">Joined</th>
-                        <th className="px-6 py-3 font-semibold text-right">Actions</th>
+                        <th className="px-4 py-2.5 font-semibold">Member</th>
+                        <th className="px-4 py-2.5 font-semibold">Role</th>
+                        <th className="px-4 py-2.5 font-semibold">Joined</th>
+                        <th className="px-4 py-2.5 font-semibold text-right">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
                       {members.map((member) => (
                         <tr key={member.id} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
-                          <td className="px-6 py-3">
-                            <div className="flex items-center gap-2">
+                          <td className="px-4 py-2.5">
+                            <div className="flex items-center gap-2.5">
                               {member.profile?.avatar ? (
-                                <img src={member.profile.avatar} alt="" className="w-8 h-8 rounded-full object-cover shrink-0" />
+                                <img src={member.profile.avatar} alt="" className="w-7 h-7 rounded-full object-cover shrink-0" />
                               ) : (
-                                <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary text-xs font-bold shrink-0">
+                                <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center text-primary text-xs font-bold shrink-0">
                                   {(member.profile?.name ?? member.profile?.email ?? '?').charAt(0).toUpperCase()}
                                 </div>
                               )}
-                              <div>
+                              <div className="min-w-0">
                                 {member.profile?.name && (
-                                  <p className="font-medium text-foreground">{member.profile.name}</p>
+                                  <p className="font-medium text-foreground text-xs truncate">{member.profile.name}</p>
                                 )}
-                                <p className="text-xs text-muted-foreground">{member.profile?.email}</p>
+                                <p className={`text-muted-foreground truncate ${member.profile?.name ? 'text-[11px]' : 'text-xs font-medium text-foreground'}`}>
+                                  {member.profile?.email}
+                                </p>
                               </div>
                             </div>
                           </td>
-                          <td className="px-6 py-3">
+                          <td className="px-4 py-2.5">
                             {member.role === 'OWNER' ? (
-                              <span className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-semibold border ${ROLE_COLORS['OWNER']}`}>
+                              <span className={`inline-flex px-2 py-0.5 rounded-full text-[11px] font-semibold border ${ROLE_COLORS['OWNER']}`}>
                                 OWNER
                               </span>
                             ) : (
                               <select
                                 value={member.role}
                                 onChange={(e) => handleChangeRole(member.userId, e.target.value)}
-                                className={`text-xs font-semibold px-2 py-1 rounded-full border cursor-pointer outline-none bg-transparent ${ROLE_COLORS[member.role] ?? ''}`}
+                                className={`text-[11px] font-semibold px-2 py-0.5 rounded-full border cursor-pointer outline-none bg-transparent ${ROLE_COLORS[member.role] ?? ''}`}
                               >
                                 <option value="OWNER">OWNER</option>
                                 <option value="ADMIN">ADMIN</option>
@@ -611,16 +667,17 @@ export default function AdminDepartmentsPage() {
                               </select>
                             )}
                           </td>
-                          <td className="px-6 py-3 text-muted-foreground text-xs">
+                          <td className="px-4 py-2.5 text-muted-foreground text-[11px]">
                             {new Date(member.joinedAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
                           </td>
-                          <td className="px-6 py-3 text-right">
+                          <td className="px-4 py-2.5 text-right">
                             {member.role !== 'OWNER' && (
                               <button
                                 onClick={() => setRemoveMemberConfirm({ userId: member.userId, label: member.profile?.name ?? member.profile?.email ?? member.userId })}
-                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium text-destructive bg-destructive/10 hover:bg-destructive hover:text-white transition-colors"
+                                className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                                title="Remove member"
                               >
-                                <UserMinus size={11} /> Remove
+                                <UserMinus size={13} />
                               </button>
                             )}
                           </td>

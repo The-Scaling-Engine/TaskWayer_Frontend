@@ -14,6 +14,7 @@ export default function DashboardLayout() {
   const fetchActiveSession = useTimeTrackingStore((s) => s.fetchActiveSession);
   const user = useAuthStore((s) => s.user);
   const fetchMyDepartments = useDepartmentStore((s) => s.fetchMyDepartments);
+  const fetchAllMemberships = useDepartmentStore((s) => s.fetchAllMemberships);
 
   useEffect(() => {
     fetchProfile();
@@ -23,8 +24,9 @@ export default function DashboardLayout() {
   useEffect(() => {
     if (user && user.role !== 'ADMIN') {
       fetchMyDepartments();
+      fetchAllMemberships();
     }
-  }, [user?.role, fetchMyDepartments]);
+  }, [user?.role, fetchMyDepartments, fetchAllMemberships]);
 
   return (
     <div className="min-h-screen bg-background">

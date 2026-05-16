@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/select';
 import type { Task } from '@/types';
 import { useTimeTrackingStore } from '@/store/timeTrackingStore';
+import { useDepartmentStore } from '@/store/departmentStore';
 import { toast } from 'sonner';
 import { Play, Square, Loader2 as TimerLoader } from 'lucide-react';
 
@@ -40,6 +41,7 @@ interface TaskDialogProps {
     deadline?: string;
     priority?: 'low' | 'medium' | 'high';
     tags?: string[];
+    departmentId?: string;
   }) => void;
   task?: Task | null;
   loading?: boolean;
@@ -47,6 +49,7 @@ interface TaskDialogProps {
 
 export default function TaskDialog({ open, onClose, onSubmit, task, loading }: TaskDialogProps) {
   const { activeSession, elapsedSeconds, loading: timerLoading, startTracking, stopTracking } = useTimeTrackingStore();
+  const allMemberships = useDepartmentStore((s) => s.allMemberships);
 
   const isThisTaskTracked = !!task?._id && activeSession?.taskId === task._id;
   const isOtherTaskTracked = !!activeSession && !isThisTaskTracked;
@@ -75,6 +78,7 @@ export default function TaskDialog({ open, onClose, onSubmit, task, loading }: T
   const [deadline, setDeadline] = useState(task?.deadline?.split('T')[0] || '');
   const [priority, setPriority] = useState<'low' | 'medium' | 'high'>(task?.priority || 'medium');
   const [tagsInput, setTagsInput] = useState(task?.tags?.join(', ') || '');
+  const [departmentId, setDepartmentId] = useState(task?.departmentId || '');
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -85,6 +89,7 @@ export default function TaskDialog({ open, onClose, onSubmit, task, loading }: T
       setDeadline(task?.deadline?.split('T')[0] || '');
       setPriority(task?.priority || 'medium');
       setTagsInput(task?.tags?.join(', ') || '');
+      setDepartmentId(task?.departmentId || '');
       setError('');
     }
   }, [task, open]);
@@ -96,6 +101,7 @@ export default function TaskDialog({ open, onClose, onSubmit, task, loading }: T
     setDeadline('');
     setPriority('medium');
     setTagsInput('');
+    setDepartmentId('');
     setError('');
   };
 
@@ -123,6 +129,7 @@ export default function TaskDialog({ open, onClose, onSubmit, task, loading }: T
       deadline: deadline || undefined,
       priority,
       tags: tagsInput.split(',').map(t => t.trim()).filter(Boolean),
+      departmentId: departmentId || undefined,
     });
   };
 
@@ -253,6 +260,26 @@ export default function TaskDialog({ open, onClose, onSubmit, task, loading }: T
               />
             </div>
           </div>
+
+          {allMemberships.length > 0 && (
+            <div className="space-y-1.5">
+              <Label>Department</Label>
+              <Select value={departmentId} onValueChange={setDepartmentId}>
+                <SelectTrigger className="rounded-xl">
+                  <SelectValue placeholder="None (Personal)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">None (Personal)</SelectItem>
+                  {allMemberships.map((m) => (
+                    <SelectItem key={m.id} value={m.department.id}>
+                      {m.department.name}
+                      <span className="ml-2 text-[10px] text-muted-foreground">[{m.role}]</span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           <DialogFooter className="pt-2">
             <Button type="button" variant="outline" onClick={onClose} className="rounded-xl">

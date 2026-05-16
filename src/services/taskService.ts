@@ -8,6 +8,7 @@ export interface CreateTaskData {
   priority?: 'low' | 'medium' | 'high';
   tags?: string[];
   deadline?: string;
+  departmentId?: string;
 }
 
 export interface UpdateTaskData {
@@ -17,6 +18,7 @@ export interface UpdateTaskData {
   priority?: 'low' | 'medium' | 'high';
   tags?: string[];
   deadline?: string;
+  departmentId?: string;
 }
 
 export const taskService = {

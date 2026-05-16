@@ -1,7 +1,8 @@
 import type { Task } from '@/types';
 import { Badge } from '@/components/ui/badge';
-import { Pencil, Trash2, Calendar, MessageSquare, Square } from 'lucide-react';
+import { Pencil, Trash2, Calendar, MessageSquare, Square, Building2 } from 'lucide-react';
 import { useTimeTrackingStore } from '@/store/timeTrackingStore';
+import { useDepartmentStore } from '@/store/departmentStore';
 import { toast } from 'sonner';
 
 function formatElapsed(seconds: number): string {
@@ -36,6 +37,10 @@ export default function TaskCard({ task, onEdit, onDelete, onComment, commentCou
   const commentCount = commentCountProp ?? task._count?.comments ?? 0;
   const { activeSession, elapsedSeconds, stopTracking } = useTimeTrackingStore();
   const isTracking = activeSession?.taskId === task._id;
+  const allMemberships = useDepartmentStore((s) => s.allMemberships);
+  const deptName = task.departmentId
+    ? allMemberships.find((m) => m.department.id === task.departmentId)?.department.name
+    : undefined;
 
   const handleStopTimer = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -90,6 +95,14 @@ export default function TaskCard({ task, onEdit, onDelete, onComment, commentCou
       <h4 className="font-semibold text-sm text-foreground mb-1.5 line-clamp-2">
         {task.title}
       </h4>
+
+      {/* Department badge */}
+      {deptName && (
+        <div className="flex items-center gap-1 mb-2">
+          <Building2 size={10} className="text-muted-foreground shrink-0" />
+          <span className="text-[10px] text-muted-foreground font-medium truncate">{deptName}</span>
+        </div>
+      )}
 
       {/* Description */}
       {task.description && (
