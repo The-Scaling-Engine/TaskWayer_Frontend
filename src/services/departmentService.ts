@@ -1,5 +1,5 @@
 import api from './api';
-import type { DepartmentMember, DepartmentMembersResponse } from '@/types';
+import type { DepartmentMember, DepartmentMembersResponse, MyDepartmentMembership, WorkloadResponse, ActiveSessionResponse, TasksResponse } from '@/types';
 
 export const departmentService = {
   getMembers: async (
@@ -40,6 +40,36 @@ export const departmentService = {
     data: { newOwnerId: string }
   ): Promise<{ success: boolean; message: string }> => {
     const response = await api.post(`/departments/${deptId}/transfer-ownership`, data);
+    return response.data;
+  },
+
+  getUserMemberships: async (): Promise<{ success: boolean; data: MyDepartmentMembership[] }> => {
+    const response = await api.get('/user/memberships');
+    return response.data;
+  },
+
+  getWorkload: async (
+    deptId: string,
+    params?: { page?: number; limit?: number }
+  ): Promise<WorkloadResponse> => {
+    const response = await api.get(`/departments/${deptId}/workload`, { params });
+    return response.data;
+  },
+
+  getMemberActiveSession: async (
+    deptId: string,
+    userId: string
+  ): Promise<ActiveSessionResponse> => {
+    const response = await api.get(`/departments/${deptId}/members/${userId}/time-tracking/active`);
+    return response.data;
+  },
+
+  getMemberTasks: async (
+    deptId: string,
+    userId: string,
+    params?: { status?: string; priority?: string; page?: number; limit?: number }
+  ): Promise<TasksResponse> => {
+    const response = await api.get(`/departments/${deptId}/members/${userId}/tasks`, { params });
     return response.data;
   },
 };

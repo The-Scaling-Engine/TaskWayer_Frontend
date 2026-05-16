@@ -17,6 +17,7 @@ import AnalyticsPage from '@/pages/AnalyticsPage';
 import AdminRoute from '@/components/AdminRoute';
 import AdminDepartmentsPage from '@/pages/AdminDepartmentsPage';
 import InvitationPage from '@/pages/InvitationPage';
+import DepartmentManagerPage from '@/pages/DepartmentManagerPage';
 
 function App() {
   return (
@@ -44,6 +45,7 @@ function App() {
           <Route path="analytics" element={<AnalyticsPage />} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="profile" element={<ProfilePage />} />
+          <Route path="departments/:departmentId" element={<DepartmentManagerPage />} />
 
           {/* Admin Routes */}
           <Route 

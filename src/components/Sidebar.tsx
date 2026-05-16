@@ -13,6 +13,7 @@ import {
   Building2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useDepartmentStore } from '@/store/departmentStore';
 
 interface SidebarProps {
   collapsed: boolean;
@@ -38,6 +39,7 @@ export default function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose
   const { user, logout } = useAuthStore();
   const navigate = useNavigate();
   const location = useLocation();
+  const myDepartments = useDepartmentStore((s) => s.myDepartments);
 
   const handleLogout = () => {
     logout();
@@ -108,6 +110,49 @@ export default function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose
               </Link>
             );
           })}
+
+          {user?.role !== 'ADMIN' && myDepartments.length > 0 && (
+            <>
+              <div className={cn('mt-4 mb-2', collapsed ? 'text-center' : 'px-3')}>
+                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  {collapsed ? 'Dept' : 'My Departments'}
+                </span>
+              </div>
+              {myDepartments.map((m) => {
+                const active = isActive(`/dashboard/departments/${m.department.id}`);
+                return (
+                  <Link
+                    key={m.id}
+                    to={`/dashboard/departments/${m.department.id}`}
+                    onClick={onMobileClose}
+                    title={collapsed ? m.department.name : undefined}
+                    className={cn(
+                      'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200',
+                      active
+                        ? 'bg-primary/10 text-primary'
+                        : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                      collapsed && 'justify-center px-2'
+                    )}
+                  >
+                    <Building2 size={20} className="shrink-0" />
+                    {!collapsed && (
+                      <>
+                        <span className="flex-1 truncate">{m.department.name}</span>
+                        <span className={cn(
+                          'text-[10px] font-bold px-1.5 py-0.5 rounded-full shrink-0',
+                          m.role === 'OWNER'
+                            ? 'bg-[#FE812C]/10 text-[#FE812C]'
+                            : 'bg-purple-500/10 text-purple-500'
+                        )}>
+                          {m.role}
+                        </span>
+                      </>
+                    )}
+                  </Link>
+                );
+              })}
+            </>
+          )}
 
           {user?.role === 'ADMIN' && (
             <>

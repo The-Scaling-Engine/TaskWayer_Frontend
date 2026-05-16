@@ -5,17 +5,26 @@ import Topbar from '@/components/Topbar';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/store/authStore';
 import { useTimeTrackingStore } from '@/store/timeTrackingStore';
+import { useDepartmentStore } from '@/store/departmentStore';
 
 export default function DashboardLayout() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const fetchProfile = useAuthStore((s) => s.fetchProfile);
   const fetchActiveSession = useTimeTrackingStore((s) => s.fetchActiveSession);
+  const user = useAuthStore((s) => s.user);
+  const fetchMyDepartments = useDepartmentStore((s) => s.fetchMyDepartments);
 
   useEffect(() => {
     fetchProfile();
     fetchActiveSession();
   }, [fetchProfile, fetchActiveSession]);
+
+  useEffect(() => {
+    if (user && user.role !== 'ADMIN') {
+      fetchMyDepartments();
+    }
+  }, [user?.role, fetchMyDepartments]);
 
   return (
     <div className="min-h-screen bg-background">

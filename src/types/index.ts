@@ -317,6 +317,59 @@ export interface InvitationsResponse {
 }
 
 // ============================================
+// MY DEPARTMENT MEMBERSHIPS
+// ============================================
+export interface MyDepartmentMembership {
+  id: string;
+  role: DepartmentMemberRole;
+  status: DepartmentMemberStatus;
+  joinedAt: string;
+  department: { id: string; name: string; description?: string };
+}
+
+export interface MemberWorkload {
+  memberId: string;
+  profile: {
+    id: string;
+    name: string | null;
+    email: string;
+    username: string | null;
+    avatar: string | null;
+    jobTitle: string | null;
+  };
+  role: DepartmentMemberRole;
+  tasks: {
+    total: number;
+    todo: number;
+    doing: number;
+    done: number;
+    overdue: number;
+    highPriority: number;
+    nearDeadline: number;
+  };
+  hasActiveSession: boolean;
+}
+
+export interface WorkloadResponse {
+  success: boolean;
+  count: number;
+  data: MemberWorkload[];
+  pagination: { page: number; limit: number; total: number; totalPages: number };
+}
+
+export interface ActiveSessionResponse {
+  success: boolean;
+  data: {
+    hasActiveSession: boolean;
+    session: {
+      id: string;
+      startedAt: string;
+      task: { id: string; title: string; priority: string; status: string; deadline: string | null };
+    } | null;
+  };
+}
+
+// ============================================
 // ANALYTICS
 // ============================================
 export interface AnalyticsSummary {
