@@ -10,6 +10,7 @@ interface NotificationState {
   fetchUnreadCount: () => Promise<void>;
   markAsRead: (id: string) => Promise<void>;
   markAllAsRead: () => Promise<void>;
+  pushNotification: (notification: Notification) => void;
 }
 
 export const useNotificationStore = create<NotificationState>((set, get) => ({
@@ -54,6 +55,13 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
     } catch {
       // silent fail
     }
+  },
+
+  pushNotification: (notification: Notification) => {
+    set((state) => ({
+      notifications: [notification, ...state.notifications].slice(0, 20),
+      unreadCount: state.unreadCount + 1,
+    }));
   },
 
   markAllAsRead: async () => {

@@ -6,15 +6,24 @@ import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/store/authStore';
 import { useTimeTrackingStore } from '@/store/timeTrackingStore';
 import { useDepartmentStore } from '@/store/departmentStore';
+import { useSocketStore } from '@/store/socketStore';
+import { useNotificationStore } from '@/store/notificationStore';
+import { useTaskStore } from '@/store/taskStore';
+import { toast } from 'sonner';
+import type { Notification } from '@/types';
 
 export default function DashboardLayout() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const fetchProfile = useAuthStore((s) => s.fetchProfile);
+  const token = useAuthStore((s) => s.token);
   const fetchActiveSession = useTimeTrackingStore((s) => s.fetchActiveSession);
   const user = useAuthStore((s) => s.user);
   const fetchMyDepartments = useDepartmentStore((s) => s.fetchMyDepartments);
   const fetchAllMemberships = useDepartmentStore((s) => s.fetchAllMemberships);
+  const { connect, disconnect, socket } = useSocketStore();
+  const pushNotification = useNotificationStore((s) => s.pushNotification);
+  const silentFetch = useTaskStore((s) => s.silentFetch);
 
   useEffect(() => {
     fetchProfile();
@@ -27,6 +36,35 @@ export default function DashboardLayout() {
       fetchAllMemberships();
     }
   }, [user?.role, fetchMyDepartments, fetchAllMemberships]);
+
+  // Connect socket when authenticated
+  useEffect(() => {
+    if (!token) return;
+    connect(token);
+    return () => { disconnect(); };
+  }, [token, connect, disconnect]);
+
+  // Global socket event listeners
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleNotification = (data: Notification) => {
+      pushNotification(data);
+      toast(data.title, { description: data.message, duration: 4000 });
+    };
+
+    const handleTaskUpdated = () => {
+      silentFetch();
+    };
+
+    socket.on('notification:new', handleNotification);
+    socket.on('task:updated', handleTaskUpdated);
+
+    return () => {
+      socket.off('notification:new', handleNotification);
+      socket.off('task:updated', handleTaskUpdated);
+    };
+  }, [socket, pushNotification, silentFetch]);
 
   return (
     <div className="min-h-screen bg-background">

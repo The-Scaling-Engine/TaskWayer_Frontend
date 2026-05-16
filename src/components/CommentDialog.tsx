@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import type { Task, Comment } from '@/types';
 import { commentService } from '@/services/commentService';
 import { useAuthStore } from '@/store/authStore';
+import { useSocketStore } from '@/store/socketStore';
 import { toast } from 'sonner';
 import { Send, Pencil, Trash2, MessageSquare, Loader2 } from 'lucide-react';
 
@@ -36,6 +37,7 @@ function getDisplayName(author: Comment['author']): string {
 
 export default function CommentDialog({ open, onClose, task, onCountUpdate }: CommentDialogProps) {
   const currentUser = useAuthStore((s) => s.user);
+  const { socket, joinTask } = useSocketStore();
 
   const [comments, setComments] = useState<Comment[]>([]);
   const [commentsLoading, setCommentsLoading] = useState(false);
@@ -45,6 +47,11 @@ export default function CommentDialog({ open, onClose, task, onCountUpdate }: Co
   const [editContent, setEditContent] = useState('');
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
+  // Keep a ref to comments so socket handlers always have latest value
+  const commentsRef = useRef<Comment[]>(comments);
+  useEffect(() => { commentsRef.current = comments; }, [comments]);
+
+  // Fetch comments + join task room when dialog opens
   useEffect(() => {
     if (open && task._id) {
       setCommentsLoading(true);
@@ -58,6 +65,8 @@ export default function CommentDialog({ open, onClose, task, onCountUpdate }: Co
         })
         .catch(() => toast.error('Failed to load comments'))
         .finally(() => setCommentsLoading(false));
+
+      joinTask(task._id);
     }
     if (!open) {
       setComments([]);
@@ -65,7 +74,60 @@ export default function CommentDialog({ open, onClose, task, onCountUpdate }: Co
       setEditingId(null);
       setDeleteConfirmId(null);
     }
-  }, [open, task._id]);
+  }, [open, task._id, joinTask]);
+
+  // Real-time comment events
+  useEffect(() => {
+    if (!socket || !open) return;
+
+    const handleCreated = (data: { commentId: string; taskId: string; content: string; authorId: string; authorName: string | null; parentId: string | null; createdAt: string }) => {
+      if (data.taskId !== task._id) return;
+      // Deduplicate: skip if already added optimistically by the current user
+      if (commentsRef.current.some((c) => c.id === data.commentId)) return;
+      const newComment: Comment = {
+        id: data.commentId,
+        taskId: data.taskId,
+        authorId: data.authorId,
+        author: { id: data.authorId, name: data.authorName },
+        content: data.content,
+        parentId: data.parentId,
+        createdAt: data.createdAt,
+      };
+      setComments((prev) => {
+        const updated = [...prev, newComment];
+        onCountUpdate?.(task._id, updated.filter((c) => !c.deletedAt).length);
+        return updated;
+      });
+    };
+
+    const handleUpdated = (data: { commentId: string; taskId: string; content: string; updatedAt: string }) => {
+      if (data.taskId !== task._id) return;
+      setComments((prev) => prev.map((c) =>
+        c.id === data.commentId ? { ...c, content: data.content, updatedAt: data.updatedAt } : c
+      ));
+    };
+
+    const handleDeleted = (data: { commentId: string; taskId: string }) => {
+      if (data.taskId !== task._id) return;
+      setComments((prev) => {
+        const updated = prev.map((c) =>
+          c.id === data.commentId ? { ...c, deletedAt: new Date().toISOString(), content: '[deleted]' } : c
+        );
+        onCountUpdate?.(task._id, updated.filter((c) => !c.deletedAt).length);
+        return updated;
+      });
+    };
+
+    socket.on('comment:created', handleCreated);
+    socket.on('comment:updated', handleUpdated);
+    socket.on('comment:deleted', handleDeleted);
+
+    return () => {
+      socket.off('comment:created', handleCreated);
+      socket.off('comment:updated', handleUpdated);
+      socket.off('comment:deleted', handleDeleted);
+    };
+  }, [socket, open, task._id, onCountUpdate]);
 
   const activeComments = comments.filter((c) => !c.deletedAt);
 

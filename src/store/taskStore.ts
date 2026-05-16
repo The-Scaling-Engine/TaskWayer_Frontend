@@ -33,6 +33,7 @@ interface TaskState {
   updateTask: (id: string, data: UpdateTaskData) => Promise<void>;
   deleteTask: (id: string) => Promise<void>;
   clearDeptMap: () => void;
+  silentFetch: () => Promise<void>;
 }
 
 export const useTaskStore = create<TaskState>((set, get) => ({
@@ -109,5 +110,19 @@ export const useTaskStore = create<TaskState>((set, get) => ({
   clearDeptMap: () => {
     set({ taskDeptMap: {} });
     try { localStorage.removeItem(DEPT_MAP_KEY); } catch {}
+  },
+
+  silentFetch: async () => {
+    try {
+      const res = await taskService.getTasks(get().params);
+      const deptMap = get().taskDeptMap;
+      const tasks = res.data.map((t) => ({
+        ...t,
+        departmentId: t.departmentId || deptMap[t._id] || undefined,
+      }));
+      set({ tasks, pagination: res.pagination });
+    } catch {
+      // silent – don't disrupt UI
+    }
   },
 }));
