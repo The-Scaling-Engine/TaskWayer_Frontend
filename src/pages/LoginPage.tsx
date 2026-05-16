@@ -148,7 +148,6 @@ export default function LoginPage() {
 
               {/* Password */}
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-zinc-600 dark:text-zinc-300 tracking-wide uppercase">Password</label>
                 <div className="relative group">
                   <div className="absolute inset-0 bg-gradient-to-r from-emerald-400/50 to-emerald-500/50 rounded-xl blur-md opacity-0 group-focus-within:opacity-100 transition-opacity duration-300" />
                   <div className="relative">
@@ -169,6 +168,12 @@ export default function LoginPage() {
                       {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                     </button>
                   </div>
+                </div>
+                  <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-zinc-600 dark:text-zinc-300 tracking-wide uppercase">Password</label>
+                  <Link to="/forgot-password" className="text-sm text-emerald-700 hover:text-emerald-800 dark:text-amber-300 dark:hover:text-amber-200 font-medium transition-colors">
+                    Forgot password?
+                  </Link>
                 </div>
               </div>
 
