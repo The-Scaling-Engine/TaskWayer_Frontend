@@ -98,9 +98,11 @@ export default function TaskCard({ task, onEdit, onDelete, onComment, commentCou
 
       {/* Department badge */}
       {deptName && (
-        <div className="flex items-center gap-1 mb-2">
-          <Building2 size={10} className="text-muted-foreground shrink-0" />
-          <span className="text-[10px] text-muted-foreground font-medium truncate">{deptName}</span>
+        <div className="flex items-center mb-2">
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-[#FE812C]/10 text-[#FE812C] text-[10px] font-semibold max-w-full">
+            <Building2 size={9} className="shrink-0" />
+            <span className="truncate">{deptName}</span>
+          </span>
         </div>
       )}
 

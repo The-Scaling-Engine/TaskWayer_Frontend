@@ -26,9 +26,13 @@ export const useDepartmentStore = create<DepartmentStore>((set) => ({
     try {
       const res = await departmentService.getUserMemberships();
       if (res.success) {
-        const managed = res.data.filter(
-          (m) => m.status === 'ACTIVE' && (m.role === 'OWNER' || m.role === 'ADMIN')
-        );
+        const normalize = (m: (typeof res.data)[number]) => {
+          const dept = m.department as typeof m.department & { _id?: string };
+          return { ...m, department: { ...dept, id: dept.id ?? dept._id ?? '' } };
+        };
+        const managed = res.data
+          .filter((m) => m.status === 'ACTIVE' && (m.role === 'OWNER' || m.role === 'ADMIN'))
+          .map(normalize);
         set({ myDepartments: managed, hasFetched: true });
       }
     } catch {
@@ -42,7 +46,12 @@ export const useDepartmentStore = create<DepartmentStore>((set) => ({
     try {
       const res = await departmentService.getUserMemberships();
       if (res.success) {
-        const active = res.data.filter((m) => m.status === 'ACTIVE');
+        const active = res.data
+          .filter((m) => m.status === 'ACTIVE')
+          .map((m) => {
+            const dept = m.department as typeof m.department & { _id?: string };
+            return { ...m, department: { ...dept, id: dept.id ?? dept._id ?? '' } };
+          });
         set({ allMemberships: active });
       }
     } catch {
