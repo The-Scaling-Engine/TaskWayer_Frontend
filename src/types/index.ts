@@ -246,8 +246,9 @@ export interface Department {
   createdAt: string;
   updatedAt: string;
   _count?: {
-    members: number;
-    tasks: number;
+    members?: number;
+    memberships?: number;
+    tasks?: number;
   };
 }
 

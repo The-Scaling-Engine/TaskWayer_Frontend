@@ -204,7 +204,7 @@ export default function AdminDepartmentsPage() {
       setMembers(prev => prev.filter(m => m.userId !== userId));
       setDepartments(prev => prev.map(d =>
         d.id === selectedDept.id && d._count
-          ? { ...d, _count: { ...d._count, members: Math.max(0, d._count.members - 1) } }
+          ? { ...d, _count: { ...d._count, members: Math.max(0, (d._count.members ?? d._count.memberships ?? 0) - 1), memberships: Math.max(0, (d._count.memberships ?? d._count.members ?? 0) - 1) } }
           : d
       ));
       toast.success(`Removed ${label}`);
@@ -355,7 +355,7 @@ export default function AdminDepartmentsPage() {
         setMembers(res.data);
         setDepartments(prev => prev.map(d =>
           d.id === selectedDept.id && d._count
-            ? { ...d, _count: { ...d._count, members: res.pagination.total } }
+            ? { ...d, _count: { ...d._count, members: res.pagination.total, memberships: res.pagination.total } }
             : d
         ));
       }
@@ -493,7 +493,7 @@ export default function AdminDepartmentsPage() {
                       onClick={() => loadMembers(dept)}
                       className="flex items-center gap-1 text-muted-foreground text-xs font-medium hover:text-primary transition-colors"
                     >
-                      <Users size={13} /> {dept._count?.members ?? 0}
+                      <Users size={13} /> {dept._count?.memberships ?? dept._count?.members ?? 0}
                     </button>
                   </td>
                   <td className="px-6 py-4 text-muted-foreground text-xs">{dept._count?.tasks ?? 0}</td>
@@ -811,13 +811,13 @@ export default function AdminDepartmentsPage() {
                 Are you sure you want to delete{' '}
                 <span className="font-semibold text-foreground">{deleteDept.name}</span>?
               </p>
-              {(deleteDept._count?.members ?? 0) > 0 && (
+              {(deleteDept._count?.memberships ?? deleteDept._count?.members ?? 0) > 0 && (
                 <p className="text-destructive font-medium">
-                  This department has {deleteDept._count?.members} active member(s).
+                  This department has {deleteDept._count?.memberships ?? deleteDept._count?.members ?? 0} active member(s).
                 </p>
               )}
             </div>
-            {(deleteDept._count?.members ?? 0) > 0 && (
+            {(deleteDept._count?.memberships ?? deleteDept._count?.members ?? 0) > 0 && (
               <label className="flex items-center gap-2 text-sm cursor-pointer select-none">
                 <input
                   type="checkbox"
@@ -835,7 +835,7 @@ export default function AdminDepartmentsPage() {
               >Cancel</button>
               <button
                 onClick={handleDeleteDept}
-                disabled={deleting || ((deleteDept._count?.members ?? 0) > 0 && !forceDelete)}
+                disabled={deleting || ((deleteDept._count?.memberships ?? deleteDept._count?.members ?? 0) > 0 && !forceDelete)}
                 className="px-4 py-2 rounded-xl text-sm font-medium text-white bg-destructive hover:bg-destructive/90 disabled:opacity-60 transition-colors"
               >
                 {deleting ? 'Deleting...' : 'Delete'}
