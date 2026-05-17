@@ -31,7 +31,7 @@ export const useSocketStore = create<SocketStore>((set, get) => ({
 
     socket.on('connect', () => set({ connected: true }));
     socket.on('disconnect', () => set({ connected: false }));
-    socket.on('connect_error', (err) => {
+    socket.on('connect_error', (err: Error) => {
       console.warn('[Socket] connect_error:', err.message);
     });
 
