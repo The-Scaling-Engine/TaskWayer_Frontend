@@ -13,6 +13,7 @@ import {
   Loader2,
   RefreshCw,
   X,
+  UserPlus,
 } from 'lucide-react';
 
 export default function AdminUsersPage() {
@@ -32,6 +33,14 @@ export default function AdminUsersPage() {
   // Confirm dialog state
   const [confirmAction, setConfirmAction] = useState<{ user: AdminUser; action: 'ban' | 'unban' } | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
+
+  // Invite user modal state
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [inviteName, setInviteName] = useState('');
+  const [inviteUsername, setInviteUsername] = useState('');
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteLoading, setInviteLoading] = useState(false);
+  const [inviteError, setInviteError] = useState('');
 
   // Date filter (client-side)
   const [joinedFrom, setJoinedFrom] = useState('');
@@ -109,6 +118,45 @@ export default function AdminUsersPage() {
     }
   };
 
+  const resetInviteForm = () => {
+    setInviteName('');
+    setInviteUsername('');
+    setInviteEmail('');
+    setInviteError('');
+  };
+
+  const handleInviteSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setInviteError('');
+
+    if (!inviteName.trim() || !inviteUsername.trim() || !inviteEmail.trim()) {
+      setInviteError('All fields are required');
+      return;
+    }
+
+    setInviteLoading(true);
+    try {
+      const res = await adminService.createUser({
+        name: inviteName.trim(),
+        username: inviteUsername.trim(),
+        email: inviteEmail.trim().toLowerCase(),
+      });
+      toast.success(res.message || 'Invitation sent successfully');
+      setShowInviteModal(false);
+      resetInviteForm();
+      fetchUsers();
+    } catch (err: unknown) {
+      if (err && typeof err === 'object' && 'response' in err) {
+        const axiosErr = err as { response?: { data?: { message?: string } } };
+        setInviteError(axiosErr.response?.data?.message || 'Failed to create user');
+      } else {
+        setInviteError('Network error. Please try again.');
+      }
+    } finally {
+      setInviteLoading(false);
+    }
+  };
+
   const filteredUsers = users.filter((u) => {
     if (!joinedFrom && !joinedTo) return true;
     if (!u.createdAt) return true;
@@ -139,6 +187,13 @@ export default function AdminUsersPage() {
             <Users size={18} />
             {totalUsers} Total Accounts
           </div>
+          <button
+            onClick={() => { resetInviteForm(); setShowInviteModal(true); }}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-sm"
+          >
+            <UserPlus size={16} />
+            Invite User
+          </button>
         </div>
       </div>
 
@@ -310,6 +365,96 @@ export default function AdminUsersPage() {
           </div>
         )}
       </div>
+
+      {/* Invite User Modal */}
+      {showInviteModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50">
+          <div className="bg-card border border-border rounded-2xl p-6 max-w-md w-full mx-4 shadow-xl">
+            <div className="flex items-center justify-between mb-5">
+              <div>
+                <h3 className="text-lg font-bold text-foreground">Invite New User</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">An activation email will be sent to their inbox.</p>
+              </div>
+              <button
+                onClick={() => setShowInviteModal(false)}
+                className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleInviteSubmit} className="space-y-4">
+              {inviteError && (
+                <div className="bg-destructive/10 border border-destructive/20 text-destructive rounded-xl px-4 py-2.5 text-sm">
+                  {inviteError}
+                </div>
+              )}
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-foreground">Full Name</label>
+                <input
+                  type="text"
+                  value={inviteName}
+                  onChange={(e) => setInviteName(e.target.value)}
+                  placeholder="John Doe"
+                  className="w-full bg-muted/50 border border-border focus:border-primary/50 focus:bg-background rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none transition-all"
+                  autoFocus
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-foreground">Username</label>
+                <input
+                  type="text"
+                  value={inviteUsername}
+                  onChange={(e) => setInviteUsername(e.target.value)}
+                  placeholder="johndoe"
+                  className="w-full bg-muted/50 border border-border focus:border-primary/50 focus:bg-background rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none transition-all"
+                />
+                <p className="text-[11px] text-muted-foreground">Letters, numbers and underscores only.</p>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-foreground">Email Address</label>
+                <input
+                  type="email"
+                  value={inviteEmail}
+                  onChange={(e) => setInviteEmail(e.target.value)}
+                  placeholder="john@example.com"
+                  className="w-full bg-muted/50 border border-border focus:border-primary/50 focus:bg-background rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none transition-all"
+                />
+              </div>
+
+              <div className="flex gap-3 justify-end pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowInviteModal(false)}
+                  className="px-4 py-2 rounded-xl text-sm font-medium text-muted-foreground hover:bg-muted transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={inviteLoading}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-60"
+                >
+                  {inviteLoading ? (
+                    <>
+                      <Loader2 size={14} className="animate-spin" />
+                      Sending...
+                    </>
+                  ) : (
+                    <>
+                      <UserPlus size={14} />
+                      Send Invitation
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Confirm Ban/Unban Dialog */}
       {confirmAction && (

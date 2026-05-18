@@ -24,17 +24,10 @@ export default function ForgotPasswordPage() {
 
     setLoading(true);
     try {
-      const res = await authService.forgotPassword(email);
-      if (res.success) {
-        setSuccess(res.message || 'Password reset link has been sent to your email. Please check your inbox.');
-      }
+      await authService.forgotPassword(email);
+      setSuccess('Password reset link has been sent to your email. Please check your inbox.');
     } catch (err: unknown) {
-      if (err && typeof err === 'object' && 'response' in err) {
-        const axiosErr = err as { response?: { data?: { message?: string } } };
-        setError(axiosErr.response?.data?.message || 'Failed to send reset email');
-      } else {
-        setError('Network error. Please try again.');
-      }
+      setError(err instanceof Error ? err.message : 'Failed to send reset email');
     } finally {
       setLoading(false);
     }

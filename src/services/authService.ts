@@ -1,41 +1,32 @@
+import { supabase } from '@/lib/supabase';
 import api from './api';
-import type { LoginRequest, RegisterRequest, AuthResponse } from '@/types';
+import type { User } from '@/types';
 
-export const authService = {
-  login: async (data: LoginRequest): Promise<AuthResponse> => {
-    const response = await api.post<AuthResponse>('/auth/login', data);
-    return response.data;
-  },
+interface LoginResult {
+  token: string;
+  user: User;
+}
 
-  register: async (data: RegisterRequest): Promise<AuthResponse> => {
-    const response = await api.post<AuthResponse>('/auth/register', data);
-    return response.data;
-  },
+const login = async (email: string, password: string): Promise<LoginResult> => {
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error) throw new Error(error.message);
 
-  forgotPassword: async (email: string): Promise<{ success: boolean; message: string }> => {
-    const response = await api.post<{ success: boolean; message: string }>(
-      '/auth/forgot-password',
-      { email }
-    );
-    return response.data;
-  },
-
-  resetPassword: async (token: string, password: string): Promise<AuthResponse> => {
-    const response = await api.post<AuthResponse>('/auth/reset-password', {
-      token,
-      password,
-    });
-    return response.data;
-  },
-
-  changePassword: async (
-    currentPassword: string,
-    newPassword: string
-  ): Promise<{ success: boolean; message: string }> => {
-    const response = await api.put<{ success: boolean; message: string }>(
-      '/auth/change-password',
-      { currentPassword, newPassword }
-    );
-    return response.data;
-  },
+  const token = data.session.access_token;
+  const profileRes = await api.get<{ data: User }>('/user/profile', {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return { token, user: profileRes.data.data };
 };
+
+const forgotPassword = async (email: string): Promise<void> => {
+  const redirectTo = `${window.location.origin}/reset-password`;
+  const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
+  if (error) throw new Error(error.message);
+};
+
+const changePassword = async (newPassword: string): Promise<void> => {
+  const { error } = await supabase.auth.updateUser({ password: newPassword });
+  if (error) throw new Error(error.message);
+};
+
+export const authService = { login, forgotPassword, changePassword };

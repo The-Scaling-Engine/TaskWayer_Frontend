@@ -26,26 +26,19 @@ export default function LoginPage() {
 
     setLoading(true);
     try {
-      const res = await authService.login({ email, password });
-      if (res.success && res.data.token) {
-        login(res.data.token, { _id: res.data.id, email: res.data.email, role: res.data.role });
-        const pendingInvitation = sessionStorage.getItem('pending_invitation');
-        if (pendingInvitation) {
-          sessionStorage.removeItem('pending_invitation');
-          navigate(pendingInvitation);
-        } else if (res.data.role === 'ADMIN') {
-          navigate('/dashboard/admin');
-        } else {
-          navigate('/dashboard');
-        }
+      const { token, user } = await authService.login(email, password);
+      login(token, user);
+      const pendingInvitation = sessionStorage.getItem('pending_invitation');
+      if (pendingInvitation) {
+        sessionStorage.removeItem('pending_invitation');
+        navigate(pendingInvitation);
+      } else if (user.role === 'ADMIN') {
+        navigate('/dashboard/admin');
+      } else {
+        navigate('/dashboard');
       }
     } catch (err: unknown) {
-      if (err && typeof err === 'object' && 'response' in err) {
-        const axiosErr = err as { response?: { data?: { message?: string } } };
-        setError(axiosErr.response?.data?.message || 'Login failed');
-      } else {
-        setError('Network error. Please try again.');
-      }
+      setError(err instanceof Error ? err.message : 'Login failed');
     } finally {
       setLoading(false);
     }
@@ -192,14 +185,6 @@ export default function LoginPage() {
 
             </form>
 
-            <div className="mt-8 text-center">
-              <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                Don't have an account?{' '}
-                <Link to="/register" className="text-emerald-700 hover:text-emerald-800 dark:text-amber-200 dark:hover:text-amber-100 font-semibold transition-colors">
-                  Sign up
-                </Link>
-              </p>
-            </div>
             
           </div>
         </div>

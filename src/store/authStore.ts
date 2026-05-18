@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { User } from '@/types';
 import { userService } from '@/services/userService';
+import { supabase } from '@/lib/supabase';
 
 interface AuthState {
   token: string | null;
@@ -24,6 +25,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   logout: () => {
+    supabase.auth.signOut().catch(() => {});
     localStorage.removeItem('microdo_token');
     localStorage.removeItem('microdo_user');
     localStorage.removeItem('microdo_task_dept_map');
@@ -38,7 +40,7 @@ export const useAuthStore = create<AuthState>((set) => ({
         set({ user: res.data });
       }
     } catch {
-      // If profile fetch fails (e.g. token expired), the 401 interceptor handles logout
+      // 401 interceptor handles logout
     }
   },
 

@@ -15,18 +15,17 @@ import { toast } from 'sonner';
 import { Lock, Eye, EyeOff, Loader2, AlertTriangle } from 'lucide-react';
 
 export default function SettingsPage() {
-  const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmNewPassword, setConfirmNewPassword] = useState('');
   const [showPasswords, setShowPasswords] = useState(false);
   const [passwordLoading, setPasswordLoading] = useState(false);
-  
+
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
 
   const handlePreSubmit = (e: FormEvent) => {
     e.preventDefault();
 
-    if (!currentPassword || !newPassword || !confirmNewPassword) {
+    if (!newPassword || !confirmNewPassword) {
       toast.error('Please fill in all password fields');
       return;
     }
@@ -37,33 +36,24 @@ export default function SettingsPage() {
     }
 
     if (newPassword !== confirmNewPassword) {
-      toast.error('New passwords do not match');
+      toast.error('Passwords do not match');
       return;
     }
 
-    // Pass validation -> open confirmation dialog
     setIsConfirmOpen(true);
   };
 
   const executePasswordChange = async () => {
     setIsConfirmOpen(false);
     setPasswordLoading(true);
-    
+
     try {
-      const res = await authService.changePassword(currentPassword, newPassword);
-      if (res.success) {
-        toast.success(res.message || 'Password changed successfully');
-        setCurrentPassword('');
-        setNewPassword('');
-        setConfirmNewPassword('');
-      }
+      await authService.changePassword(newPassword);
+      toast.success('Password changed successfully');
+      setNewPassword('');
+      setConfirmNewPassword('');
     } catch (err: unknown) {
-      if (err && typeof err === 'object' && 'response' in err) {
-        const axiosErr = err as { response?: { data?: { message?: string } } };
-        toast.error(axiosErr.response?.data?.message || 'Failed to change password');
-      } else {
-        toast.error('Network error. Please try again.');
-      }
+      toast.error(err instanceof Error ? err.message : 'Failed to change password');
     } finally {
       setPasswordLoading(false);
     }
@@ -78,30 +68,6 @@ export default function SettingsPage() {
 
       <div className="bg-card rounded-2xl border border-border p-6 shadow-sm">
         <form onSubmit={handlePreSubmit} className="space-y-4">
-          {/* Current Password */}
-          <div className="space-y-1.5">
-            <Label htmlFor="current-password" className="text-xs font-medium text-foreground">Current Password</Label>
-            <div className="relative">
-              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
-              <Input
-                id="current-password"
-                type={showPasswords ? 'text' : 'password'}
-                placeholder="Enter current password"
-                value={currentPassword}
-                onChange={(e) => setCurrentPassword(e.target.value)}
-                className="pl-9 pr-10 h-11 rounded-lg bg-accent/5 focus-visible:ring-1"
-                autoComplete="current-password"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPasswords(!showPasswords)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-              >
-                {showPasswords ? <EyeOff size={16} /> : <Eye size={16} />}
-              </button>
-            </div>
-          </div>
-
           {/* New Password */}
           <div className="space-y-1.5">
             <Label htmlFor="new-password-change" className="text-xs font-medium text-foreground">New Password</Label>
@@ -113,9 +79,16 @@ export default function SettingsPage() {
                 placeholder="At least 6 characters"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
-                className="pl-9 h-11 rounded-lg bg-accent/5 focus-visible:ring-1"
+                className="pl-9 pr-10 h-11 rounded-lg bg-accent/5 focus-visible:ring-1"
                 autoComplete="new-password"
               />
+              <button
+                type="button"
+                onClick={() => setShowPasswords(!showPasswords)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+              >
+                {showPasswords ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
             </div>
           </div>
 
@@ -162,7 +135,7 @@ export default function SettingsPage() {
             </div>
             <DialogTitle className="text-center text-xl">Confirm Password Change</DialogTitle>
             <DialogDescription className="text-center pt-2">
-              Are you sure you want to change your password? This will log you out of other active sessions.
+              Are you sure you want to change your password? Other active sessions will be signed out.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="flex gap-2 sm:gap-0 mt-6 pt-4 border-t border-border">

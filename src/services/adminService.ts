@@ -22,6 +22,11 @@ export const adminService = {
     return response.data;
   },
 
+  createUser: async (data: { name: string; username: string; email: string }): Promise<{ success: boolean; message: string; data: AdminUser }> => {
+    const response = await api.post<{ success: boolean; message: string; data: AdminUser }>('/admin/users', data);
+    return response.data;
+  },
+
   banUser: async (id: string): Promise<{ success: boolean; message: string; data: AdminUser }> => {
     const response = await api.patch<{ success: boolean; message: string; data: AdminUser }>(`/admin/users/${id}/ban`);
     return response.data;
