@@ -8,7 +8,11 @@ export interface CreateTaskData {
   priority?: 'low' | 'medium' | 'high';
   tags?: string[];
   deadline?: string;
+  scheduledAt?: string | null;
   departmentId?: string;
+  isRecurring?: boolean;
+  recurrenceType?: 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY' | null;
+  recurrenceEndDate?: string | null;
 }
 
 export interface UpdateTaskData {
@@ -18,7 +22,11 @@ export interface UpdateTaskData {
   priority?: 'low' | 'medium' | 'high';
   tags?: string[];
   deadline?: string;
+  scheduledAt?: string | null;
   departmentId?: string;
+  isRecurring?: boolean;
+  recurrenceType?: 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY' | null;
+  recurrenceEndDate?: string | null;
 }
 
 export const taskService = {
@@ -31,26 +39,24 @@ export const taskService = {
     limit?: number;
     sortBy?: string;
     order?: string;
+    deadlineFrom?: string;
+    deadlineTo?: string;
+    createdFrom?: string;
+    createdTo?: string;
+    scheduledFrom?: string;
+    scheduledTo?: string;
   }): Promise<TasksResponse> => {
     const response = await api.get<TasksResponse>('/tasks', { params });
     return response.data;
   },
 
   createTask: async (data: CreateTaskData): Promise<{ success: boolean; data: Task }> => {
-    const payload = {
-      ...data,
-      deadline: data.deadline ? `${data.deadline}T00:00:00.000Z` : undefined,
-    };
-    const response = await api.post('/tasks', payload);
+    const response = await api.post('/tasks', data);
     return response.data;
   },
 
   updateTask: async (id: string, data: UpdateTaskData): Promise<{ success: boolean; data: Task }> => {
-    const payload = {
-      ...data,
-      deadline: data.deadline ? `${data.deadline}T00:00:00.000Z` : data.deadline,
-    };
-    const response = await api.put(`/tasks/${id}`, payload);
+    const response = await api.put(`/tasks/${id}`, data);
     return response.data;
   },
 

@@ -19,9 +19,7 @@ const login = async (email: string, password: string): Promise<LoginResult> => {
 };
 
 const forgotPassword = async (email: string): Promise<void> => {
-  const redirectTo = `${window.location.origin}/reset-password`;
-  const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
-  if (error) throw new Error(error.message);
+  await api.post('/auth/forgot-password', { email });
 };
 
 const changePassword = async (newPassword: string): Promise<void> => {

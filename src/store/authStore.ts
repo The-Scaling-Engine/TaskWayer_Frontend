@@ -28,7 +28,6 @@ export const useAuthStore = create<AuthState>((set) => ({
     supabase.auth.signOut().catch(() => {});
     localStorage.removeItem('microdo_token');
     localStorage.removeItem('microdo_user');
-    localStorage.removeItem('microdo_task_dept_map');
     set({ token: null, user: null, isAuthenticated: false });
   },
 

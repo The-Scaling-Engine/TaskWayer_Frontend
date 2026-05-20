@@ -1,6 +1,6 @@
 import type { Task } from '@/types';
 import { Badge } from '@/components/ui/badge';
-import { Pencil, Trash2, Calendar, MessageSquare, Square, Building2 } from 'lucide-react';
+import { Pencil, Trash2, Calendar, MessageSquare, Square, Building2, Clock } from 'lucide-react';
 import { useTimeTrackingStore } from '@/store/timeTrackingStore';
 import { useDepartmentStore } from '@/store/departmentStore';
 import { toast } from 'sonner';
@@ -133,21 +133,27 @@ export default function TaskCard({ task, onEdit, onDelete, onComment, commentCou
         </div>
       )}
 
-      {/* Footer: Deadline + comment count (always visible) */}
-      <div className="flex items-center justify-between">
-        {task.deadline ? (
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Calendar size={12} />
-            <span>{new Date(task.deadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
-          </div>
-        ) : <div />}
+      {/* Footer */}
+      <div className="space-y-1.5">
+        <div className="flex items-center justify-between">
+          {task.deadline ? (
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Calendar size={12} />
+              <span>{new Date(task.deadline).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+            </div>
+          ) : <div />}
 
-        {commentCount > 0 && (
-          <div className="flex items-center gap-1 text-xs text-muted-foreground">
-            <MessageSquare size={11} />
-            <span>{commentCount}</span>
-          </div>
-        )}
+          {commentCount > 0 && (
+            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+              <MessageSquare size={11} />
+              <span>{commentCount}</span>
+            </div>
+          )}
+        </div>
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground/60">
+          <Clock size={11} className="shrink-0" />
+          <span>Created {new Date(task.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+        </div>
       </div>
 
       {/* Floating timer – shown when this task is being tracked */}

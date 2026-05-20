@@ -11,6 +11,7 @@ import {
   Users,
   BarChart2,
   Building2,
+  CalendarDays,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useDepartmentStore } from '@/store/departmentStore';
@@ -25,6 +26,7 @@ interface SidebarProps {
 const navItems = [
   { icon: LayoutDashboard, label: 'Overview', path: '/dashboard' },
   { icon: CheckSquare, label: 'My Tasks', path: '/dashboard/tasks' },
+  { icon: CalendarDays, label: 'Calendar', path: '/dashboard/calendar' },
   { icon: BarChart2, label: 'Analytics', path: '/dashboard/analytics' },
   { icon: Settings, label: 'Settings', path: '/dashboard/settings' },
 ];
@@ -79,7 +81,7 @@ export default function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose
             <CheckSquare className="text-primary-foreground" size={22} />
           </div>
           {!collapsed && (
-            <span className="text-xl font-bold text-foreground tracking-tight">MicroDo</span>
+            <span className="text-xl font-bold text-foreground tracking-tight">TasksWayer</span>
           )}
         </div>
 

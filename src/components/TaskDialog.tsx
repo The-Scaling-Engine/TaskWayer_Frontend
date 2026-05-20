@@ -23,6 +23,17 @@ import { useDepartmentStore } from '@/store/departmentStore';
 import { toast } from 'sonner';
 import { Play, Square, Loader2 as TimerLoader } from 'lucide-react';
 
+function toDatetimeLocal(isoStr: string): string {
+  const d = new Date(isoStr);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function formatCreatedAt(isoStr: string): string {
+  const d = new Date(isoStr);
+  return d.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
 function formatElapsed(seconds: number): string {
   const h = Math.floor(seconds / 3600);
   const m = Math.floor((seconds % 3600) / 60);
@@ -39,15 +50,21 @@ interface TaskDialogProps {
     description: string;
     status: 'todo' | 'doing' | 'done';
     deadline?: string;
+    scheduledAt?: string | null;
     priority?: 'low' | 'medium' | 'high';
     tags?: string[];
     departmentId?: string;
+    isRecurring?: boolean;
+    recurrenceType?: 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY' | null;
+    recurrenceEndDate?: string | null;
   }) => void;
   task?: Task | null;
   loading?: boolean;
+  defaultDeadline?: string;
+  defaultScheduledAt?: string;
 }
 
-export default function TaskDialog({ open, onClose, onSubmit, task, loading }: TaskDialogProps) {
+export default function TaskDialog({ open, onClose, onSubmit, task, loading, defaultDeadline, defaultScheduledAt }: TaskDialogProps) {
   const { activeSession, elapsedSeconds, loading: timerLoading, startTracking, stopTracking } = useTimeTrackingStore();
   const allMemberships = useDepartmentStore((s) => s.allMemberships);
 
@@ -75,10 +92,14 @@ export default function TaskDialog({ open, onClose, onSubmit, task, loading }: T
   const [title, setTitle] = useState(task?.title || '');
   const [description, setDescription] = useState(task?.description || '');
   const [status, setStatus] = useState<'todo' | 'doing' | 'done'>(task?.status || 'todo');
-  const [deadline, setDeadline] = useState(task?.deadline?.split('T')[0] || '');
+  const [deadline, setDeadline] = useState(task?.deadline ? toDatetimeLocal(task.deadline) : '');
+  const [scheduledAt, setScheduledAt] = useState(task?.scheduledAt ? toDatetimeLocal(task.scheduledAt) : '');
   const [priority, setPriority] = useState<'low' | 'medium' | 'high'>(task?.priority || 'medium');
   const [tagsInput, setTagsInput] = useState(task?.tags?.join(', ') || '');
   const [departmentId, setDepartmentId] = useState(task?.departmentId || '__none__');
+  const [isRecurring, setIsRecurring] = useState(task?.isRecurring ?? false);
+  const [recurrenceType, setRecurrenceType] = useState<'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY' | ''>(task?.recurrenceType ?? '');
+  const [recurrenceEndDate, setRecurrenceEndDate] = useState(task?.recurrenceEndDate ? task.recurrenceEndDate.substring(0, 10) : '');
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -86,22 +107,36 @@ export default function TaskDialog({ open, onClose, onSubmit, task, loading }: T
       setTitle(task?.title || '');
       setDescription(task?.description || '');
       setStatus(task?.status || 'todo');
-      setDeadline(task?.deadline?.split('T')[0] || '');
+      setDeadline(task?.deadline ? toDatetimeLocal(task.deadline) : defaultDeadline ? `${defaultDeadline}T09:00` : '');
+      setScheduledAt(
+        task?.scheduledAt
+          ? toDatetimeLocal(task.scheduledAt)
+          : defaultScheduledAt
+            ? defaultScheduledAt.includes('T') ? defaultScheduledAt : `${defaultScheduledAt}T09:00`
+            : ''
+      );
       setPriority(task?.priority || 'medium');
       setTagsInput(task?.tags?.join(', ') || '');
       setDepartmentId(task?.departmentId || '__none__');
+      setIsRecurring(task?.isRecurring ?? false);
+      setRecurrenceType(task?.recurrenceType ?? '');
+      setRecurrenceEndDate(task?.recurrenceEndDate ? task.recurrenceEndDate.substring(0, 10) : '');
       setError('');
     }
-  }, [task, open]);
+  }, [task, open, defaultDeadline, defaultScheduledAt]);
 
   const resetForm = () => {
     setTitle('');
     setDescription('');
     setStatus('todo');
     setDeadline('');
+    setScheduledAt('');
     setPriority('medium');
     setTagsInput('');
     setDepartmentId('__none__');
+    setIsRecurring(false);
+    setRecurrenceType('');
+    setRecurrenceEndDate('');
     setError('');
   };
 
@@ -112,11 +147,24 @@ export default function TaskDialog({ open, onClose, onSubmit, task, loading }: T
       return;
     }
 
-    if (deadline) {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const selected = new Date(deadline + 'T00:00:00');
-      if (selected < today) {
+    if (isRecurring) {
+      if (!deadline) {
+        setError('Deadline is required for recurring tasks');
+        return;
+      }
+      if (!recurrenceType) {
+        setError('Please select how often this task repeats');
+        return;
+      }
+    }
+
+    if (deadline && !task?._id) {
+      const selected = new Date(deadline);
+      if (isNaN(selected.getTime())) {
+        setError('Invalid deadline');
+        return;
+      }
+      if (selected < new Date()) {
         setError('Deadline cannot be in the past');
         return;
       }
@@ -126,10 +174,14 @@ export default function TaskDialog({ open, onClose, onSubmit, task, loading }: T
       title: title.trim(),
       description: description.trim(),
       status,
-      deadline: deadline || undefined,
+      deadline: deadline ? new Date(deadline).toISOString() : undefined,
+      scheduledAt: scheduledAt ? new Date(scheduledAt).toISOString() : null,
       priority,
       tags: tagsInput.split(',').map(t => t.trim()).filter(Boolean),
       departmentId: departmentId === '__none__' ? undefined : departmentId || undefined,
+      isRecurring,
+      recurrenceType: isRecurring ? (recurrenceType as 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY') : null,
+      recurrenceEndDate: isRecurring && recurrenceEndDate ? new Date(`${recurrenceEndDate}T23:59:59`).toISOString() : null,
     });
   };
 
@@ -238,27 +290,40 @@ export default function TaskDialog({ open, onClose, onSubmit, task, loading }: T
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <Label htmlFor="task-deadline">Deadline</Label>
+              <Label htmlFor="task-scheduled">Scheduled for</Label>
               <Input
-                id="task-deadline"
-                type="date"
-                value={deadline}
-                onChange={(e) => setDeadline(e.target.value)}
+                id="task-scheduled"
+                type="datetime-local"
+                step="60"
+                value={scheduledAt}
+                onChange={(e) => setScheduledAt(e.target.value)}
                 className="rounded-xl"
               />
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="task-tags">Tags (comma-separated)</Label>
+              <Label htmlFor="task-deadline">Deadline <span className="text-muted-foreground font-normal">(optional)</span></Label>
               <Input
-                id="task-tags"
-                type="text"
-                placeholder="bug, feature, etc."
-                value={tagsInput}
-                onChange={(e) => setTagsInput(e.target.value)}
+                id="task-deadline"
+                type="datetime-local"
+                step="60"
+                value={deadline}
+                onChange={(e) => setDeadline(e.target.value)}
                 className="rounded-xl"
               />
             </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="task-tags">Tags <span className="text-muted-foreground font-normal">(comma-separated)</span></Label>
+            <Input
+              id="task-tags"
+              type="text"
+              placeholder="bug, feature, etc."
+              value={tagsInput}
+              onChange={(e) => setTagsInput(e.target.value)}
+              className="rounded-xl"
+            />
           </div>
 
           {allMemberships.length > 0 && (
@@ -278,6 +343,60 @@ export default function TaskDialog({ open, onClose, onSubmit, task, loading }: T
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+          )}
+
+          {/* Recurring task section */}
+          <div className="space-y-3 pt-1">
+            <div className="flex items-center gap-2">
+              <input
+                id="task-recurring"
+                type="checkbox"
+                checked={isRecurring}
+                onChange={(e) => setIsRecurring(e.target.checked)}
+                className="w-4 h-4 rounded accent-[#FE812C] cursor-pointer"
+              />
+              <Label htmlFor="task-recurring" className="cursor-pointer font-normal">
+                Make this a recurring task
+              </Label>
+            </div>
+
+            {isRecurring && (
+              <div className="grid grid-cols-2 gap-4 pl-6">
+                <div className="space-y-1.5">
+                  <Label>Repeats</Label>
+                  <Select value={recurrenceType} onValueChange={(v) => setRecurrenceType(v as 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY')}>
+                    <SelectTrigger className="rounded-xl">
+                      <SelectValue placeholder="Select frequency" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="DAILY">Daily</SelectItem>
+                      <SelectItem value="WEEKLY">Weekly</SelectItem>
+                      <SelectItem value="MONTHLY">Monthly</SelectItem>
+                      <SelectItem value="YEARLY">Yearly</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="task-recurrence-end">End date <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                  <Input
+                    id="task-recurrence-end"
+                    type="date"
+                    value={recurrenceEndDate}
+                    onChange={(e) => setRecurrenceEndDate(e.target.value)}
+                    className="rounded-xl"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
+          {task?.createdAt && (
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Created at</Label>
+              <p className="text-sm text-muted-foreground px-3 py-2 bg-muted/40 rounded-xl">
+                {formatCreatedAt(task.createdAt)}
+              </p>
             </div>
           )}
 

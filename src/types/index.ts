@@ -26,11 +26,16 @@ export interface Task {
   priority: 'low' | 'medium' | 'high';
   tags: string[];
   deadline?: string;
+  scheduledAt?: string | null;
   completedAt?: string;
   departmentId?: string;
   userId: string;
   createdAt: string;
   updatedAt: string;
+  isRecurring?: boolean;
+  recurrenceType?: 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY' | null;
+  recurrenceEndDate?: string | null;
+  recurrenceParentId?: string | null;
   __v?: number;
   _count?: { comments: number };
 }
@@ -176,7 +181,13 @@ export type NotificationType =
   | 'COMMENT_ADDED'
   | 'MENTIONED_IN_COMMENT'
   | 'TASK_UPDATED'
-  | 'DEADLINE_SOON';
+  | 'DEADLINE_SOON'
+  | 'DEADLINE_3_DAYS'
+  | 'DEADLINE_2_DAYS'
+  | 'DEADLINE_1_DAY'
+  | 'DEADLINE_12_HOURS'
+  | 'DEADLINE_4_HOURS'
+  | 'DEADLINE_1_HOUR';
 
 export interface Notification {
   id: string;

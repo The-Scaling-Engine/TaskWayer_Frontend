@@ -13,18 +13,23 @@ interface Column {
   color: string;
 }
 
+interface TaskSubmitData {
+  title: string;
+  description: string;
+  status: 'todo' | 'doing' | 'done';
+  deadline?: string;
+  priority?: 'low' | 'medium' | 'high';
+  tags?: string[];
+  departmentId?: string;
+  isRecurring?: boolean;
+  recurrenceType?: 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY' | null;
+  recurrenceEndDate?: string | null;
+}
+
 interface PendingUpdate {
   taskId: string;
   taskTitle: string;
-  data: {
-    title: string;
-    description: string;
-    status: 'todo' | 'doing' | 'done';
-    deadline?: string;
-    priority?: 'low' | 'medium' | 'high';
-    tags?: string[];
-    departmentId?: string;
-  };
+  data: TaskSubmitData;
 }
 
 const columns: Column[] = [
@@ -102,15 +107,7 @@ const KanbanBoard = forwardRef<KanbanBoardRef>((_props, ref) => {
     }
   };
 
-  const handleSubmit = async (data: {
-    title: string;
-    description: string;
-    status: 'todo' | 'doing' | 'done';
-    deadline?: string;
-    priority?: 'low' | 'medium' | 'high';
-    tags?: string[];
-    departmentId?: string;
-  }) => {
+  const handleSubmit = async (data: TaskSubmitData) => {
     if (editingTask && editingTask._id) {
       // Close the edit dialog first, then show update confirmation popup
       setDialogOpen(false);

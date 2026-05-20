@@ -16,7 +16,7 @@ export default function Navbar() {
           <div className="w-9 h-9 border border-emerald-500/40 dark:border-emerald-400/40 rounded-lg flex items-center justify-center bg-emerald-500/10 dark:bg-emerald-400/10">
             <CheckSquare className="text-emerald-600 dark:text-emerald-400" size={20} />
           </div>
-          <span className="text-xl font-bold tracking-tight text-foreground">MicroDo</span>
+          <span className="text-xl font-bold tracking-tight text-foreground">TasksWayer</span>
         </Link>
 
         {/* Right Actions */}

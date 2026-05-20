@@ -84,7 +84,7 @@ export default function InvitationPage() {
               ? 'You have declined this invitation.'
               : !isAuthenticated
               ? 'Please log in to accept this invitation.'
-              : "You've been invited to join a department on MicroDo."}
+              : "You've been invited to join a department on TasksWayer."}
           </p>
         </div>
 

@@ -4,6 +4,8 @@ import type { KanbanBoardRef } from '@/components/KanbanBoard';
 import { Search, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useTaskStore } from '@/store/taskStore';
+import DateRangePicker from '@/components/DateRangePicker';
+import type { DateRange } from '@/components/DateRangePicker';
 
 export default function TasksPage() {
   const boardRef = useRef<KanbanBoardRef>(null);
@@ -25,6 +27,13 @@ export default function TasksPage() {
 
   const handleStatusChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     setParams({ status: e.target.value || undefined });
+  };
+
+  const handleDeadlineRange = (range: DateRange) => {
+    setParams({
+      deadlineFrom: range.from ?? undefined,
+      deadlineTo: range.to ?? undefined,
+    });
   };
 
   const handleSortChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -70,6 +79,12 @@ export default function TasksPage() {
             className="w-full pl-10 pr-4 py-2 bg-card border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium"
           />
         </div>
+
+        {/* Deadline date range filter */}
+        <DateRangePicker
+          value={{ from: params.deadlineFrom ?? null, to: params.deadlineTo ?? null }}
+          onChange={handleDeadlineRange}
+        />
 
         {/* Filters & Sort */}
         <div className="flex gap-3">

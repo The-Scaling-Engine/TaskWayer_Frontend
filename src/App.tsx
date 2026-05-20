@@ -15,19 +15,22 @@ import AdminDashboardPage from '@/pages/AdminDashboardPage';
 import AdminUsersPage from '@/pages/AdminUsersPage';
 import AnalyticsPage from '@/pages/AnalyticsPage';
 import AdminRoute from '@/components/AdminRoute';
+import GuestRoute from '@/components/GuestRoute';
+import UserRoute from '@/components/UserRoute';
 import AdminDepartmentsPage from '@/pages/AdminDepartmentsPage';
 import InvitationPage from '@/pages/InvitationPage';
 import DepartmentManagerPage from '@/pages/DepartmentManagerPage';
+import CalendarPage from '@/pages/CalendarPage';
 
 function App() {
   return (
     <Router>
       <Routes>
         {/* Public routes */}
-        <Route path="/" element={<LandingPage />} />
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/register" element={<RegisterPage />} />
-        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/" element={<GuestRoute><LandingPage /></GuestRoute>} />
+        <Route path="/login" element={<GuestRoute><LoginPage /></GuestRoute>} />
+        <Route path="/register" element={<GuestRoute><RegisterPage /></GuestRoute>} />
+        <Route path="/forgot-password" element={<GuestRoute><ForgotPasswordPage /></GuestRoute>} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="/invitations/accept" element={<InvitationPage />} />
 
@@ -41,8 +44,9 @@ function App() {
           }
         >
           <Route index element={<DashboardPage />} />
-          <Route path="tasks" element={<TasksPage />} />
-          <Route path="analytics" element={<AnalyticsPage />} />
+          <Route path="tasks" element={<UserRoute><TasksPage /></UserRoute>} />
+          <Route path="calendar" element={<UserRoute><CalendarPage /></UserRoute>} />
+          <Route path="analytics" element={<UserRoute><AnalyticsPage /></UserRoute>} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="profile" element={<ProfilePage />} />
           <Route path="departments/:departmentId" element={<DepartmentManagerPage />} />
