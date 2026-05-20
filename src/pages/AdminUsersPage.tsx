@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useAuthStore } from '@/store/authStore';
 import { adminService } from '@/services/adminService';
+import { getApiErrorMessage } from '@/services/api';
 import type { AdminUser } from '@/types';
 import { toast } from 'sonner';
 import {
@@ -14,6 +15,7 @@ import {
   RefreshCw,
   X,
   UserPlus,
+  Mail,
 } from 'lucide-react';
 
 export default function AdminUsersPage() {
@@ -33,6 +35,9 @@ export default function AdminUsersPage() {
   // Confirm dialog state
   const [confirmAction, setConfirmAction] = useState<{ user: AdminUser; action: 'ban' | 'unban' } | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
+
+  // Resend invite state
+  const [resendingId, setResendingId] = useState<string | null>(null);
 
   // Invite user modal state
   const [showInviteModal, setShowInviteModal] = useState(false);
@@ -118,6 +123,20 @@ export default function AdminUsersPage() {
     }
   };
 
+  const handleResendInvite = async (user: AdminUser) => {
+    const userId = user.id ?? user._id;
+    if (!userId) return;
+    setResendingId(userId);
+    try {
+      const res = await adminService.resendInvite(userId);
+      toast.success(res.message || 'Invitation resent successfully');
+    } catch (err: unknown) {
+      toast.error(getApiErrorMessage(err, 'Failed to resend invitation'));
+    } finally {
+      setResendingId(null);
+    }
+  };
+
   const resetInviteForm = () => {
     setInviteName('');
     setInviteUsername('');
@@ -146,12 +165,7 @@ export default function AdminUsersPage() {
       resetInviteForm();
       fetchUsers();
     } catch (err: unknown) {
-      if (err && typeof err === 'object' && 'response' in err) {
-        const axiosErr = err as { response?: { data?: { message?: string } } };
-        setInviteError(axiosErr.response?.data?.message || 'Failed to create user');
-      } else {
-        setInviteError('Network error. Please try again.');
-      }
+      setInviteError(getApiErrorMessage(err, 'Failed to create user'));
     } finally {
       setInviteLoading(false);
     }
@@ -296,12 +310,18 @@ export default function AdminUsersPage() {
                     </td>
                     <td className="px-6 py-4">
                       <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium border ${
-                        user.status === 'BANNED' 
-                          ? 'bg-destructive/10 border-destructive/20 text-destructive' 
+                        user.status === 'BANNED'
+                          ? 'bg-destructive/10 border-destructive/20 text-destructive'
+                          : user.status === 'PENDING'
+                          ? 'bg-yellow-500/10 border-yellow-500/20 text-yellow-600 dark:text-yellow-400'
                           : 'bg-primary/10 border-primary/20 text-primary'
                       }`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${user.status === 'BANNED' ? 'bg-destructive' : 'bg-primary'}`} />
-                        {user.status === 'BANNED' ? 'Suspended' : 'Active'}
+                        <span className={`w-1.5 h-1.5 rounded-full ${
+                          user.status === 'BANNED' ? 'bg-destructive'
+                          : user.status === 'PENDING' ? 'bg-yellow-500'
+                          : 'bg-primary'
+                        }`} />
+                        {user.status === 'BANNED' ? 'Suspended' : user.status === 'PENDING' ? 'Pending Invite' : 'Active'}
                       </span>
                     </td>
                     <td className="px-6 py-4 text-muted-foreground">
@@ -313,24 +333,34 @@ export default function AdminUsersPage() {
                     </td>
                     <td className="px-6 py-4 text-right">
                       {(user.id ?? user._id) !== (currentUser?.id ?? currentUser?._id) && user.role !== 'ADMIN' && (
-                        <button
-                          onClick={() => handleToggleClick(user)}
-                          className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                            user.status === 'ACTIVE'
-                              ? 'text-destructive bg-destructive/10 hover:bg-destructive hover:text-white'
-                              : 'text-primary bg-primary/10 hover:bg-primary hover:text-white'
-                          }`}
-                        >
-                          {user.status === 'ACTIVE' ? (
-                            <>
-                              <ShieldAlert size={14} /> Ban
-                            </>
-                          ) : (
-                            <>
-                              <ShieldCheck size={14} /> Restore
-                            </>
-                          )}
-                        </button>
+                        user.status === 'PENDING' ? (
+                          <button
+                            onClick={() => handleResendInvite(user)}
+                            disabled={resendingId === (user.id ?? user._id)}
+                            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors text-amber-600 bg-amber-500/10 hover:bg-amber-500 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {resendingId === (user.id ?? user._id) ? (
+                              <><Loader2 size={14} className="animate-spin" /> Sending...</>
+                            ) : (
+                              <><Mail size={14} /> Resend Invite</>
+                            )}
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => handleToggleClick(user)}
+                            className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                              user.status === 'ACTIVE'
+                                ? 'text-destructive bg-destructive/10 hover:bg-destructive hover:text-white'
+                                : 'text-primary bg-primary/10 hover:bg-primary hover:text-white'
+                            }`}
+                          >
+                            {user.status === 'ACTIVE' ? (
+                              <><ShieldAlert size={14} /> Ban</>
+                            ) : (
+                              <><ShieldCheck size={14} /> Restore</>
+                            )}
+                          </button>
+                        )
                       )}
                     </td>
                   </tr>

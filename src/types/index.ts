@@ -121,7 +121,7 @@ export interface AdminUser {
   email: string;
   name?: string;
   role: 'USER' | 'ADMIN' | 'DEPT_MANAGER' | 'DEPT_MEMBER';
-  status: 'ACTIVE' | 'BANNED';
+  status: 'PENDING' | 'ACTIVE' | 'BANNED';
   createdAt?: string;
 }
 

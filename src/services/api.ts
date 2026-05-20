@@ -35,4 +35,22 @@ api.interceptors.response.use(
   }
 );
 
+type ApiErrorShape = {
+  response?: {
+    data?: {
+      message?: string;
+      errors?: Array<{ field?: string; message: string }>;
+    };
+  };
+};
+
+export function getApiErrorMessage(err: unknown, fallback = 'Something went wrong'): string {
+  const e = err as ApiErrorShape;
+  const fieldErrors = e?.response?.data?.errors;
+  if (Array.isArray(fieldErrors) && fieldErrors.length > 0) {
+    return fieldErrors.map(fe => fe.message).join(' · ');
+  }
+  return e?.response?.data?.message ?? (err instanceof Error ? err.message : null) ?? fallback;
+}
+
 export default api;

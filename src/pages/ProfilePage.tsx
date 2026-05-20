@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/dialog';
 import { useAuthStore } from '@/store/authStore';
 import { userService } from '@/services/userService';
+import { getApiErrorMessage } from '@/services/api';
 import { toast } from 'sonner';
 import {
   User as UserIcon, Mail, Image as ImageIcon, Loader2, Camera,
@@ -114,12 +115,7 @@ export default function ProfilePage() {
         toast.success(res.message || 'Profile updated successfully');
       }
     } catch (err: unknown) {
-      if (err && typeof err === 'object' && 'response' in err) {
-        const axiosErr = err as { response?: { data?: { message?: string } } };
-        toast.error(axiosErr.response?.data?.message || 'Failed to update profile');
-      } else {
-        toast.error('Network error. Please try again.');
-      }
+      toast.error(getApiErrorMessage(err, 'Failed to update profile'));
     } finally {
       setProfileLoading(false);
     }

@@ -39,9 +39,7 @@ function isOverdue(deadline?: string | null) {
   return new Date(deadline) < new Date();
 }
 
-type BE_ERROR = { response?: { data?: { message?: string } } };
-const beMsg = (err: unknown, fallback: string) =>
-  (err as BE_ERROR)?.response?.data?.message ?? fallback;
+import { getApiErrorMessage } from '@/services/api';
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -257,7 +255,7 @@ export default function DepartmentManagerPage() {
         await departmentService.changeMemberRole(departmentId, userId, { role: newRole });
         setMembers(prev => prev.map(m => m.userId === userId ? { ...m, role: newRole as DepartmentMemberRole } : m));
         toast.success('Role updated');
-      } catch (err) { toast.error(beMsg(err, 'Failed to update role')); }
+      } catch (err) { toast.error(getApiErrorMessage(err, 'Failed to update role')); }
     })();
   };
 
@@ -269,7 +267,7 @@ export default function DepartmentManagerPage() {
       setMembers(prev => prev.filter(m => m.userId !== userId));
       toast.success(`Removed ${label}`);
       setRemoveMemberConfirm(null);
-    } catch (err) { toast.error(beMsg(err, 'Failed to remove member')); }
+    } catch (err) { toast.error(getApiErrorMessage(err, 'Failed to remove member')); }
   };
 
   const handleTransferOwnership = async () => {
@@ -284,7 +282,7 @@ export default function DepartmentManagerPage() {
       }));
       toast.success(`Ownership transferred to ${transferOwnerConfirm.label}`);
       setTransferOwnerConfirm(null);
-    } catch (err) { toast.error(beMsg(err, 'Failed to transfer ownership')); } finally {
+    } catch (err) { toast.error(getApiErrorMessage(err, 'Failed to transfer ownership')); } finally {
       setTransferOwnerLoading(false);
     }
   };
@@ -298,7 +296,7 @@ export default function DepartmentManagerPage() {
       setInviteOpen(false); setInviteEmail(''); setInviteRole('MEMBER');
       const invRes = await invitationService.getInvitations(departmentId);
       if (invRes.success) setInvitations(invRes.data);
-    } catch (err) { toast.error(beMsg(err, 'Failed to send invitation')); } finally {
+    } catch (err) { toast.error(getApiErrorMessage(err, 'Failed to send invitation')); } finally {
       setInviteLoading(false);
     }
   };
@@ -309,7 +307,7 @@ export default function DepartmentManagerPage() {
       await invitationService.cancelInvitation(departmentId, id);
       setInvitations(prev => prev.filter(i => i.id !== id));
       toast.success('Invitation cancelled');
-    } catch (err) { toast.error(beMsg(err, 'Failed to cancel invitation')); }
+    } catch (err) { toast.error(getApiErrorMessage(err, 'Failed to cancel invitation')); }
   };
 
   const closeAddMember = () => {
@@ -325,7 +323,7 @@ export default function DepartmentManagerPage() {
       toast.success('Member added');
       closeAddMember();
       fetchMembers();
-    } catch (err) { toast.error(beMsg(err, 'Failed to add member')); } finally {
+    } catch (err) { toast.error(getApiErrorMessage(err, 'Failed to add member')); } finally {
       setAddMemberLoading(false);
     }
   };

@@ -9,10 +9,7 @@ import {
   X, Search, ChevronLeft, ChevronRight, UserPlus, UserMinus,
   Mail, Clock, RefreshCw,
 } from 'lucide-react';
-
-type BE_ERROR = { response?: { data?: { message?: string } } };
-const beMsg = (err: unknown, fallback: string) =>
-  (err as BE_ERROR)?.response?.data?.message ?? fallback;
+import { getApiErrorMessage } from '@/services/api';
 
 const ROLE_COLORS: Record<string, string> = {
   OWNER:  'bg-[#FE812C]/10 text-[#FE812C] border-[#FE812C]/20',
@@ -90,7 +87,7 @@ export default function AdminDepartmentsPage() {
         setTotalDepts(res.pagination.total);
       }
     } catch (err) {
-      toast.error(beMsg(err, 'Failed to load departments'));
+      toast.error(getApiErrorMessage(err, 'Failed to load departments'));
     } finally {
       setLoading(false);
     }
@@ -108,7 +105,7 @@ export default function AdminDepartmentsPage() {
       const res = await departmentService.getMembers(dept.id, { limit: 50 });
       if (res.success) setMembers(res.data);
     } catch (err) {
-      toast.error(beMsg(err, 'Failed to load members'));
+      toast.error(getApiErrorMessage(err, 'Failed to load members'));
     } finally {
       setMembersLoading(false);
     }
@@ -171,7 +168,7 @@ export default function AdminDepartmentsPage() {
         fetchDepartments();
       }
     } catch (err) {
-      toast.error(beMsg(err, 'Failed to save department'));
+      toast.error(getApiErrorMessage(err, 'Failed to save department'));
     } finally {
       setSaving(false);
     }
@@ -189,7 +186,7 @@ export default function AdminDepartmentsPage() {
       setDeleteDept(null);
       setForceDelete(false);
     } catch (err) {
-      toast.error(beMsg(err, 'Failed to delete department'));
+      toast.error(getApiErrorMessage(err, 'Failed to delete department'));
     } finally {
       setDeleting(false);
     }
@@ -210,7 +207,7 @@ export default function AdminDepartmentsPage() {
       toast.success(`Removed ${label}`);
       setRemoveMemberConfirm(null);
     } catch (err) {
-      toast.error(beMsg(err, 'Failed to remove member'));
+      toast.error(getApiErrorMessage(err, 'Failed to remove member'));
     }
   };
 
@@ -231,7 +228,7 @@ export default function AdminDepartmentsPage() {
         ));
         toast.success('Role updated');
       } catch (err) {
-        toast.error(beMsg(err, 'Failed to update role'));
+        toast.error(getApiErrorMessage(err, 'Failed to update role'));
       }
     })();
   };
@@ -250,7 +247,7 @@ export default function AdminDepartmentsPage() {
       toast.success(`Ownership transferred to ${transferOwnerConfirm.label}`);
       setTransferOwnerConfirm(null);
     } catch (err) {
-      toast.error(beMsg(err, 'Failed to transfer ownership'));
+      toast.error(getApiErrorMessage(err, 'Failed to transfer ownership'));
     } finally {
       setTransferOwnerLoading(false);
     }
@@ -277,7 +274,7 @@ export default function AdminDepartmentsPage() {
       const invRes = await invitationService.getInvitations(selectedDept.id);
       if (invRes.success) setInvitations(invRes.data);
     } catch (err) {
-      toast.error(beMsg(err, 'Failed to send invitation'));
+      toast.error(getApiErrorMessage(err, 'Failed to send invitation'));
     } finally {
       setInviteLoading(false);
     }
@@ -290,7 +287,7 @@ export default function AdminDepartmentsPage() {
       setInvitations(prev => prev.filter(i => i.id !== invitationId));
       toast.success('Invitation cancelled');
     } catch (err) {
-      toast.error(beMsg(err, 'Failed to cancel invitation'));
+      toast.error(getApiErrorMessage(err, 'Failed to cancel invitation'));
     }
   };
 
@@ -360,7 +357,7 @@ export default function AdminDepartmentsPage() {
         ));
       }
     } catch (err) {
-      toast.error(beMsg(err, 'Failed to add member'));
+      toast.error(getApiErrorMessage(err, 'Failed to add member'));
     } finally {
       setAddMemberLoading(false);
     }

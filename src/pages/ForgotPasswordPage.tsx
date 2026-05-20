@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { authService } from '@/services/authService';
+import { getApiErrorMessage } from '@/services/api';
 import { Mail, CheckSquare, ArrowLeft } from 'lucide-react';
 import ThemeToggle from '@/components/ThemeToggle';
 
@@ -27,7 +28,7 @@ export default function ForgotPasswordPage() {
       await authService.forgotPassword(email);
       setSuccess('Password reset link has been sent to your email. Please check your inbox.');
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to send reset email');
+      setError(getApiErrorMessage(err, 'Failed to send reset email'));
     } finally {
       setLoading(false);
     }

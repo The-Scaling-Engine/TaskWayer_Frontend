@@ -4,10 +4,7 @@ import { invitationService } from '@/services/invitationService';
 import { useAuthStore } from '@/store/authStore';
 import { CheckCircle, XCircle, Loader2, Mail } from 'lucide-react';
 import { toast } from 'sonner';
-
-type BE_ERROR = { response?: { data?: { message?: string } } };
-const beMsg = (err: unknown, fallback: string) =>
-  (err as BE_ERROR)?.response?.data?.message ?? fallback;
+import { getApiErrorMessage } from '@/services/api';
 
 export default function InvitationPage() {
   const [searchParams] = useSearchParams();
@@ -33,7 +30,7 @@ export default function InvitationPage() {
         setTimeout(() => navigate('/login'), 2000);
       }
     } catch (err) {
-      toast.error(beMsg(err, 'Failed to accept invitation. It may have expired or already been used.'));
+      toast.error(getApiErrorMessage(err, 'Failed to accept invitation. It may have expired or already been used.'));
     } finally {
       setAccepting(false);
     }
@@ -48,7 +45,7 @@ export default function InvitationPage() {
       toast.success('Invitation declined.');
       setTimeout(() => navigate('/'), 2000);
     } catch (err) {
-      toast.error(beMsg(err, 'Failed to decline invitation.'));
+      toast.error(getApiErrorMessage(err, 'Failed to decline invitation.'));
     } finally {
       setRejecting(false);
     }

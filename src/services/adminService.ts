@@ -37,6 +37,11 @@ export const adminService = {
     return response.data;
   },
 
+  resendInvite: async (id: string): Promise<{ success: boolean; message: string }> => {
+    const response = await api.post<{ success: boolean; message: string }>(`/admin/users/${id}/resend-invite`);
+    return response.data;
+  },
+
   // ── Department CRUD ──────────────────────────────────────────
 
   createDepartment: async (data: { name: string; description?: string }): Promise<{ success: boolean; message: string; data: Department }> => {
