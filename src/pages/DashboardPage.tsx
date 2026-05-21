@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/store/authStore';
 import { taskService } from '@/services/taskService';
 import type { TaskStats } from '@/types';
@@ -13,6 +14,7 @@ import {
 
 export default function DashboardPage() {
   const user = useAuthStore((s) => s.user);
+  const navigate = useNavigate();
 
   const [stats, setStats] = useState<TaskStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -38,9 +40,9 @@ export default function DashboardPage() {
   }, []);
 
   const quickActions = [
-    { icon: CheckSquare, label: 'Create Task', color: 'text-[#FE812C]' },
-    { icon: ClipboardList, label: 'Plan Today', color: 'text-primary' },
-    { icon: Clock, label: 'Review Blocked', color: 'text-[#E298B9]' },
+    { icon: CheckSquare, label: 'Create Task', color: 'text-[#FE812C]', path: '/dashboard/tasks', state: { openCreate: true } },
+    { icon: ClipboardList, label: 'Plan Today', color: 'text-primary', path: '/dashboard/calendar' },
+    { icon: Clock, label: 'View your performance', color: 'text-[#E298B9]', path: '/dashboard/analytics' },
   ];
 
   return (
@@ -66,6 +68,7 @@ export default function DashboardPage() {
               return (
                 <button
                   key={action.label}
+                  onClick={() => navigate(action.path, action.state ? { state: action.state } : undefined)}
                   className="flex items-center gap-3 w-full px-4 py-3 rounded-xl bg-muted/50 hover:bg-muted text-foreground text-sm font-medium transition-colors group"
                 >
                   <Icon size={18} className={action.color} />

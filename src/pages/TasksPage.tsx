@@ -1,4 +1,5 @@
 import React, { useRef } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import KanbanBoard from '@/components/KanbanBoard';
 import type { KanbanBoardRef } from '@/components/KanbanBoard';
 import { Search, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
@@ -9,8 +10,24 @@ import type { DateRange } from '@/components/DateRangePicker';
 
 export default function TasksPage() {
   const boardRef = useRef<KanbanBoardRef>(null);
+  const location = useLocation();
+  const navigate = useNavigate();
   const { params, setParams, pagination } = useTaskStore();
   const [searchValue, setSearchValue] = React.useState(params.search || '');
+
+  React.useEffect(() => {
+    if (location.state?.openCreate) {
+      // Use setTimeout to ensure KanbanBoard has mounted and ref is initialized
+      const timer = setTimeout(() => {
+        if (boardRef.current) {
+          boardRef.current.openCreateTask();
+          // Clear state in history so reloading doesn't open the popup again
+          navigate(location.pathname, { replace: true, state: {} });
+        }
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [location, navigate]);
 
   React.useEffect(() => {
     const timeout = setTimeout(() => {
