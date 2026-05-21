@@ -81,7 +81,7 @@ export default function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose
             <CheckSquare className="text-primary-foreground" size={22} />
           </div>
           {!collapsed && (
-            <span className="text-xl font-bold text-foreground tracking-tight">TasksWayer</span>
+            <span className="text-xl font-bold text-foreground tracking-tight">Wayer Tasks</span>
           )}
         </div>
 

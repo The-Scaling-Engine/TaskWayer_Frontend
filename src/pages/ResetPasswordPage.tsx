@@ -111,7 +111,7 @@ export default function ResetPasswordPage() {
         <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-white/40 dark:bg-white/10 backdrop-blur-md border border-black/10 dark:border-white/20 group-hover:bg-white/60 dark:group-hover:bg-white/20 transition-colors">
           <CheckSquare className="text-emerald-600 dark:text-emerald-400" size={18} />
         </div>
-        <span className="text-xl font-bold tracking-tight text-zinc-900 dark:text-white group-hover:text-emerald-700 dark:group-hover:text-emerald-300 transition-colors">TasksWayer</span>
+        <span className="text-xl font-bold tracking-tight text-zinc-900 dark:text-white group-hover:text-emerald-700 dark:group-hover:text-emerald-300 transition-colors">Wayer Tasks</span>
       </div>
 
       <div className="absolute top-6 right-6 z-50">

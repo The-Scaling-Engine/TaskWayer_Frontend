@@ -55,17 +55,17 @@ export const useTaskStore = create<TaskState>((set, get) => ({
 
   createTask: async (data: CreateTaskData) => {
     await taskService.createTask(data);
-    get().fetchTasks();
+    await get().silentFetch();
   },
 
   updateTask: async (id: string, data: UpdateTaskData) => {
     await taskService.updateTask(id, data);
-    get().fetchTasks();
+    await get().silentFetch();
   },
 
   deleteTask: async (id: string) => {
     await taskService.deleteTask(id);
-    get().fetchTasks();
+    await get().silentFetch();
   },
 
   silentFetch: async () => {
