@@ -1,5 +1,18 @@
 import { useEffect, useState, forwardRef, useImperativeHandle } from 'react';
+import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  useDroppable,
+  useDraggable,
+  type DragStartEvent,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import { CSS } from '@dnd-kit/utilities';
 import { useTaskStore } from '@/store/taskStore';
+import { useSocketStore } from '@/store/socketStore';
 import TaskCard from '@/components/TaskCard';
 import TaskDialog from '@/components/TaskDialog';
 import CommentDialog from '@/components/CommentDialog';
@@ -38,28 +51,112 @@ const columns: Column[] = [
   { id: 'done', title: 'Done', color: 'bg-primary' },
 ];
 
+interface DraggableTaskCardProps {
+  task: Task;
+  isActiveDrag: boolean;
+  onEdit: (task: Task) => void;
+  onDelete: (task: Task) => void;
+  onComment: (task: Task) => void;
+  onCancelRecurring: (task: Task) => void;
+  commentCount?: number;
+}
+
+function DraggableTaskCard({ task, isActiveDrag, onEdit, onDelete, onComment, onCancelRecurring, commentCount }: DraggableTaskCardProps) {
+  const { attributes, listeners, setNodeRef, transform } = useDraggable({ id: task._id });
+  const style = transform ? { transform: CSS.Translate.toString(transform) } : undefined;
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
+      className={isActiveDrag ? 'opacity-30' : undefined}
+    >
+      <TaskCard
+        task={task}
+        onEdit={onEdit}
+        onDelete={onDelete}
+        onComment={onComment}
+        onCancelRecurring={onCancelRecurring}
+        commentCount={commentCount}
+      />
+    </div>
+  );
+}
+
+function DroppableColumn({ id, children }: { id: string; children: React.ReactNode }) {
+  const { setNodeRef, isOver } = useDroppable({ id });
+  return (
+    <div
+      ref={setNodeRef}
+      className={`space-y-2.5 min-h-[120px] rounded-xl p-2.5 transition-colors duration-150 ${
+        isOver ? 'bg-primary/10 ring-2 ring-primary/30 ring-inset' : 'bg-muted/30'
+      }`}
+    >
+      {children}
+    </div>
+  );
+}
+
 export interface KanbanBoardRef {
   openCreateTask: () => void;
 }
 
 const KanbanBoard = forwardRef<KanbanBoardRef>((_props, ref) => {
-  const { tasks, loading, fetchTasks, createTask, updateTask, deleteTask } = useTaskStore();
+  const { tasks, loading, fetchTasks, createTask, updateTask, deleteTask, moveTask, cancelRecurrence, silentFetch } = useTaskStore();
+  const { socket } = useSocketStore();
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [dialogLoading, setDialogLoading] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<Task | null>(null);
   const [updateConfirm, setUpdateConfirm] = useState<PendingUpdate | null>(null);
+  const [cancelRecurringTask, setCancelRecurringTask] = useState<Task | null>(null);
+  const [keepChildren, setKeepChildren] = useState(false);
+  const [cancelRecurringLoading, setCancelRecurringLoading] = useState(false);
   const [commentTask, setCommentTask] = useState<Task | null>(null);
   const [commentCounts, setCommentCounts] = useState<Record<string, number>>({});
+  const [activeTask, setActiveTask] = useState<Task | null>(null);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
+  );
 
   useEffect(() => {
     fetchTasks();
   }, [fetchTasks]);
 
+  useEffect(() => {
+    if (!socket) return;
+    const handler = () => { void silentFetch(); };
+    socket.on('task:statusUpdated', handler);
+    return () => { socket.off('task:statusUpdated', handler); };
+  }, [socket, silentFetch]);
+
   useImperativeHandle(ref, () => ({
     openCreateTask: () => handleCreate()
   }));
+
+  const handleDragStart = (event: DragStartEvent) => {
+    const task = tasks.find((t) => t._id === event.active.id);
+    setActiveTask(task ?? null);
+  };
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    setActiveTask(null);
+    const { active, over } = event;
+    if (!over) return;
+    const taskId = active.id as string;
+    const newStatus = over.id as 'todo' | 'doing' | 'done';
+    const task = tasks.find((t) => t._id === taskId);
+    if (!task || task.status === newStatus) return;
+    try {
+      await moveTask(taskId, newStatus);
+    } catch {
+      toast.error('Failed to move task');
+    }
+  };
 
   const handleCreate = (columnStatus?: 'todo' | 'doing' | 'done') => {
     setEditingTask(null);
@@ -87,6 +184,20 @@ const KanbanBoard = forwardRef<KanbanBoardRef>((_props, ref) => {
         toast.error('Failed to delete task');
       }
       setDeleteConfirm(null);
+    }
+  };
+
+  const confirmCancelRecurring = async () => {
+    if (!cancelRecurringTask) return;
+    setCancelRecurringLoading(true);
+    try {
+      const message = await cancelRecurrence(cancelRecurringTask._id, keepChildren);
+      toast.success(message);
+      setCancelRecurringTask(null);
+    } catch {
+      toast.error('Failed to cancel recurring task');
+    } finally {
+      setCancelRecurringLoading(false);
     }
   };
 
@@ -133,7 +244,13 @@ const KanbanBoard = forwardRef<KanbanBoardRef>((_props, ref) => {
   };
 
   const getTasksByStatus = (status: string) =>
-    tasks.filter((t) => t.status === status);
+    tasks
+      .filter((t) => t.status === status)
+      .sort((a, b) => {
+        const aTime = a.scheduledAt ? new Date(a.scheduledAt).getTime() : new Date(a.createdAt).getTime();
+        const bTime = b.scheduledAt ? new Date(b.scheduledAt).getTime() : new Date(b.createdAt).getTime();
+        return aTime - bTime;
+      });
 
   if (loading) {
     return (
@@ -145,52 +262,70 @@ const KanbanBoard = forwardRef<KanbanBoardRef>((_props, ref) => {
 
   return (
     <>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-        {columns.map((col) => {
-          const colTasks = getTasksByStatus(col.id);
-          return (
-            <div key={col.id} className="space-y-3">
-              {/* Column Header */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className={`w-2.5 h-2.5 rounded-full ${col.color}`} />
-                  <h3 className="font-semibold text-foreground text-sm">{col.title}</h3>
-                  <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full font-medium">
-                    {colTasks.length}
-                  </span>
-                </div>
-                <button
-                  onClick={() => handleCreate(col.id)}
-                  className="p-1 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-                  title={`Add task to ${col.title}`}
-                >
-                  <Plus size={16} />
-                </button>
-              </div>
-
-              {/* Column Body */}
-              <div className="space-y-2.5 min-h-[120px] bg-muted/30 rounded-xl p-2.5">
-                {colTasks.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
-                    <p className="text-xs">No tasks yet</p>
+      <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+          {columns.map((col) => {
+            const colTasks = getTasksByStatus(col.id);
+            return (
+              <div key={col.id} className="space-y-3">
+                {/* Column Header */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className={`w-2.5 h-2.5 rounded-full ${col.color}`} />
+                    <h3 className="font-semibold text-foreground text-sm">{col.title}</h3>
+                    <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full font-medium">
+                      {colTasks.length}
+                    </span>
                   </div>
-                ) : (
-                  colTasks.map((task) => (
-                    <TaskCard
-                      key={task._id}
-                      task={task}
-                      onEdit={handleEdit}
-                      onDelete={handleDelete}
-                      onComment={(t) => setCommentTask(t)}
-                      commentCount={commentCounts[task._id]}
-                    />
-                  ))
-                )}
+                  <button
+                    onClick={() => handleCreate(col.id)}
+                    className="p-1 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                    title={`Add task to ${col.title}`}
+                  >
+                    <Plus size={16} />
+                  </button>
+                </div>
+
+                {/* Column Body */}
+                <DroppableColumn id={col.id}>
+                  {colTasks.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
+                      <p className="text-xs">No tasks yet</p>
+                    </div>
+                  ) : (
+                    colTasks.map((task) => (
+                      <DraggableTaskCard
+                        key={task._id}
+                        task={task}
+                        isActiveDrag={activeTask?._id === task._id}
+                        onEdit={handleEdit}
+                        onDelete={handleDelete}
+                        onComment={(t) => setCommentTask(t)}
+                        onCancelRecurring={(t) => { setKeepChildren(false); setCancelRecurringTask(t); }}
+                        commentCount={commentCounts[task._id]}
+                      />
+                    ))
+                  )}
+                </DroppableColumn>
               </div>
+            );
+          })}
+        </div>
+
+        <DragOverlay dropAnimation={null}>
+          {activeTask ? (
+            <div className="rotate-2 opacity-90 shadow-2xl">
+              <TaskCard
+                task={activeTask}
+                onEdit={handleEdit}
+                onDelete={handleDelete}
+                onComment={(t) => setCommentTask(t)}
+                commentCount={commentCounts[activeTask._id]}
+              />
             </div>
-          );
-        })}
-      </div>
+          ) : null}
+        </DragOverlay>
+      </DndContext>
 
       {/* Create/Edit Dialog */}
       <TaskDialog
@@ -238,6 +373,61 @@ const KanbanBoard = forwardRef<KanbanBoardRef>((_props, ref) => {
             setCommentCounts((prev) => ({ ...prev, [taskId]: count }))
           }
         />
+      )}
+
+      {/* Cancel Recurring Dialog */}
+      {cancelRecurringTask && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50">
+          <div className="bg-card border border-border rounded-2xl p-6 max-w-sm w-full mx-4 shadow-xl space-y-4">
+            <h3 className="text-lg font-bold text-foreground">Cancel Recurring Task</h3>
+            <p className="text-sm text-muted-foreground">
+              What would you like to do with the existing copies of "{cancelRecurringTask.title}"?
+            </p>
+            <div className="space-y-2.5">
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="radio"
+                  name="keepChildren"
+                  checked={!keepChildren}
+                  onChange={() => setKeepChildren(false)}
+                  className="mt-0.5 accent-[#FE812C]"
+                />
+                <div>
+                  <p className="text-sm font-medium text-foreground">Delete unstarted copies</p>
+                  <p className="text-xs text-muted-foreground">Remove all "To Do" copies. Keep "In Progress" and "Done" copies.</p>
+                </div>
+              </label>
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="radio"
+                  name="keepChildren"
+                  checked={keepChildren}
+                  onChange={() => setKeepChildren(true)}
+                  className="mt-0.5 accent-[#FE812C]"
+                />
+                <div>
+                  <p className="text-sm font-medium text-foreground">Keep all existing copies</p>
+                  <p className="text-xs text-muted-foreground">Only stop generating new copies. All existing copies remain.</p>
+                </div>
+              </label>
+            </div>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setCancelRecurringTask(null)}
+                className="px-4 py-2 rounded-xl text-sm font-medium text-muted-foreground hover:bg-muted transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmCancelRecurring}
+                disabled={cancelRecurringLoading}
+                className="px-4 py-2 rounded-xl text-sm font-medium bg-amber-500 text-white hover:bg-amber-600 transition-colors"
+              >
+                {cancelRecurringLoading ? 'Processing...' : 'Confirm'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Delete Confirmation Dialog */}

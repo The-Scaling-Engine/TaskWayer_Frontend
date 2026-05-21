@@ -1,6 +1,6 @@
 import type { Task } from '@/types';
 import { Badge } from '@/components/ui/badge';
-import { Pencil, Trash2, Calendar, MessageSquare, Square, Building2, Clock } from 'lucide-react';
+import { Pencil, Trash2, Calendar, MessageSquare, Square, Building2, Clock, CircleSlash, Repeat } from 'lucide-react';
 import { useTimeTrackingStore } from '@/store/timeTrackingStore';
 import { useDepartmentStore } from '@/store/departmentStore';
 import { toast } from 'sonner';
@@ -18,6 +18,7 @@ interface TaskCardProps {
   onEdit: (task: Task) => void;
   onDelete: (task: Task) => void;
   onComment: (task: Task) => void;
+  onCancelRecurring?: (task: Task) => void;
   commentCount?: number;
 }
 
@@ -33,7 +34,7 @@ const statusLabels: Record<string, string> = {
   done: 'Done',
 };
 
-export default function TaskCard({ task, onEdit, onDelete, onComment, commentCount: commentCountProp }: TaskCardProps) {
+export default function TaskCard({ task, onEdit, onDelete, onComment, onCancelRecurring, commentCount: commentCountProp }: TaskCardProps) {
   const commentCount = commentCountProp ?? task._count?.comments ?? 0;
   const { activeSession, elapsedSeconds, stopTracking } = useTimeTrackingStore();
   const isTracking = activeSession?.taskId === task._id;
@@ -52,13 +53,27 @@ export default function TaskCard({ task, onEdit, onDelete, onComment, commentCou
     }
   };
 
+  const isParentRecurring = task.isRecurring && !task.recurrenceParentId;
+
   return (
-    <div className="bg-card border border-border rounded-xl p-4 shadow-sm hover:shadow-md hover:border-primary/20 transition-all duration-200 group cursor-pointer">
+    <div className={`bg-card border rounded-xl p-4 shadow-sm hover:shadow-md transition-all duration-200 group cursor-pointer ${
+      isParentRecurring
+        ? 'border-l-2 border-l-amber-400 border-border hover:border-l-amber-500'
+        : 'border-border hover:border-primary/20'
+    }`}>
       {/* Header: Status Badge + Actions */}
       <div className="flex items-start justify-between mb-3">
-        <Badge variant="secondary" className={`${statusColors[task.status]} text-xs font-medium rounded-md`}>
-          {statusLabels[task.status]}
-        </Badge>
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <Badge variant="secondary" className={`${statusColors[task.status]} text-xs font-medium rounded-md`}>
+            {statusLabels[task.status]}
+          </Badge>
+          {isParentRecurring && (
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-amber-500/10 text-amber-500 text-[10px] font-semibold border border-amber-500/20">
+              <Repeat size={9} className="shrink-0" />
+              Recurring
+            </span>
+          )}
+        </div>
         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
           {/* Comment icon with count */}
           <button
@@ -73,6 +88,16 @@ export default function TaskCard({ task, onEdit, onDelete, onComment, commentCou
               </span>
             )}
           </button>
+
+          {task.isRecurring && !task.recurrenceParentId && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onCancelRecurring?.(task); }}
+              className="p-1.5 rounded-lg hover:bg-amber-500/10 text-muted-foreground hover:text-amber-500 transition-colors"
+              title="Cancel recurring"
+            >
+              <CircleSlash size={14} />
+            </button>
+          )}
 
           <button
             onClick={(e) => { e.stopPropagation(); onEdit(task); }}

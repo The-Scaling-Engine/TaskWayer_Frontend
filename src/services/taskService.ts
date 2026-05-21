@@ -69,4 +69,9 @@ export const taskService = {
     const response = await api.get<TaskStatsResponse>('/tasks/stats');
     return response.data;
   },
+
+  cancelRecurrence: async (id: string, keepChildren: boolean): Promise<{ success: boolean; message: string; data: { deletedCount: number } }> => {
+    const response = await api.post(`/tasks/${id}/cancel-recurrence`, { keepChildren });
+    return response.data;
+  },
 };
