@@ -354,6 +354,12 @@ export default function TaskDialog({ open, onClose, onSubmit, task, loading, def
                 type="checkbox"
                 checked={isRecurring}
                 onChange={(e) => setIsRecurring(e.target.checked)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    setIsRecurring(!isRecurring);
+                  }
+                }}
                 className="w-4 h-4 rounded accent-[#FE812C] cursor-pointer"
               />
               <Label htmlFor="task-recurring" className="cursor-pointer font-normal">
