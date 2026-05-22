@@ -33,7 +33,7 @@ export default function UserStatsChart({ users, loading, error }: UserStatsChart
     });
 
     // Create an ordered array
-    let output = Object.entries(countsByDay)
+    const output = Object.entries(countsByDay)
       .map(([date, count]) => ({ date, count }))
       .sort((a, b) => a.date.localeCompare(b.date));
       
@@ -113,6 +113,7 @@ export default function UserStatsChart({ users, loading, error }: UserStatsChart
                 boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
                 color: '#1A1A1A'
               }}
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
               formatter={(value: any) => [`${value} Accounts`, 'Created']}
               labelFormatter={(label) => `Date: ${label}`}
             />

@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 import { useState, useEffect, type FormEvent } from 'react';
 import {
   Dialog,

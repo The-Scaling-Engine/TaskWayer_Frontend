@@ -121,7 +121,7 @@ export default function DepartmentManagerPage() {
         setWorkloadTotal(res.pagination.total);
         setWorkloadTotalPages(res.pagination.totalPages);
       }
-    } catch { } finally {
+    } catch { /* empty */ } finally {
       setWorkloadLoading(false);
     }
   }, []);
@@ -144,7 +144,7 @@ export default function DepartmentManagerPage() {
       ]);
       if (membersRes.success) setMembers(membersRes.data);
       if (invRes.success) setInvitations(invRes.data);
-    } catch { } finally {
+    } catch { /* empty */ } finally {
       setMembersLoading(false);
     }
     setInvitationsLoading(false);
@@ -163,7 +163,7 @@ export default function DepartmentManagerPage() {
     try {
       const res = await departmentService.getMemberActiveSession(departmentId, profileId);
       if (res.success) setMemberSession(res.data);
-    } catch { } finally {
+    } catch { /* empty */ } finally {
       setMemberSessionLoading(false);
     }
   }, [departmentId]);
@@ -201,7 +201,7 @@ export default function DepartmentManagerPage() {
         });
         setMemberTasks(sorted);
       }
-    } catch { } finally {
+    } catch { /* empty */ } finally {
       setMemberTasksLoading(false);
     }
   }, [departmentId]);
