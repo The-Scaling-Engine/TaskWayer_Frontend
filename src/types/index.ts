@@ -51,6 +51,18 @@ export interface TaskStats {
 }
 
 // ============================================
+// TODO
+// ============================================
+export interface Todo {
+  id: string;
+  profileId: string;
+  text: string;
+  done: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ============================================
 // AUTH
 // ============================================
 export interface LoginRequest {

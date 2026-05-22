@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/store/authStore';
 import { taskService } from '@/services/taskService';
-import type { TaskStats } from '@/types';
+import { todoService } from '@/services/todoService';
+import { getApiErrorMessage } from '@/services/api';
+import type { TaskStats, Todo } from '@/types';
 
 import {
   CheckSquare,
@@ -10,34 +12,115 @@ import {
   Clock,
   TrendingUp,
   Loader2,
+  Plus,
+  X,
+  Check,
+  Trash2,
 } from 'lucide-react';
+
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+
+const TODO_PREVIEW_LIMIT = 6;
 
 export default function DashboardPage() {
   const user = useAuthStore((s) => s.user);
   const navigate = useNavigate();
 
+  // ── Task stats ──────────────────────────────────────────────
   const [stats, setStats] = useState<TaskStats | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [statsLoading, setStatsLoading] = useState(true);
+  const [statsError, setStatsError] = useState('');
+
+  // ── Todos ───────────────────────────────────────────────────
+  const [todos, setTodos] = useState<Todo[]>([]);
+  const [todosLoading, setTodosLoading] = useState(true);
+  const [newText, setNewText] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [showAll, setShowAll] = useState(false);
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const fetchStats = async () => {
-      setLoading(true);
-      setError('');
+      setStatsLoading(true);
+      setStatsError('');
       try {
         const res = await taskService.getStats();
-        if (res.success) {
-          setStats(res.data);
-        }
+        if (res.success) setStats(res.data);
       } catch {
-        setError('Failed to load dashboard stats');
+        setStatsError('Failed to load dashboard stats');
       } finally {
-        setLoading(false);
+        setStatsLoading(false);
+      }
+    };
+
+    const fetchTodos = async () => {
+      setTodosLoading(true);
+      try {
+        const res = await todoService.getAll();
+        setTodos(res.data);
+      } catch {
+        // silently fail — non-critical widget
+      } finally {
+        setTodosLoading(false);
       }
     };
 
     fetchStats();
+    fetchTodos();
   }, []);
+
+  const handleAddTodo = async () => {
+    const text = newText.trim();
+    if (!text || submitting) return;
+    setSubmitting(true);
+    try {
+      const res = await todoService.create(text);
+      setTodos((prev) => [res.data, ...prev]);
+      setNewText('');
+      inputRef.current?.focus();
+    } catch (err) {
+      console.error(getApiErrorMessage(err));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleToggleDone = async (todo: Todo) => {
+    setTodos((prev) =>
+      prev.map((t) => (t.id === todo.id ? { ...t, done: !t.done } : t))
+    );
+    try {
+      await todoService.update(todo.id, { done: !todo.done });
+    } catch {
+      // revert on failure
+      setTodos((prev) =>
+        prev.map((t) => (t.id === todo.id ? { ...t, done: todo.done } : t))
+      );
+    }
+  };
+
+  const handleDeleteTodo = async (id: string) => {
+    setTodos((prev) => prev.filter((t) => t.id !== id));
+    try {
+      await todoService.delete(id);
+    } catch {
+      // revert on failure — re-fetch
+      const res = await todoService.getAll();
+      setTodos(res.data);
+    }
+  };
+
+  const visibleTodos = showAll ? todos : todos.slice(0, TODO_PREVIEW_LIMIT);
+  const hiddenCount = todos.length - TODO_PREVIEW_LIMIT;
 
   const quickActions = [
     { icon: CheckSquare, label: 'Create Task', color: 'text-[#FE812C]', path: '/dashboard/tasks', state: { openCreate: true } },
@@ -55,9 +138,9 @@ export default function DashboardPage() {
         <p className="text-muted-foreground mt-1">Here's what's happening with your tasks.</p>
       </div>
 
-      {/* Top Cards Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-        {/* Quick Actions Card */}
+      {/* Grid: 2 col × 2 row — Quick Todo spans full right column */}
+      <div className="grid grid-cols-1 md:grid-cols-2 md:grid-rows-2 gap-5">
+        {/* Row 1 Col 1 — Quick Actions Card */}
         <div className="bg-card rounded-2xl border border-border p-6 shadow-sm hover:shadow-md transition-shadow">
           <div className="flex items-center justify-between mb-5">
             <h3 className="text-sm font-semibold text-foreground">How can I help you today?</h3>
@@ -80,7 +163,109 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Task Progress Card */}
+        {/* Col 2 Rows 1-2 — Quick Todo Card (spans full right column) */}
+        <div className="md:row-span-2 bg-card rounded-2xl border border-border p-6 shadow-sm hover:shadow-md transition-shadow flex flex-col">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="text-sm font-semibold text-foreground">Quick Todos</h3>
+              <p className="text-xs text-muted-foreground">Small tasks, no project needed</p>
+            </div>
+            {todos.length > 0 && (
+              <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded-md">
+                {todos.filter((t) => t.done).length}/{todos.length} done
+              </span>
+            )}
+          </div>
+
+          {/* Input */}
+          <div className="flex items-center gap-2 mb-4">
+            <input
+              ref={inputRef}
+              value={newText}
+              onChange={(e) => setNewText(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleAddTodo()}
+              placeholder="Add a quick todo..."
+              maxLength={500}
+              className="flex-1 text-sm bg-muted/50 border border-border rounded-xl px-4 py-2.5 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 transition"
+            />
+            <button
+              onClick={handleAddTodo}
+              disabled={!newText.trim() || submitting}
+              className="shrink-0 flex items-center justify-center w-9 h-9 rounded-xl bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-40 transition"
+            >
+              {submitting ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />}
+            </button>
+          </div>
+
+          {/* Todo List */}
+          {todosLoading ? (
+            <div className="flex items-center justify-center py-6">
+              <Loader2 className="animate-spin text-primary" size={20} />
+            </div>
+          ) : todos.length === 0 ? (
+            <p className="text-xs text-muted-foreground text-center py-6">
+              No todos yet — add one above!
+            </p>
+          ) : (
+            <div className="space-y-2 flex-1">
+              {visibleTodos.map((todo) => (
+                <div
+                  key={todo.id}
+                  className="flex items-center gap-3 group px-3 py-2.5 rounded-xl hover:bg-muted/50 transition-colors"
+                >
+                  {/* Checkbox */}
+                  <button
+                    onClick={() => handleToggleDone(todo)}
+                    className={`shrink-0 w-5 h-5 rounded-md border-2 flex items-center justify-center transition-colors ${
+                      todo.done
+                        ? 'bg-primary border-primary'
+                        : 'border-border hover:border-primary'
+                    }`}
+                  >
+                    {todo.done && <Check size={11} className="text-primary-foreground" strokeWidth={3} />}
+                  </button>
+
+                  {/* Text */}
+                  <span
+                    className={`flex-1 text-sm leading-tight break-words ${
+                      todo.done ? 'line-through text-muted-foreground' : 'text-foreground'
+                    }`}
+                  >
+                    {todo.text}
+                  </span>
+
+                  {/* Delete (show on hover) — opens confirm dialog */}
+                  <button
+                    onClick={() => setPendingDeleteId(todo.id)}
+                    className="shrink-0 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              ))}
+
+              {/* Show more / less toggle */}
+              {!showAll && hiddenCount > 0 && (
+                <button
+                  onClick={() => setShowAll(true)}
+                  className="w-full text-xs text-muted-foreground hover:text-foreground py-1.5 transition-colors"
+                >
+                  Show {hiddenCount} more...
+                </button>
+              )}
+              {showAll && todos.length > TODO_PREVIEW_LIMIT && (
+                <button
+                  onClick={() => setShowAll(false)}
+                  className="w-full text-xs text-muted-foreground hover:text-foreground py-1.5 transition-colors"
+                >
+                  Show less
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Row 2 Col 1 — Task Progress Card */}
         <div className="bg-card rounded-2xl border border-border p-6 shadow-sm hover:shadow-md transition-shadow">
           <div className="flex items-center justify-between mb-5">
             <div>
@@ -90,13 +275,13 @@ export default function DashboardPage() {
             <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded-md">Live</span>
           </div>
 
-          {loading ? (
+          {statsLoading ? (
             <div className="flex items-center justify-center py-8">
               <Loader2 className="animate-spin text-primary" size={24} />
             </div>
-          ) : error ? (
+          ) : statsError ? (
             <div className="bg-destructive/10 border border-destructive/30 text-destructive rounded-xl px-4 py-3 text-sm font-medium">
-              {error}
+              {statsError}
             </div>
           ) : stats ? (
             <>
@@ -124,6 +309,34 @@ export default function DashboardPage() {
           ) : null}
         </div>
       </div>
+      {/* Delete confirm dialog */}
+      <Dialog open={pendingDeleteId !== null} onOpenChange={(open) => { if (!open) setPendingDeleteId(null); }}>
+        <DialogContent showCloseButton={false} className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Trash2 size={16} className="text-destructive" />
+              Delete todo?
+            </DialogTitle>
+            <DialogDescription>
+              This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPendingDeleteId(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                if (pendingDeleteId) handleDeleteTodo(pendingDeleteId);
+                setPendingDeleteId(null);
+              }}
+            >
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
