@@ -121,11 +121,15 @@ export default function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose
                 </span>
               </div>
               {myDepartments.map((m) => {
-                const active = isActive(`/dashboard/departments/${m.department.id}`);
+                const isManagerRole = m.role === 'OWNER' || m.role === 'ADMIN';
+                const deptPath = isManagerRole
+                  ? `/dashboard/departments/${m.department.id}`
+                  : `/dashboard/departments/${m.department.id}/tasks`;
+                const active = isActive(deptPath);
                 return (
                   <Link
                     key={m.id}
-                    to={`/dashboard/departments/${m.department.id}`}
+                    to={deptPath}
                     onClick={onMobileClose}
                     title={collapsed ? m.department.name : undefined}
                     className={cn(

@@ -31,7 +31,7 @@ export const useDepartmentStore = create<DepartmentStore>((set) => ({
           return { ...m, department: { ...dept, id: dept.id ?? dept._id ?? '' } };
         };
         const managed = res.data
-          .filter((m) => m.status === 'ACTIVE' && (m.role === 'OWNER' || m.role === 'ADMIN'))
+          .filter((m) => m.status === 'ACTIVE')
           .map(normalize);
         set({ myDepartments: managed, hasFetched: true });
       }

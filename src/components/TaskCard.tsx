@@ -1,8 +1,9 @@
 import type { Task } from '@/types';
 import { Badge } from '@/components/ui/badge';
-import { Pencil, Trash2, Calendar, MessageSquare, Square, Building2, Clock, CircleSlash, Repeat } from 'lucide-react';
+import { Pencil, Trash2, Calendar, MessageSquare, Square, Building2, Clock, CircleSlash, Repeat, UserCheck } from 'lucide-react';
 import { useTimeTrackingStore } from '@/store/timeTrackingStore';
 import { useDepartmentStore } from '@/store/departmentStore';
+import { useAuthStore } from '@/store/authStore';
 import { toast } from 'sonner';
 
 function formatElapsed(seconds: number): string {
@@ -20,6 +21,7 @@ interface TaskCardProps {
   onComment: (task: Task) => void;
   onCancelRecurring?: (task: Task) => void;
   commentCount?: number;
+  hideDeptLabel?: boolean;
 }
 
 const statusColors: Record<string, string> = {
@@ -34,14 +36,17 @@ const statusLabels: Record<string, string> = {
   done: 'Done',
 };
 
-export default function TaskCard({ task, onEdit, onDelete, onComment, onCancelRecurring, commentCount: commentCountProp }: TaskCardProps) {
+export default function TaskCard({ task, onEdit, onDelete, onComment, onCancelRecurring, commentCount: commentCountProp, hideDeptLabel }: TaskCardProps) {
   const commentCount = commentCountProp ?? task._count?.comments ?? 0;
   const { activeSession, elapsedSeconds, stopTracking } = useTimeTrackingStore();
   const isTracking = activeSession?.taskId === task._id;
   const allMemberships = useDepartmentStore((s) => s.allMemberships);
+  const currentUser = useAuthStore((s) => s.user);
   const deptName = task.departmentId
     ? allMemberships.find((m) => m.department.id === task.departmentId)?.department.name
     : undefined;
+  const currentUserId = currentUser?.id ?? currentUser?._id;
+  const isAssignedToMe = task.isAssigned && task.assignedTo != null && task.assignedTo === currentUserId;
 
   const handleStopTimer = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -71,6 +76,12 @@ export default function TaskCard({ task, onEdit, onDelete, onComment, onCancelRe
             <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-amber-500/10 text-amber-500 text-[10px] font-semibold border border-amber-500/20">
               <Repeat size={9} className="shrink-0" />
               Recurring
+            </span>
+          )}
+          {isAssignedToMe && (
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-purple-500/10 text-purple-500 text-[10px] font-semibold border border-purple-500/20">
+              <UserCheck size={9} className="shrink-0" />
+              Assigned
             </span>
           )}
         </div>
@@ -122,7 +133,7 @@ export default function TaskCard({ task, onEdit, onDelete, onComment, onCancelRe
       </h4>
 
       {/* Department badge */}
-      {deptName && (
+      {deptName && !hideDeptLabel && (
         <div className="flex items-center mb-2">
           <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-[#FE812C]/10 text-[#FE812C] text-[10px] font-semibold max-w-full">
             <Building2 size={9} className="shrink-0" />

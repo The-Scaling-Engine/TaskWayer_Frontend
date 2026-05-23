@@ -59,9 +59,10 @@ interface DraggableTaskCardProps {
   onComment: (task: Task) => void;
   onCancelRecurring: (task: Task) => void;
   commentCount?: number;
+  hideDeptLabel?: boolean;
 }
 
-function DraggableTaskCard({ task, isActiveDrag, onEdit, onDelete, onComment, onCancelRecurring, commentCount }: DraggableTaskCardProps) {
+function DraggableTaskCard({ task, isActiveDrag, onEdit, onDelete, onComment, onCancelRecurring, commentCount, hideDeptLabel }: DraggableTaskCardProps) {
   const { attributes, listeners, setNodeRef, transform } = useDraggable({ id: task._id });
   const style = transform ? { transform: CSS.Translate.toString(transform) } : undefined;
 
@@ -80,6 +81,7 @@ function DraggableTaskCard({ task, isActiveDrag, onEdit, onDelete, onComment, on
         onComment={onComment}
         onCancelRecurring={onCancelRecurring}
         commentCount={commentCount}
+        hideDeptLabel={hideDeptLabel}
       />
     </div>
   );
@@ -104,7 +106,11 @@ export interface KanbanBoardRef {
   openTaskById: (taskId: string, highlightCommentId?: string) => void;
 }
 
-const KanbanBoard = forwardRef<KanbanBoardRef>((_props, ref) => {
+interface KanbanBoardProps {
+  hideDeptLabel?: boolean;
+}
+
+const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({ hideDeptLabel }, ref) => {
   const { tasks, loading, fetchTasks, createTask, updateTask, deleteTask, moveTask, cancelRecurrence, silentFetch } = useTaskStore();
   const { socket } = useSocketStore();
 
@@ -315,6 +321,7 @@ const KanbanBoard = forwardRef<KanbanBoardRef>((_props, ref) => {
                         onComment={(t) => setCommentTask(t)}
                         onCancelRecurring={(t) => { setKeepChildren(false); setCancelRecurringTask(t); }}
                         commentCount={commentCounts[task._id]}
+                        hideDeptLabel={hideDeptLabel}
                       />
                     ))
                   )}
@@ -333,6 +340,7 @@ const KanbanBoard = forwardRef<KanbanBoardRef>((_props, ref) => {
                 onDelete={handleDelete}
                 onComment={(t) => setCommentTask(t)}
                 commentCount={commentCounts[activeTask._id]}
+                hideDeptLabel={hideDeptLabel}
               />
             </div>
           ) : null}

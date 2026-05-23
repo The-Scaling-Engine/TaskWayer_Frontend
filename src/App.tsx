@@ -20,6 +20,7 @@ import UserRoute from '@/components/UserRoute';
 import AdminDepartmentsPage from '@/pages/AdminDepartmentsPage';
 import InvitationPage from '@/pages/InvitationPage';
 import DepartmentManagerPage from '@/pages/DepartmentManagerPage';
+import DeptTasksPage from '@/pages/DeptTasksPage';
 import CalendarPage from '@/pages/CalendarPage';
 
 function App() {
@@ -50,6 +51,7 @@ function App() {
           <Route path="settings" element={<SettingsPage />} />
           <Route path="profile" element={<ProfilePage />} />
           <Route path="departments/:departmentId" element={<DepartmentManagerPage />} />
+          <Route path="departments/:departmentId/tasks" element={<DeptTasksPage />} />
 
           {/* Admin Routes */}
           <Route 

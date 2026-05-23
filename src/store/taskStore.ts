@@ -11,6 +11,8 @@ interface TaskQueryParams {
   limit?: number;
   deadlineFrom?: string;
   deadlineTo?: string;
+  personal?: boolean;
+  departmentId?: string;
 }
 
 interface TaskState {
@@ -20,6 +22,7 @@ interface TaskState {
   params: TaskQueryParams;
   pagination: TasksResponse['pagination'] | null;
   setParams: (newParams: Partial<TaskQueryParams>) => void;
+  resetParams: (overrides?: Partial<TaskQueryParams>) => void;
   fetchTasks: () => Promise<void>;
   createTask: (data: CreateTaskData) => Promise<void>;
   updateTask: (id: string, data: UpdateTaskData) => Promise<void>;
@@ -42,6 +45,11 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       updatedParams.page = 1;
     }
     set({ params: updatedParams });
+    get().fetchTasks();
+  },
+
+  resetParams: (overrides) => {
+    set({ params: { limit: 50, page: 1, ...overrides } });
     get().fetchTasks();
   },
 

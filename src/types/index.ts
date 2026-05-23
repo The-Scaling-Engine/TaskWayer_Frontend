@@ -36,6 +36,9 @@ export interface Task {
   recurrenceType?: 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY' | null;
   recurrenceEndDate?: string | null;
   recurrenceParentId?: string | null;
+  isAssigned?: boolean;
+  assignedTo?: string;
+  assignedBy?: string;
   __v?: number;
   _count?: { comments: number };
 }

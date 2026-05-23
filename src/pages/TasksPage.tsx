@@ -12,8 +12,12 @@ export default function TasksPage() {
   const boardRef = useRef<KanbanBoardRef>(null);
   const location = useLocation();
   const navigate = useNavigate();
-  const { params, setParams, pagination } = useTaskStore();
+  const { params, setParams, resetParams, pagination } = useTaskStore();
   const [searchValue, setSearchValue] = React.useState(params.search || '');
+
+  React.useEffect(() => {
+    resetParams({ personal: true });
+  }, [resetParams]);
 
   React.useEffect(() => {
     if (location.state?.openCreate) {
