@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { useAuthStore } from '@/store/authStore';
 import { useNotificationStore } from '@/store/notificationStore';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import type { Notification } from '@/types';
 import { cn } from '@/lib/utils';
 import ThemeToggle from '@/components/ThemeToggle';
 import { Bell, CheckCheck, BellOff } from 'lucide-react';
@@ -25,6 +26,7 @@ export default function Topbar({ sidebarCollapsed }: TopbarProps) {
   const user = useAuthStore((s) => s.user);
   const { notifications, unreadCount, loading, fetchNotifications, fetchUnreadCount, markAsRead, markAllAsRead } =
     useNotificationStore();
+  const navigate = useNavigate();
 
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -54,8 +56,22 @@ export default function Topbar({ sidebarCollapsed }: TopbarProps) {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  const handleNotificationClick = (id: string, readAt?: string) => {
-    if (!readAt) markAsRead(id);
+  const handleNotificationClick = (n: Notification) => {
+    if (!n.readAt) markAsRead(n.id);
+    setDropdownOpen(false);
+
+    if (n.entityType === 'task' && n.payload?.taskId) {
+      navigate('/dashboard/tasks', {
+        state: { openTaskId: n.payload.taskId },
+      });
+    } else if (n.entityType === 'comment' && n.payload?.taskId) {
+      navigate('/dashboard/tasks', {
+        state: {
+          openTaskId: n.payload.taskId,
+          highlightCommentId: n.payload.commentId,
+        },
+      });
+    }
   };
 
   return (
@@ -104,7 +120,7 @@ export default function Topbar({ sidebarCollapsed }: TopbarProps) {
               </div>
 
               {/* List */}
-              <div className="max-h-[360px] overflow-y-auto">
+              <div className="max-h-[360px] overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-border [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb:hover]:bg-muted-foreground/40">
                 {loading ? (
                   <div className="flex items-center justify-center py-8 text-muted-foreground text-sm">
                     Loading...
@@ -118,7 +134,7 @@ export default function Topbar({ sidebarCollapsed }: TopbarProps) {
                   notifications.map((n) => (
                     <button
                       key={n.id}
-                      onClick={() => handleNotificationClick(n.id, n.readAt)}
+                      onClick={() => handleNotificationClick(n)}
                       className={cn(
                         'w-full text-left px-4 py-3 border-b border-border/50 last:border-0 hover:bg-muted/50 transition-colors',
                         !n.readAt && 'bg-primary/5'

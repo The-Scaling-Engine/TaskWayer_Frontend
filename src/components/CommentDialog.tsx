@@ -12,6 +12,7 @@ import { commentService } from '@/services/commentService';
 import { useAuthStore } from '@/store/authStore';
 import { useSocketStore } from '@/store/socketStore';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 import { Send, Pencil, Trash2, MessageSquare, Loader2 } from 'lucide-react';
 
 interface CommentDialogProps {
@@ -19,6 +20,7 @@ interface CommentDialogProps {
   onClose: () => void;
   task: Task;
   onCountUpdate?: (taskId: string, count: number) => void;
+  highlightCommentId?: string;
 }
 
 function formatRelativeTime(dateStr: string): string {
@@ -35,7 +37,7 @@ function getDisplayName(author: Comment['author']): string {
   return author?.name ?? author?.username ?? 'Unknown';
 }
 
-export default function CommentDialog({ open, onClose, task, onCountUpdate }: CommentDialogProps) {
+export default function CommentDialog({ open, onClose, task, onCountUpdate, highlightCommentId }: CommentDialogProps) {
   const currentUser = useAuthStore((s) => s.user);
   const { socket, joinTask } = useSocketStore();
 
@@ -46,9 +48,11 @@ export default function CommentDialog({ open, onClose, task, onCountUpdate }: Co
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState('');
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [highlightedId, setHighlightedId] = useState<string | undefined>(undefined);
 
   // Keep a ref to comments so socket handlers always have latest value
   const commentsRef = useRef<Comment[]>(comments);
+  const commentRefs = useRef<Record<string, HTMLDivElement | null>>({});
   useEffect(() => { commentsRef.current = comments; }, [comments]);
 
   // Fetch comments + join task room when dialog opens
@@ -77,6 +81,18 @@ export default function CommentDialog({ open, onClose, task, onCountUpdate }: Co
       setDeleteConfirmId(null);
     }
   }, [open, taskId, joinTask]);
+
+  // Scroll to + highlight target comment when opened from notification
+  useEffect(() => {
+    if (!open || !highlightCommentId || comments.length === 0 || commentsLoading) return;
+    const el = commentRefs.current[highlightCommentId];
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      setHighlightedId(highlightCommentId);
+      const timer = setTimeout(() => setHighlightedId(undefined), 2500);
+      return () => clearTimeout(timer);
+    }
+  }, [open, highlightCommentId, comments, commentsLoading]);
 
   // Real-time comment events
   useEffect(() => {
@@ -222,7 +238,14 @@ export default function CommentDialog({ open, onClose, task, onCountUpdate }: Co
             </div>
           ) : (
             activeComments.map((comment) => (
-              <div key={comment.id} className="flex gap-3 group">
+              <div
+                key={comment.id}
+                ref={(el) => { commentRefs.current[comment.id] = el; }}
+                className={cn(
+                  'flex gap-3 group rounded-xl transition-all duration-500',
+                  highlightedId === comment.id && 'ring-2 ring-primary/60 bg-primary/5 px-2 py-1'
+                )}
+              >
                 {/* Avatar */}
                 {comment.author?.avatar ? (
                   <img

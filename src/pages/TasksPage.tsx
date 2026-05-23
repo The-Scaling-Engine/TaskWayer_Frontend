@@ -17,11 +17,19 @@ export default function TasksPage() {
 
   React.useEffect(() => {
     if (location.state?.openCreate) {
-      // Use setTimeout to ensure KanbanBoard has mounted and ref is initialized
       const timer = setTimeout(() => {
         if (boardRef.current) {
           boardRef.current.openCreateTask();
-          // Clear state in history so reloading doesn't open the popup again
+          navigate(location.pathname, { replace: true, state: {} });
+        }
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+    const { openTaskId, highlightCommentId } = (location.state ?? {}) as { openTaskId?: string; highlightCommentId?: string };
+    if (openTaskId) {
+      const timer = setTimeout(() => {
+        if (boardRef.current) {
+          boardRef.current.openTaskById(openTaskId, highlightCommentId);
           navigate(location.pathname, { replace: true, state: {} });
         }
       }, 100);

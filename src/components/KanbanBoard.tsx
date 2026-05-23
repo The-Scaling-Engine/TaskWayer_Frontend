@@ -101,6 +101,7 @@ function DroppableColumn({ id, children }: { id: string; children: React.ReactNo
 
 export interface KanbanBoardRef {
   openCreateTask: () => void;
+  openTaskById: (taskId: string, highlightCommentId?: string) => void;
 }
 
 const KanbanBoard = forwardRef<KanbanBoardRef>((_props, ref) => {
@@ -116,6 +117,7 @@ const KanbanBoard = forwardRef<KanbanBoardRef>((_props, ref) => {
   const [keepChildren, setKeepChildren] = useState(false);
   const [cancelRecurringLoading, setCancelRecurringLoading] = useState(false);
   const [commentTask, setCommentTask] = useState<Task | null>(null);
+  const [highlightCommentId, setHighlightCommentId] = useState<string | undefined>(undefined);
   const [commentCounts, setCommentCounts] = useState<Record<string, number>>({});
   const [activeTask, setActiveTask] = useState<Task | null>(null);
 
@@ -135,7 +137,17 @@ const KanbanBoard = forwardRef<KanbanBoardRef>((_props, ref) => {
   }, [socket, silentFetch]);
 
   useImperativeHandle(ref, () => ({
-    openCreateTask: () => handleCreate()
+    openCreateTask: () => handleCreate(),
+    openTaskById: (taskId: string, hcId?: string) => {
+      const task = tasks.find((t) => t.id === taskId || t._id === taskId);
+      if (!task) return;
+      if (hcId) {
+        setHighlightCommentId(hcId);
+        setCommentTask(task);
+      } else {
+        handleEdit(task);
+      }
+    },
   }));
 
   const handleDragStart = (event: DragStartEvent) => {
@@ -367,11 +379,12 @@ const KanbanBoard = forwardRef<KanbanBoardRef>((_props, ref) => {
       {commentTask && (
         <CommentDialog
           open={!!commentTask}
-          onClose={() => setCommentTask(null)}
+          onClose={() => { setCommentTask(null); setHighlightCommentId(undefined); }}
           task={commentTask}
           onCountUpdate={(taskId, count) =>
             setCommentCounts((prev) => ({ ...prev, [taskId]: count }))
           }
+          highlightCommentId={highlightCommentId}
         />
       )}
 
