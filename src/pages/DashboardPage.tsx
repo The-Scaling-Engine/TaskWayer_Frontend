@@ -16,7 +16,25 @@ import {
   X,
   Check,
   Trash2,
+  GripVertical,
 } from 'lucide-react';
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  KeyboardSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 import {
   Dialog,
@@ -30,11 +48,102 @@ import { Button } from '@/components/ui/button';
 
 const TODO_PREVIEW_LIMIT = 6;
 
+const sortTodos = (arr: Todo[]) =>
+  [...arr].sort((a, b) =>
+    a.done !== b.done
+      ? a.done ? 1 : -1
+      : a.order !== b.order
+        ? a.order - b.order
+        : new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  );
+
 const extractTags = (text: string): string[] => {
   const matches = text.match(/#([a-zA-Z][a-zA-Z0-9_]*)/g);
   if (!matches) return [];
   return [...new Set(matches.map((m) => m.slice(1).toLowerCase()))];
 };
+
+function SortableTodoItem({
+  todo,
+  onToggle,
+  onDelete,
+  justMoved,
+}: {
+  todo: Todo;
+  onToggle: (todo: Todo) => void;
+  onDelete: (id: string) => void;
+  justMoved: { id: string; dir: 'down' | 'up' } | null;
+}) {
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({
+    id: todo.id,
+    disabled: todo.done,
+  });
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      className={`flex items-start gap-2 group px-3 py-2.5 rounded-xl hover:bg-muted/50 transition-all duration-200 ${
+        todo.done ? 'opacity-50' : ''
+      } ${isDragging ? 'shadow-md bg-card ring-1 ring-border z-10' : ''} ${
+        justMoved?.id === todo.id
+          ? justMoved.dir === 'down'
+            ? 'animate-in fade-in slide-in-from-top-3 duration-300'
+            : 'animate-in fade-in slide-in-from-bottom-3 duration-300'
+          : ''
+      }`}
+    >
+      {/* Drag handle */}
+      <button
+        ref={setActivatorNodeRef}
+        {...listeners}
+        {...attributes}
+        tabIndex={-1}
+        className={`shrink-0 mt-1 touch-none transition-colors ${
+          todo.done
+            ? 'text-transparent cursor-default pointer-events-none'
+            : 'cursor-grab active:cursor-grabbing text-muted-foreground/30 hover:text-muted-foreground/70'
+        }`}
+      >
+        <GripVertical size={14} />
+      </button>
+
+      {/* Checkbox */}
+      <button
+        onClick={() => onToggle(todo)}
+        className={`shrink-0 mt-0.5 w-5 h-5 rounded-md border-2 flex items-center justify-center transition-colors ${
+          todo.done ? 'bg-primary border-primary' : 'border-border hover:border-primary'
+        }`}
+      >
+        {todo.done && <Check size={11} className="text-primary-foreground" strokeWidth={3} />}
+      </button>
+
+      {/* Text + tag badges */}
+      <div className="flex-1 min-w-0">
+        <span className={`text-sm leading-tight break-words ${todo.done ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
+          {todo.text}
+        </span>
+        {todo.tags && todo.tags.length > 0 && (
+          <div className="flex gap-1 flex-wrap mt-1">
+            {todo.tags.map((t) => (
+              <span key={t} className="text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary font-medium">
+                #{t}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Delete */}
+      <button
+        onClick={() => onDelete(todo.id)}
+        className="shrink-0 mt-0.5 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all"
+      >
+        <X size={14} />
+      </button>
+    </div>
+  );
+}
 
 export default function DashboardPage() {
   const user = useAuthStore((s) => s.user);
@@ -73,9 +182,7 @@ export default function DashboardPage() {
       setTodosLoading(true);
       try {
         const res = await todoService.getAll();
-        setTodos([...res.data].sort((a: Todo, b: Todo) =>
-          a.done !== b.done ? (a.done ? 1 : -1) : new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-        ));
+        setTodos(sortTodos(res.data));
       } catch {
         // silently fail — non-critical widget
       } finally {
@@ -94,12 +201,7 @@ export default function DashboardPage() {
     try {
       const tags = extractTags(text);
       const res = await todoService.create(text, tags);
-      setTodos((prev) => {
-      const next = [res.data, ...prev];
-      return [...next].sort((a, b) =>
-        a.done !== b.done ? (a.done ? 1 : -1) : new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      );
-    });
+      setTodos((prev) => sortTodos([res.data, ...prev]));
       setNewText('');
       inputRef.current?.focus();
     } catch (err) {
@@ -112,21 +214,11 @@ export default function DashboardPage() {
   const handleToggleDone = async (todo: Todo) => {
     setJustMoved({ id: todo.id, dir: todo.done ? 'up' : 'down' });
     setTimeout(() => setJustMoved(null), 400);
-    setTodos((prev) => {
-      const next = prev.map((t) => (t.id === todo.id ? { ...t, done: !t.done } : t));
-      return [...next].sort((a, b) =>
-        a.done !== b.done ? (a.done ? 1 : -1) : new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      );
-    });
+    setTodos((prev) => sortTodos(prev.map((t) => (t.id === todo.id ? { ...t, done: !t.done } : t))));
     try {
       await todoService.update(todo.id, { done: !todo.done });
     } catch {
-      setTodos((prev) => {
-        const next = prev.map((t) => (t.id === todo.id ? { ...t, done: todo.done } : t));
-        return [...next].sort((a, b) =>
-          a.done !== b.done ? (a.done ? 1 : -1) : new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-        );
-      });
+      setTodos((prev) => sortTodos(prev.map((t) => (t.id === todo.id ? { ...t, done: todo.done } : t))));
     }
   };
 
@@ -136,9 +228,46 @@ export default function DashboardPage() {
       await todoService.delete(id);
     } catch {
       const res = await todoService.getAll();
-      setTodos([...res.data].sort((a, b) =>
-        a.done !== b.done ? (a.done ? 1 : -1) : new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      ));
+      setTodos(sortTodos(res.data));
+    }
+  };
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const sectionIdx = tagSections.findIndex((s) =>
+      s.items.some((t) => t.id === String(active.id))
+    );
+    if (sectionIdx === -1) return;
+
+    const section = tagSections[sectionIdx];
+    const oldIdx = section.items.findIndex((t) => t.id === String(active.id));
+    const newIdx = section.items.findIndex((t) => t.id === String(over.id));
+    if (oldIdx === -1 || newIdx === -1) return;
+
+    const updatedSections = tagSections.map((s, i) =>
+      i === sectionIdx ? { ...s, items: arrayMove(s.items, oldIdx, newIdx) } : s
+    );
+
+    const allUndone = updatedSections.flatMap((s) => s.items.filter((t) => !t.done));
+    const orderUpdates = allUndone.map((t, i) => ({ id: t.id, order: i }));
+    const orderMap = new Map(orderUpdates.map(({ id, order }) => [id, order]));
+
+    setTodos((prev) =>
+      sortTodos(prev.map((t) => ({ ...t, order: orderMap.get(t.id) ?? t.order })))
+    );
+
+    try {
+      await todoService.reorder(orderUpdates);
+    } catch {
+      const res = await todoService.getAll();
+      setTodos(sortTodos(res.data));
     }
   };
 
@@ -248,68 +377,31 @@ export default function DashboardPage() {
               No todos yet — add one above!
             </p>
           ) : (
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
             <div className="flex-1 overflow-y-auto space-y-1">
               {tagSections.map(({ tag, items }, sectionIdx) => (
                 <div key={tag ?? '__no_tag__'}>
-                  {/* Section header */}
                   {tag && (
                     <div className={`flex items-center gap-2 mb-1 ${sectionIdx > 0 ? 'mt-3' : 'mt-1'}`}>
                       <span className="text-[11px] font-semibold text-primary/70 uppercase tracking-wide">
-                        #{tag}
+                        {tag}
                       </span>
                       <div className="flex-1 h-px bg-border" />
                     </div>
                   )}
-
-                  {/* Items */}
-                  <div className="space-y-1">
-                    {items.map((todo) => (
-                      <div
-                        key={todo.id}
-                        className={`flex items-start gap-3 group px-3 py-2.5 rounded-xl hover:bg-muted/50 transition-all duration-200 ${todo.done ? 'opacity-50' : ''} ${
-                          justMoved?.id === todo.id
-                            ? justMoved.dir === 'down'
-                              ? 'animate-in fade-in slide-in-from-top-3 duration-300'
-                              : 'animate-in fade-in slide-in-from-bottom-3 duration-300'
-                            : ''
-                        }`}
-                      >
-                        {/* Checkbox */}
-                        <button
-                          onClick={() => handleToggleDone(todo)}
-                          className={`shrink-0 mt-0.5 w-5 h-5 rounded-md border-2 flex items-center justify-center transition-colors ${
-                            todo.done ? 'bg-primary border-primary' : 'border-border hover:border-primary'
-                          }`}
-                        >
-                          {todo.done && <Check size={11} className="text-primary-foreground" strokeWidth={3} />}
-                        </button>
-
-                        {/* Text + tag badges */}
-                        <div className="flex-1 min-w-0">
-                          <span className={`text-sm leading-tight break-words ${todo.done ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
-                            {todo.text}
-                          </span>
-                          {todo.tags && todo.tags.length > 0 && (
-                            <div className="flex gap-1 flex-wrap mt-1">
-                              {todo.tags.map((t) => (
-                                <span key={t} className="text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary font-medium">
-                                  #{t}
-                                </span>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Delete */}
-                        <button
-                          onClick={() => setPendingDeleteId(todo.id)}
-                          className="shrink-0 mt-0.5 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all"
-                        >
-                          <X size={14} />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
+                  <SortableContext items={items.map((t) => t.id)} strategy={verticalListSortingStrategy}>
+                    <div className="space-y-1">
+                      {items.map((todo) => (
+                        <SortableTodoItem
+                          key={todo.id}
+                          todo={todo}
+                          onToggle={handleToggleDone}
+                          onDelete={setPendingDeleteId}
+                          justMoved={justMoved}
+                        />
+                      ))}
+                    </div>
+                  </SortableContext>
                 </div>
               ))}
 
@@ -331,6 +423,7 @@ export default function DashboardPage() {
                 </button>
               )}
             </div>
+          </DndContext>
           )}
         </div>
 

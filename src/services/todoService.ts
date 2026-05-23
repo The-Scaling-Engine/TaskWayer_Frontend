@@ -22,5 +22,8 @@ export const todoService = {
   update: (id: string, data: { text?: string; done?: boolean; tags?: string[] }) =>
     api.patch<TodoResponse>(`/todos/${id}`, data).then((r) => r.data),
 
+  reorder: (items: { id: string; order: number }[]) =>
+    api.patch('/todos/reorder', { items }).then((r) => r.data),
+
   delete: (id: string) => api.delete(`/todos/${id}`),
 };
