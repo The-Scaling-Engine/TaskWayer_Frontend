@@ -61,9 +61,15 @@ export default function Topbar({ sidebarCollapsed }: TopbarProps) {
     setDropdownOpen(false);
 
     if (n.entityType === 'task' && n.payload?.taskId) {
-      navigate('/dashboard/tasks', {
-        state: { openTaskId: n.payload.taskId },
-      });
+      if (typeof n.payload.departmentId === 'string') {
+        navigate(`/dashboard/departments/${n.payload.departmentId}/tasks`, {
+          state: { openTaskId: n.payload.taskId },
+        });
+      } else {
+        navigate('/dashboard/tasks', {
+          state: { openTaskId: n.payload.taskId },
+        });
+      }
     } else if (n.entityType === 'comment' && n.payload?.taskId) {
       navigate('/dashboard/tasks', {
         state: {

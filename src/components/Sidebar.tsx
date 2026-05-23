@@ -1,6 +1,7 @@
 import { Link, useLocation } from 'react-router-dom';
 import { useAuthStore } from '@/store/authStore';
 import { useNavigate } from 'react-router-dom';
+import { useMemo } from 'react';
 import {
   LayoutDashboard,
   CheckSquare,
@@ -42,6 +43,20 @@ export default function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose
   const navigate = useNavigate();
   const location = useLocation();
   const myDepartments = useDepartmentStore((s) => s.myDepartments);
+  const recentDeptIds = useDepartmentStore((s) => s.recentDeptIds);
+
+  const topDepts = useMemo(() => {
+    return [...myDepartments]
+      .sort((a, b) => {
+        const ai = recentDeptIds.indexOf(a.department.id);
+        const bi = recentDeptIds.indexOf(b.department.id);
+        if (ai === -1 && bi === -1) return 0;
+        if (ai === -1) return 1;
+        if (bi === -1) return -1;
+        return ai - bi;
+      })
+      .slice(0, 3);
+  }, [myDepartments, recentDeptIds]);
 
   const handleLogout = () => {
     logout();
@@ -104,23 +119,19 @@ export default function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose
                 )}
               >
                 <Icon size={20} className="shrink-0" />
-                {!collapsed && (
-                  <>
-                    <span className="flex-1">{item.label}</span>
-                  </>
-                )}
+                {!collapsed && <span className="flex-1">{item.label}</span>}
               </Link>
             );
           })}
 
-          {user?.role !== 'ADMIN' && myDepartments.length > 0 && (
+          {user?.role !== 'ADMIN' && topDepts.length > 0 && (
             <>
               <div className={cn('mt-4 mb-2', collapsed ? 'text-center' : 'px-3')}>
                 <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                   {collapsed ? 'Dept' : 'My Departments'}
                 </span>
               </div>
-              {myDepartments.map((m) => {
+              {topDepts.map((m) => {
                 const isManagerRole = m.role === 'OWNER' || m.role === 'ADMIN';
                 const deptPath = isManagerRole
                   ? `/dashboard/departments/${m.department.id}`
@@ -184,9 +195,7 @@ export default function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose
                     )}
                   >
                     <Icon size={20} className="shrink-0" />
-                    {!collapsed && (
-                      <span className="flex-1">{item.label}</span>
-                    )}
+                    {!collapsed && <span className="flex-1">{item.label}</span>}
                   </Link>
                 );
               })}
@@ -196,7 +205,6 @@ export default function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose
 
         {/* Footer */}
         <div className="p-3 border-t border-border space-y-1">
-          {/* User info */}
           {!collapsed && (
             <Link
               to="/dashboard/profile"
@@ -225,7 +233,6 @@ export default function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose
             </Link>
           )}
 
-          {/* Logout */}
           <button
             onClick={handleLogout}
             className={cn(
@@ -237,7 +244,6 @@ export default function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose
             {!collapsed && <span>Sign Out</span>}
           </button>
 
-          {/* Collapse Toggle (desktop only) */}
           <button
             onClick={onToggle}
             className={cn(
@@ -251,7 +257,7 @@ export default function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose
         </div>
       </aside>
 
-      {/* Mobile menu button (rendered by Sidebar so it's always visible) */}
+      {/* Mobile menu button */}
       <button
         onClick={() => mobileOpen ? onMobileClose() : onToggle()}
         className="fixed top-4 left-4 z-30 lg:hidden p-2 rounded-xl bg-card border border-border text-muted-foreground hover:text-foreground shadow-sm"

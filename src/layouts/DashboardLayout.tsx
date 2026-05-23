@@ -21,6 +21,7 @@ export default function DashboardLayout() {
   const user = useAuthStore((s) => s.user);
   const fetchMyDepartments = useDepartmentStore((s) => s.fetchMyDepartments);
   const fetchAllMemberships = useDepartmentStore((s) => s.fetchAllMemberships);
+  const updateRecentDept = useDepartmentStore((s) => s.updateRecentDept);
   const { connect, disconnect, socket } = useSocketStore();
   const pushNotification = useNotificationStore((s) => s.pushNotification);
   const silentFetch = useTaskStore((s) => s.silentFetch);
@@ -51,6 +52,9 @@ export default function DashboardLayout() {
     const handleNotification = (data: Notification) => {
       pushNotification(data);
       toast(data.title, { description: data.message, duration: 4000 });
+      if (data.type === 'TASK_ASSIGNED' && typeof data.payload?.departmentId === 'string') {
+        updateRecentDept(data.payload.departmentId);
+      }
     };
 
     const handleTaskUpdated = () => {
@@ -64,7 +68,7 @@ export default function DashboardLayout() {
       socket.off('notification:new', handleNotification);
       socket.off('task:updated', handleTaskUpdated);
     };
-  }, [socket, pushNotification, silentFetch]);
+  }, [socket, pushNotification, silentFetch, updateRecentDept]);
 
   return (
     <div className="min-h-screen bg-background">

@@ -52,7 +52,10 @@ export default function DepartmentManagerPage() {
   // ── Page tabs ──────────────────────────────────────────────────────────────
   const [pageTab, setPageTab] = useState<'workload' | 'members'>('workload');
   const [switcherOpen, setSwitcherOpen] = useState(false);
+  const [switcherSearch, setSwitcherSearch] = useState('');
   const [refreshing, setRefreshing] = useState(false);
+
+  const managerDepts = myDepartments.filter((m) => m.role === 'OWNER' || m.role === 'ADMIN');
 
   // ── Workload ───────────────────────────────────────────────────────────────
   const [workload, setWorkload] = useState<MemberWorkload[]>([]);
@@ -364,10 +367,10 @@ export default function DepartmentManagerPage() {
               <Building2 size={18} className="text-[#FE812C]" />
             </div>
 
-            {myDepartments.length > 1 ? (
+            {managerDepts.length > 1 ? (
               <div className="relative">
                 <button
-                  onClick={() => setSwitcherOpen((o) => !o)}
+                  onClick={() => { setSwitcherOpen((o) => !o); setSwitcherSearch(''); }}
                   className="flex items-center gap-2 px-3 py-2 rounded-xl border border-border hover:bg-muted transition-colors"
                 >
                   <span className="font-bold text-foreground text-lg leading-tight">{department.name}</span>
@@ -375,19 +378,42 @@ export default function DepartmentManagerPage() {
                 </button>
                 {switcherOpen && (
                   <>
-                    <div className="fixed inset-0 z-10" onClick={() => setSwitcherOpen(false)} />
-                    <div className="absolute top-full mt-1 left-0 z-20 bg-card border border-border rounded-xl shadow-lg min-w-[200px] py-1 overflow-hidden">
-                      {myDepartments.map((m) => (
-                        <button
-                          key={m.id}
-                          onClick={() => { setSwitcherOpen(false); navigate(`/dashboard/departments/${m.department.id}`); }}
-                          className={cn('w-full flex items-center gap-3 px-4 py-2.5 text-sm text-left hover:bg-muted transition-colors', m.department.id === departmentId && 'bg-primary/5 text-primary font-medium')}
-                        >
-                          <Building2 size={14} className="shrink-0 text-muted-foreground" />
-                          <span className="flex-1 truncate">{m.department.name}</span>
-                          <span className={cn('text-[10px] font-bold px-1.5 py-0.5 rounded-full border shrink-0', ROLE_COLORS[m.role] ?? '')}>{m.role}</span>
-                        </button>
-                      ))}
+                    <div className="fixed inset-0 z-10" onClick={() => { setSwitcherOpen(false); setSwitcherSearch(''); }} />
+                    <div className="absolute top-full mt-1 left-0 z-20 bg-card border border-border rounded-xl shadow-lg min-w-[220px] overflow-hidden">
+                      {/* Search */}
+                      <div className="p-2 border-b border-border">
+                        <div className="relative">
+                          <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                          <input
+                            autoFocus
+                            type="text"
+                            placeholder="Search departments..."
+                            value={switcherSearch}
+                            onChange={(e) => setSwitcherSearch(e.target.value)}
+                            onClick={(e) => e.stopPropagation()}
+                            className="w-full pl-7 pr-3 py-1.5 bg-muted/50 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-primary/30 placeholder:text-muted-foreground/50"
+                          />
+                        </div>
+                      </div>
+                      {/* List */}
+                      <div className="max-h-[200px] overflow-y-auto py-1 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-border [&::-webkit-scrollbar-thumb]:rounded-full">
+                        {managerDepts
+                          .filter((m) => m.department.name.toLowerCase().includes(switcherSearch.toLowerCase()))
+                          .map((m) => (
+                            <button
+                              key={m.id}
+                              onClick={() => { setSwitcherOpen(false); setSwitcherSearch(''); navigate(`/dashboard/departments/${m.department.id}`); }}
+                              className={cn('w-full flex items-center gap-3 px-4 py-2.5 text-sm text-left hover:bg-muted transition-colors', m.department.id === departmentId && 'bg-primary/5 text-primary font-medium')}
+                            >
+                              <Building2 size={14} className="shrink-0 text-muted-foreground" />
+                              <span className="flex-1 truncate">{m.department.name}</span>
+                              <span className={cn('text-[10px] font-bold px-1.5 py-0.5 rounded-full border shrink-0', ROLE_COLORS[m.role] ?? '')}>{m.role}</span>
+                            </button>
+                          ))}
+                        {managerDepts.filter((m) => m.department.name.toLowerCase().includes(switcherSearch.toLowerCase())).length === 0 && (
+                          <p className="text-xs text-muted-foreground px-4 py-3 text-center">No departments found</p>
+                        )}
+                      </div>
                     </div>
                   </>
                 )}

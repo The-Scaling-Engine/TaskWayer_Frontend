@@ -204,7 +204,8 @@ export type NotificationType =
   | 'DEADLINE_1_DAY'
   | 'DEADLINE_12_HOURS'
   | 'DEADLINE_4_HOURS'
-  | 'DEADLINE_1_HOUR';
+  | 'DEADLINE_1_HOUR'
+  | 'DEPT_MEMBER_JOINED';
 
 export interface Notification {
   id: string;
@@ -473,7 +474,7 @@ export interface AdminAnalyticsDepartmentsResponse {
 }
 
 // ============================================
-// CHART TYPES (giữ lại cho backward compat)
+// CHART TYPES (kept for backward compat)
 // ============================================
 export interface RevenueDataPoint {
   date: string;

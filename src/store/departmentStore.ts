@@ -2,6 +2,13 @@ import { create } from 'zustand';
 import { departmentService } from '@/services/departmentService';
 import type { MyDepartmentMembership } from '@/types';
 
+const RECENT_KEY = 'recentDeptIds';
+
+const loadRecentDeptIds = (): string[] => {
+  try { return JSON.parse(localStorage.getItem(RECENT_KEY) ?? '[]'); }
+  catch { return []; }
+};
+
 interface DepartmentStore {
   myDepartments: MyDepartmentMembership[];
   loading: boolean;
@@ -11,15 +18,20 @@ interface DepartmentStore {
   allMemberships: MyDepartmentMembership[];
   fetchAllMemberships: () => Promise<void>;
 
+  recentDeptIds: string[];
+  updateRecentDept: (deptId: string) => void;
+
   reset: () => void;
 }
 
-export const useDepartmentStore = create<DepartmentStore>((set) => ({
+export const useDepartmentStore = create<DepartmentStore>((set, get) => ({
   myDepartments: [],
   loading: false,
   hasFetched: false,
 
   allMemberships: [],
+
+  recentDeptIds: loadRecentDeptIds(),
 
   fetchMyDepartments: async () => {
     set({ loading: true });
@@ -59,5 +71,12 @@ export const useDepartmentStore = create<DepartmentStore>((set) => ({
     }
   },
 
-  reset: () => set({ myDepartments: [], loading: false, hasFetched: false, allMemberships: [] }),
+  updateRecentDept: (deptId: string) => {
+    const current = get().recentDeptIds;
+    const updated = [deptId, ...current.filter((id) => id !== deptId)].slice(0, 10);
+    set({ recentDeptIds: updated });
+    localStorage.setItem(RECENT_KEY, JSON.stringify(updated));
+  },
+
+  reset: () => set({ myDepartments: [], loading: false, hasFetched: false, allMemberships: [], recentDeptIds: [] }),
 }));
