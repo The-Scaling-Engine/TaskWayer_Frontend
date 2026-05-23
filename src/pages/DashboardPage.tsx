@@ -46,6 +46,7 @@ export default function DashboardPage() {
   const [submitting, setSubmitting] = useState(false);
   const [showAll, setShowAll] = useState(false);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const [justMoved, setJustMoved] = useState<{ id: string; dir: 'down' | 'up' } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -66,7 +67,9 @@ export default function DashboardPage() {
       setTodosLoading(true);
       try {
         const res = await todoService.getAll();
-        setTodos(res.data);
+        setTodos([...res.data].sort((a: Todo, b: Todo) =>
+          a.done !== b.done ? (a.done ? 1 : -1) : new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        ));
       } catch {
         // silently fail — non-critical widget
       } finally {
@@ -84,7 +87,12 @@ export default function DashboardPage() {
     setSubmitting(true);
     try {
       const res = await todoService.create(text);
-      setTodos((prev) => [res.data, ...prev]);
+      setTodos((prev) => {
+      const next = [res.data, ...prev];
+      return [...next].sort((a, b) =>
+        a.done !== b.done ? (a.done ? 1 : -1) : new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+    });
       setNewText('');
       inputRef.current?.focus();
     } catch (err) {
@@ -95,16 +103,23 @@ export default function DashboardPage() {
   };
 
   const handleToggleDone = async (todo: Todo) => {
-    setTodos((prev) =>
-      prev.map((t) => (t.id === todo.id ? { ...t, done: !t.done } : t))
-    );
+    setJustMoved({ id: todo.id, dir: todo.done ? 'up' : 'down' });
+    setTimeout(() => setJustMoved(null), 400);
+    setTodos((prev) => {
+      const next = prev.map((t) => (t.id === todo.id ? { ...t, done: !t.done } : t));
+      return [...next].sort((a, b) =>
+        a.done !== b.done ? (a.done ? 1 : -1) : new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+    });
     try {
       await todoService.update(todo.id, { done: !todo.done });
     } catch {
-      // revert on failure
-      setTodos((prev) =>
-        prev.map((t) => (t.id === todo.id ? { ...t, done: todo.done } : t))
-      );
+      setTodos((prev) => {
+        const next = prev.map((t) => (t.id === todo.id ? { ...t, done: todo.done } : t));
+        return [...next].sort((a, b) =>
+          a.done !== b.done ? (a.done ? 1 : -1) : new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        );
+      });
     }
   };
 
@@ -211,7 +226,13 @@ export default function DashboardPage() {
               {visibleTodos.map((todo) => (
                 <div
                   key={todo.id}
-                  className="flex items-center gap-3 group px-3 py-2.5 rounded-xl hover:bg-muted/50 transition-colors"
+                  className={`flex items-center gap-3 group px-3 py-2.5 rounded-xl hover:bg-muted/50 transition-all duration-200 ${todo.done ? 'opacity-50' : ''} ${
+                    justMoved?.id === todo.id
+                      ? justMoved.dir === 'down'
+                        ? 'animate-in fade-in slide-in-from-top-3 duration-300'
+                        : 'animate-in fade-in slide-in-from-bottom-3 duration-300'
+                      : ''
+                  }`}
                 >
                   {/* Checkbox */}
                   <button
