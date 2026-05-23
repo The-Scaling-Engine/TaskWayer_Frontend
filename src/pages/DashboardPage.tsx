@@ -30,6 +30,12 @@ import { Button } from '@/components/ui/button';
 
 const TODO_PREVIEW_LIMIT = 6;
 
+const extractTags = (text: string): string[] => {
+  const matches = text.match(/#([a-zA-Z][a-zA-Z0-9_]*)/g);
+  if (!matches) return [];
+  return [...new Set(matches.map((m) => m.slice(1).toLowerCase()))];
+};
+
 export default function DashboardPage() {
   const user = useAuthStore((s) => s.user);
   const navigate = useNavigate();
@@ -86,7 +92,8 @@ export default function DashboardPage() {
     if (!text || submitting) return;
     setSubmitting(true);
     try {
-      const res = await todoService.create(text);
+      const tags = extractTags(text);
+      const res = await todoService.create(text, tags);
       setTodos((prev) => {
       const next = [res.data, ...prev];
       return [...next].sort((a, b) =>
@@ -128,14 +135,33 @@ export default function DashboardPage() {
     try {
       await todoService.delete(id);
     } catch {
-      // revert on failure — re-fetch
       const res = await todoService.getAll();
-      setTodos(res.data);
+      setTodos([...res.data].sort((a, b) =>
+        a.done !== b.done ? (a.done ? 1 : -1) : new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      ));
     }
   };
 
   const visibleTodos = showAll ? todos : todos.slice(0, TODO_PREVIEW_LIMIT);
   const hiddenCount = todos.length - TODO_PREVIEW_LIMIT;
+
+  // Group visibleTodos: no-tag section first, then one section per primary tag
+  const tagSections: { tag: string | null; items: Todo[] }[] = [];
+  {
+    const tagMap = new Map<string, Todo[]>();
+    const noTagItems: Todo[] = [];
+    for (const todo of visibleTodos) {
+      if (!todo.tags || todo.tags.length === 0) {
+        noTagItems.push(todo);
+      } else {
+        const primary = todo.tags[0];
+        if (!tagMap.has(primary)) tagMap.set(primary, []);
+        tagMap.get(primary)!.push(todo);
+      }
+    }
+    if (noTagItems.length > 0) tagSections.push({ tag: null, items: noTagItems });
+    tagMap.forEach((items, tag) => tagSections.push({ tag, items }));
+  }
 
   const quickActions = [
     { icon: CheckSquare, label: 'Create Task', color: 'text-[#FE812C]', path: '/dashboard/tasks', state: { openCreate: true } },
@@ -222,50 +248,72 @@ export default function DashboardPage() {
               No todos yet — add one above!
             </p>
           ) : (
-            <div className="space-y-2 flex-1">
-              {visibleTodos.map((todo) => (
-                <div
-                  key={todo.id}
-                  className={`flex items-center gap-3 group px-3 py-2.5 rounded-xl hover:bg-muted/50 transition-all duration-200 ${todo.done ? 'opacity-50' : ''} ${
-                    justMoved?.id === todo.id
-                      ? justMoved.dir === 'down'
-                        ? 'animate-in fade-in slide-in-from-top-3 duration-300'
-                        : 'animate-in fade-in slide-in-from-bottom-3 duration-300'
-                      : ''
-                  }`}
-                >
-                  {/* Checkbox */}
-                  <button
-                    onClick={() => handleToggleDone(todo)}
-                    className={`shrink-0 w-5 h-5 rounded-md border-2 flex items-center justify-center transition-colors ${
-                      todo.done
-                        ? 'bg-primary border-primary'
-                        : 'border-border hover:border-primary'
-                    }`}
-                  >
-                    {todo.done && <Check size={11} className="text-primary-foreground" strokeWidth={3} />}
-                  </button>
+            <div className="flex-1 overflow-y-auto space-y-1">
+              {tagSections.map(({ tag, items }, sectionIdx) => (
+                <div key={tag ?? '__no_tag__'}>
+                  {/* Section header */}
+                  {tag && (
+                    <div className={`flex items-center gap-2 mb-1 ${sectionIdx > 0 ? 'mt-3' : 'mt-1'}`}>
+                      <span className="text-[11px] font-semibold text-primary/70 uppercase tracking-wide">
+                        #{tag}
+                      </span>
+                      <div className="flex-1 h-px bg-border" />
+                    </div>
+                  )}
 
-                  {/* Text */}
-                  <span
-                    className={`flex-1 text-sm leading-tight break-words ${
-                      todo.done ? 'line-through text-muted-foreground' : 'text-foreground'
-                    }`}
-                  >
-                    {todo.text}
-                  </span>
+                  {/* Items */}
+                  <div className="space-y-1">
+                    {items.map((todo) => (
+                      <div
+                        key={todo.id}
+                        className={`flex items-start gap-3 group px-3 py-2.5 rounded-xl hover:bg-muted/50 transition-all duration-200 ${todo.done ? 'opacity-50' : ''} ${
+                          justMoved?.id === todo.id
+                            ? justMoved.dir === 'down'
+                              ? 'animate-in fade-in slide-in-from-top-3 duration-300'
+                              : 'animate-in fade-in slide-in-from-bottom-3 duration-300'
+                            : ''
+                        }`}
+                      >
+                        {/* Checkbox */}
+                        <button
+                          onClick={() => handleToggleDone(todo)}
+                          className={`shrink-0 mt-0.5 w-5 h-5 rounded-md border-2 flex items-center justify-center transition-colors ${
+                            todo.done ? 'bg-primary border-primary' : 'border-border hover:border-primary'
+                          }`}
+                        >
+                          {todo.done && <Check size={11} className="text-primary-foreground" strokeWidth={3} />}
+                        </button>
 
-                  {/* Delete (show on hover) — opens confirm dialog */}
-                  <button
-                    onClick={() => setPendingDeleteId(todo.id)}
-                    className="shrink-0 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all"
-                  >
-                    <X size={14} />
-                  </button>
+                        {/* Text + tag badges */}
+                        <div className="flex-1 min-w-0">
+                          <span className={`text-sm leading-tight break-words ${todo.done ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
+                            {todo.text}
+                          </span>
+                          {todo.tags && todo.tags.length > 0 && (
+                            <div className="flex gap-1 flex-wrap mt-1">
+                              {todo.tags.map((t) => (
+                                <span key={t} className="text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary font-medium">
+                                  #{t}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Delete */}
+                        <button
+                          onClick={() => setPendingDeleteId(todo.id)}
+                          className="shrink-0 mt-0.5 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               ))}
 
-              {/* Show more / less toggle */}
+              {/* Show more / less */}
               {!showAll && hiddenCount > 0 && (
                 <button
                   onClick={() => setShowAll(true)}

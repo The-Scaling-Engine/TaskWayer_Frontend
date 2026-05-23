@@ -58,6 +58,8 @@ export interface Todo {
   profileId: string;
   text: string;
   done: boolean;
+  tags: string[];
+  order: number;
   createdAt: string;
   updatedAt: string;
 }
