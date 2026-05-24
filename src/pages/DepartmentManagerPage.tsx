@@ -889,11 +889,11 @@ export default function DepartmentManagerPage() {
 
       {/* ── Member Detail Panel (Step 10.6) ── */}
       {detailMember && (
-        <div className="fixed inset-0 z-[45] flex">
+        <div className="fixed inset-0 z-[45] flex animate-in fade-in duration-200">
           {/* Backdrop */}
           <div className="flex-1 bg-black/30" onClick={() => setDetailMember(null)} />
           {/* Panel */}
-          <div className="w-[420px] max-w-[95vw] h-full bg-card border-l border-border shadow-2xl flex flex-col overflow-hidden">
+          <div className="w-[420px] max-w-[95vw] h-full bg-card border-l border-border shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-right duration-300 ease-out">
             {/* Panel header */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
               <div className="flex items-center gap-2.5 min-w-0">
@@ -1155,8 +1155,8 @@ export default function DepartmentManagerPage() {
 
       {/* Remove member confirm */}
       {removeMemberConfirm && (
-        <div className="fixed inset-0 z-[65] flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-card border border-border rounded-2xl p-6 max-w-sm w-full shadow-xl space-y-4">
+        <div className="fixed inset-0 z-[65] flex items-center justify-center bg-black/50 p-4 animate-in fade-in duration-200">
+          <div className="bg-card border border-border rounded-2xl p-6 max-w-sm w-full shadow-xl space-y-4 animate-in fade-in zoom-in-95 duration-150 ease-out">
             <h3 className="text-lg font-bold">Remove Member</h3>
             <p className="text-sm text-muted-foreground">Remove <span className="font-semibold text-foreground">{removeMemberConfirm.label}</span> from this department?</p>
             <div className="flex gap-3 justify-end">
@@ -1169,8 +1169,8 @@ export default function DepartmentManagerPage() {
 
       {/* Invite by email */}
       {inviteOpen && (
-        <div className="fixed inset-0 z-[65] flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-card border border-border rounded-2xl p-6 max-w-md w-full shadow-xl space-y-4">
+        <div className="fixed inset-0 z-[65] flex items-center justify-center bg-black/50 p-4 animate-in fade-in duration-200">
+          <div className="bg-card border border-border rounded-2xl p-6 max-w-md w-full shadow-xl space-y-4 animate-in fade-in zoom-in-95 duration-150 ease-out">
             <h3 className="text-lg font-bold">Invite to {department.name}</h3>
             <div className="space-y-3">
               <div>
@@ -1202,8 +1202,8 @@ export default function DepartmentManagerPage() {
 
       {/* Add member directly */}
       {addMemberOpen && (
-        <div className="fixed inset-0 z-[65] flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-card border border-border rounded-2xl p-6 max-w-md w-full shadow-xl space-y-4">
+        <div className="fixed inset-0 z-[65] flex items-center justify-center bg-black/50 p-4 animate-in fade-in duration-200">
+          <div className="bg-card border border-border rounded-2xl p-6 max-w-md w-full shadow-xl space-y-4 animate-in fade-in zoom-in-95 duration-150 ease-out">
             <h3 className="text-lg font-bold">Add Member to {department.name}</h3>
             <div className="space-y-3">
               <div>
@@ -1276,8 +1276,8 @@ export default function DepartmentManagerPage() {
 
       {/* Transfer ownership */}
       {transferOwnerConfirm && (
-        <div className="fixed inset-0 z-[65] flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-card border border-border rounded-2xl p-6 max-w-sm w-full shadow-xl space-y-4">
+        <div className="fixed inset-0 z-[65] flex items-center justify-center bg-black/50 p-4 animate-in fade-in duration-200">
+          <div className="bg-card border border-border rounded-2xl p-6 max-w-sm w-full shadow-xl space-y-4 animate-in fade-in zoom-in-95 duration-150 ease-out">
             <h3 className="text-lg font-bold">Transfer Ownership</h3>
             <p className="text-sm text-muted-foreground">Transfer ownership of <span className="font-semibold text-foreground">{department.name}</span> to <span className="font-semibold text-foreground">{transferOwnerConfirm.label}</span>?</p>
             <p className="text-xs text-muted-foreground bg-muted/50 rounded-xl px-3 py-2">You will be demoted to <span className="font-semibold">MEMBER</span>.</p>
