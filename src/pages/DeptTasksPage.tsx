@@ -4,6 +4,7 @@ import { ArrowLeft, Building2, ChevronDown, Plus, Search } from 'lucide-react';
 import KanbanBoard from '@/components/KanbanBoard';
 import type { KanbanBoardRef } from '@/components/KanbanBoard';
 import { Button } from '@/components/ui/button';
+import TimerStartButton from '@/components/TimerStartButton';
 import { useTaskStore } from '@/store/taskStore';
 import { useDepartmentStore } from '@/store/departmentStore';
 import { useAuthStore } from '@/store/authStore';
@@ -137,13 +138,16 @@ export default function DeptTasksPage() {
           )}
         </div>
 
-        <Button
-          onClick={() => boardRef.current?.openCreateTask()}
-          className="bg-[#FE812C] hover:bg-[#e5732a] text-white rounded-xl shadow-md shadow-[#FE812C]/20 gap-2"
-        >
-          <Plus size={18} />
-          <span className="hidden sm:inline">Create Task</span>
-        </Button>
+        <div className="flex items-center gap-2">
+          <TimerStartButton fetchParams={{ status: 'doing', departmentId: departmentId!, limit: 50 }} />
+          <Button
+            onClick={() => boardRef.current?.openCreateTask()}
+            className="bg-[#FE812C] hover:bg-[#e5732a] text-white rounded-xl shadow-md shadow-[#FE812C]/20 gap-2"
+          >
+            <Plus size={18} />
+            <span className="hidden sm:inline">Create Task</span>
+          </Button>
+        </div>
       </div>
 
       <KanbanBoard

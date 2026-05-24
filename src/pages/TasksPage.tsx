@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { useTaskStore } from '@/store/taskStore';
 import DateRangePicker from '@/components/DateRangePicker';
 import type { DateRange } from '@/components/DateRangePicker';
+import TimerStartButton from '@/components/TimerStartButton';
 
 export default function TasksPage() {
   const boardRef = useRef<KanbanBoardRef>(null);
@@ -89,10 +90,13 @@ export default function TasksPage() {
             {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
           </span>
         </div>
-        <Button onClick={() => boardRef.current?.openCreateTask()} className="bg-[#FE812C] hover:bg-[#e5732a] text-white rounded-xl shadow-md shadow-[#FE812C]/20 gap-2">
-          <Plus size={18} />
-          <span className="hidden sm:inline">Create Task</span>
-        </Button>
+        <div className="flex items-center gap-2">
+          <TimerStartButton fetchParams={{ status: 'doing', personal: true, limit: 50 }} />
+          <Button onClick={() => boardRef.current?.openCreateTask()} className="bg-[#FE812C] hover:bg-[#e5732a] text-white rounded-xl shadow-md shadow-[#FE812C]/20 gap-2">
+            <Plus size={18} />
+            <span className="hidden sm:inline">Create Task</span>
+          </Button>
+        </div>
       </div>
 
       {/* Toolbar */}
