@@ -75,8 +75,9 @@ export default function DescriptionEditor({
           `<a href="${url}" target="_blank" rel="noopener noreferrer">${file.name}</a>`
         ).run();
       }
-    } catch {
-      toast.error('Upload failed. Make sure the "task-attachments" Supabase Storage bucket exists.');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Upload failed';
+      toast.error(msg);
     } finally {
       setUploading(false);
     }
