@@ -1,7 +1,6 @@
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import LinkExt from '@tiptap/extension-link';
-import ImageExt from '@tiptap/extension-image';
 import Placeholder from '@tiptap/extension-placeholder';
 import DOMPurify from 'dompurify';
 import { useRef, useState, useMemo } from 'react';
@@ -11,6 +10,9 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 
+const GALLERY_MAX = 3; // visible slots before overflow
+
+// ── HTML helpers ────────────────────────────────────────────────
 function sanitizeHtml(html: string): string {
   return DOMPurify.sanitize(html, {
     ADD_TAGS: ['img'],
@@ -28,13 +30,14 @@ function extractImages(html: string): { textHtml: string; images: string[] } {
   return { textHtml: div.innerHTML, images };
 }
 
-/* ── Lightbox ── */
-function ImageLightbox({
-  images,
-  index,
-  onClose,
-  onNav,
-}: {
+function buildHtml(textHtml: string, images: string[]): string {
+  const text = textHtml === '<p></p>' ? '' : textHtml;
+  const imgHtml = images.map(s => `<img src="${s}" />`).join('');
+  return text + imgHtml;
+}
+
+// ── Lightbox ────────────────────────────────────────────────────
+function ImageLightbox({ images, index, onClose, onNav }: {
   images: string[];
   index: number;
   onClose: () => void;
@@ -42,7 +45,7 @@ function ImageLightbox({
 }) {
   return (
     <Dialog open onOpenChange={open => { if (!open) onClose(); }}>
-      <DialogContent className="max-w-4xl w-full p-3 border-none bg-black/95 [&>button]:text-white/70">
+      <DialogContent className="max-w-4xl w-full p-3 border-none bg-black/95 [&>button]:text-white/60">
         <div className="relative flex items-center justify-center min-h-[35vh]">
           <img
             src={images[index]}
@@ -65,7 +68,7 @@ function ImageLightbox({
               >
                 <ChevronRight size={18} />
               </button>
-              <div className="absolute bottom-2 left-1/2 -translate-x-1/2 text-xs text-white/60 bg-black/50 px-2.5 py-0.5 rounded-full select-none">
+              <div className="absolute bottom-2 left-1/2 -translate-x-1/2 text-xs text-white/55 bg-black/50 px-2.5 py-0.5 rounded-full select-none">
                 {index + 1} / {images.length}
               </div>
             </>
@@ -76,7 +79,57 @@ function ImageLightbox({
   );
 }
 
-/* ── Read-only renderer (used in TaskCard and assigned read-only state) ── */
+// ── Shared gallery row (editor + read-only) ──────────────────────
+function ImageGalleryRow({ images, onLightbox, onRemove }: {
+  images: string[];
+  onLightbox: (i: number) => void;
+  onRemove?: (i: number) => void;
+}) {
+  if (images.length === 0) return null;
+  const visible = images.slice(0, GALLERY_MAX);
+  const overflow = images.length - GALLERY_MAX;
+
+  return (
+    <div className="flex gap-1.5 flex-nowrap">
+      {visible.map((src, i) => (
+        <div
+          key={i}
+          className="relative shrink-0 h-[72px] w-[72px] rounded-lg overflow-hidden group cursor-pointer"
+          onClick={() => onLightbox(i)}
+        >
+          <img src={src} alt={`Image ${i + 1}`} className="w-full h-full object-cover" />
+          {onRemove && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onRemove(i); }}
+              className="absolute top-0.5 right-0.5 w-[18px] h-[18px] rounded-full bg-black/65 text-white text-[11px] leading-none flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+            >
+              ×
+            </button>
+          )}
+        </div>
+      ))}
+
+      {overflow > 0 && images[GALLERY_MAX] !== undefined && (
+        <div
+          className="relative shrink-0 h-[72px] w-[72px] rounded-lg overflow-hidden cursor-pointer"
+          onClick={() => onLightbox(GALLERY_MAX)}
+        >
+          <img
+            src={images[GALLERY_MAX]}
+            alt="More images"
+            className="w-full h-full object-cover blur-[2px] scale-110"
+          />
+          <div className="absolute inset-0 bg-black/55 flex items-center justify-center">
+            <span className="text-white font-bold text-base leading-none">+{overflow}</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Read-only renderer ───────────────────────────────────────────
 export function DescriptionView({ html, className }: { html: string; className?: string }) {
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
 
@@ -86,9 +139,6 @@ export function DescriptionView({ html, className }: { html: string; className?:
   }, [html]);
 
   if (!html) return null;
-
-  const visibleImages = images.slice(0, 2);
-  const extraCount = images.length - 2;
 
   return (
     <div className={cn('text-sm break-words', className)}>
@@ -102,35 +152,11 @@ export function DescriptionView({ html, className }: { html: string; className?:
           dangerouslySetInnerHTML={{ __html: textHtml }}
         />
       )}
-
       {images.length > 0 && (
-        <div className="flex gap-1.5 mt-1.5 flex-wrap">
-          {visibleImages.map((src, i) => (
-            <button
-              key={i}
-              type="button"
-              onClick={() => setLightboxIndex(i)}
-              className="shrink-0 rounded-lg overflow-hidden hover:opacity-85 transition-opacity"
-            >
-              <img
-                src={src}
-                alt={`Image ${i + 1}`}
-                className="h-16 w-auto max-w-[90px] object-cover"
-              />
-            </button>
-          ))}
-          {extraCount > 0 && (
-            <button
-              type="button"
-              onClick={() => setLightboxIndex(2)}
-              className="h-16 w-16 shrink-0 rounded-lg bg-muted flex items-center justify-center text-sm font-bold text-muted-foreground hover:bg-muted/70 transition-colors"
-            >
-              +{extraCount}
-            </button>
-          )}
+        <div className="mt-1.5">
+          <ImageGalleryRow images={images} onLightbox={setLightboxIndex} />
         </div>
       )}
-
       {lightboxIndex !== null && (
         <ImageLightbox
           images={images}
@@ -143,6 +169,7 @@ export function DescriptionView({ html, className }: { html: string; className?:
   );
 }
 
+// ── Editor component ─────────────────────────────────────────────
 interface DescriptionEditorProps {
   value: string;
   onChange: (html: string) => void;
@@ -163,36 +190,74 @@ export default function DescriptionEditor({
   const [uploading, setUploading] = useState(false);
   const [linkMode, setLinkMode] = useState(false);
   const [linkUrl, setLinkUrl] = useState('');
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+
+  // Parse initial value once — parent uses key= prop to force remount on task change
+  const initialRef = useRef<{ textHtml: string; images: string[] } | null>(null);
+  if (initialRef.current === null) {
+    initialRef.current = value ? extractImages(value) : { textHtml: '', images: [] };
+  }
+  const { textHtml: initialText, images: initialImages } = initialRef.current;
+
+  const [images, setImages] = useState<string[]>(initialImages);
+  // Ref so TipTap's onUpdate closure always reads latest images without stale closure
+  const imagesRef = useRef<string[]>(initialImages);
+  imagesRef.current = images;
 
   const editor = useEditor({
     extensions: [
       StarterKit,
       LinkExt.configure({ openOnClick: false, autolink: true, linkOnPaste: true }),
-      ImageExt.configure({ inline: false, allowBase64: false }),
       Placeholder.configure({ placeholder }),
     ],
-    content: value || '',
+    content: initialText || '',
     editable: !disabled,
     onUpdate: ({ editor }) => {
-      const html = editor.getHTML();
-      onChange(html === '<p></p>' ? '' : html);
+      onChange(buildHtml(editor.getHTML(), imagesRef.current));
     },
   });
 
-  const handleUpload = async (file: File, type: 'image' | 'file') => {
+  // Helpers to mutate images and emit combined HTML synchronously
+  const addImages = (urls: string[]) => {
+    const next = [...imagesRef.current, ...urls];
+    imagesRef.current = next;
+    setImages(next);
+    onChange(buildHtml(editor?.getHTML() ?? '', next));
+  };
+
+  const removeImage = (i: number) => {
+    const next = imagesRef.current.filter((_, idx) => idx !== i);
+    imagesRef.current = next;
+    setImages(next);
+    onChange(buildHtml(editor?.getHTML() ?? '', next));
+  };
+
+  const handleUploadImages = async (files: File[]) => {
+    setUploading(true);
+    try {
+      const results = await Promise.allSettled(files.map(f => uploadFile(f)));
+      const urls = results
+        .filter((r): r is PromiseFulfilledResult<string> => r.status === 'fulfilled')
+        .map(r => r.value);
+      const failed = results.filter(r => r.status === 'rejected').length;
+      if (failed > 0) toast.error(`${failed} image(s) failed to upload`);
+      if (urls.length > 0) addImages(urls);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Upload failed');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleUploadFile = async (file: File) => {
     setUploading(true);
     try {
       const url = await uploadFile(file);
-      if (type === 'image') {
-        editor?.chain().focus().setImage({ src: url, alt: file.name }).run();
-      } else {
-        editor?.chain().focus().insertContent(
-          `<a href="${url}" target="_blank" rel="noopener noreferrer">${file.name}</a>`
-        ).run();
-      }
+      editor?.chain().focus()
+        .insertContent(`<a href="${url}" target="_blank" rel="noopener noreferrer">${file.name}</a>`)
+        .run();
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Upload failed';
-      toast.error(msg);
+      toast.error(err instanceof Error ? err.message : 'Upload failed');
     } finally {
       setUploading(false);
     }
@@ -203,7 +268,6 @@ export default function DescriptionEditor({
       const href = linkUrl.startsWith('http') ? linkUrl : `https://${linkUrl}`;
       const { empty } = editor!.state.selection;
       if (empty) {
-        // No text selected — insert URL as visible linked text
         editor?.chain().focus()
           .insertContent(`<a href="${href}" target="_blank" rel="noopener noreferrer">${href}</a>`)
           .run();
@@ -229,16 +293,12 @@ export default function DescriptionEditor({
           active={editor?.isActive('bold')}
           onClick={() => editor?.chain().focus().toggleBold().run()}
           title="Bold"
-        >
-          <Bold size={12} />
-        </ToolbarBtn>
+        ><Bold size={12} /></ToolbarBtn>
         <ToolbarBtn
           active={editor?.isActive('italic')}
           onClick={() => editor?.chain().focus().toggleItalic().run()}
           title="Italic"
-        >
-          <Italic size={12} />
-        </ToolbarBtn>
+        ><Italic size={12} /></ToolbarBtn>
 
         <div className="w-px h-3.5 bg-border mx-1" />
 
@@ -246,33 +306,29 @@ export default function DescriptionEditor({
           active={editor?.isActive('link') || linkMode}
           onClick={() => { setLinkMode(m => !m); setLinkUrl(editor?.getAttributes('link').href ?? ''); }}
           title="Insert link"
-        >
-          <Link2 size={12} />
-        </ToolbarBtn>
+        ><Link2 size={12} /></ToolbarBtn>
         <ToolbarBtn
           onClick={() => imageInputRef.current?.click()}
-          title="Upload image"
+          title="Upload images (multiple)"
           disabled={uploading}
         >
           {uploading ? <Loader2 size={12} className="animate-spin" /> : <ImageIcon size={12} />}
         </ToolbarBtn>
         <ToolbarBtn
           onClick={() => fileInputRef.current?.click()}
-          title="Upload PDF / file"
+          title="Upload PDF"
           disabled={uploading}
-        >
-          <Paperclip size={12} />
-        </ToolbarBtn>
+        ><Paperclip size={12} /></ToolbarBtn>
 
-        {/* Hidden file inputs */}
         <input
           ref={imageInputRef}
           type="file"
           accept="image/jpeg,image/png,image/gif,image/webp"
+          multiple
           className="hidden"
           onChange={(e) => {
-            const f = e.target.files?.[0];
-            if (f) handleUpload(f, 'image');
+            const files = Array.from(e.target.files ?? []);
+            if (files.length) handleUploadImages(files);
             e.target.value = '';
           }}
         />
@@ -283,19 +339,19 @@ export default function DescriptionEditor({
           className="hidden"
           onChange={(e) => {
             const f = e.target.files?.[0];
-            if (f) handleUpload(f, 'file');
+            if (f) handleUploadFile(f);
             e.target.value = '';
           }}
         />
       </div>
 
-      {/* Inline link input */}
+      {/* Inline link bar */}
       {linkMode && (
         <div className="flex items-center gap-1.5 px-2 py-1.5 border-b border-border bg-muted/20">
           <input
             autoFocus
             type="url"
-            placeholder="https://... (or select text first to make it a hyperlink)"
+            placeholder="https://... (select text first to make it a hyperlink)"
             value={linkUrl}
             onChange={(e) => setLinkUrl(e.target.value)}
             onKeyDown={(e) => {
@@ -314,11 +370,11 @@ export default function DescriptionEditor({
         </div>
       )}
 
-      {/* Editor content area */}
+      {/* Text editor */}
       <EditorContent
         editor={editor}
         className={cn(
-          'px-3 py-2 min-h-[90px] text-sm',
+          'px-3 py-2 min-h-[80px] text-sm',
           '[&_.ProseMirror]:outline-none',
           '[&_.ProseMirror_p.is-editor-empty:first-child::before]:content-[attr(data-placeholder)]',
           '[&_.ProseMirror_p.is-editor-empty:first-child::before]:text-muted-foreground',
@@ -326,16 +382,33 @@ export default function DescriptionEditor({
           '[&_.ProseMirror_p.is-editor-empty:first-child::before]:pointer-events-none',
           '[&_.ProseMirror_p]:my-0.5',
           '[&_.ProseMirror_a]:text-primary [&_.ProseMirror_a]:underline',
-          '[&_.ProseMirror_img]:rounded-lg [&_.ProseMirror_img]:max-w-[25%] [&_.ProseMirror_img]:my-1',
         )}
       />
+
+      {/* Image gallery row */}
+      {images.length > 0 && (
+        <div className="border-t border-border px-3 py-2">
+          <ImageGalleryRow
+            images={images}
+            onLightbox={setLightboxIndex}
+            onRemove={removeImage}
+          />
+        </div>
+      )}
+
+      {lightboxIndex !== null && (
+        <ImageLightbox
+          images={images}
+          index={lightboxIndex}
+          onClose={() => setLightboxIndex(null)}
+          onNav={setLightboxIndex}
+        />
+      )}
     </div>
   );
 }
 
-function ToolbarBtn({
-  children, onClick, active, title, disabled,
-}: {
+function ToolbarBtn({ children, onClick, active, title, disabled }: {
   children: React.ReactNode;
   onClick: () => void;
   active?: boolean;
