@@ -12,6 +12,7 @@ import { commentService } from '@/services/commentService';
 import { useAuthStore } from '@/store/authStore';
 import { useSocketStore } from '@/store/socketStore';
 import { toast } from 'sonner';
+import { getApiErrorMessage } from '@/services/api';
 import { cn } from '@/lib/utils';
 import { Send, Pencil, Trash2, MessageSquare, Loader2 } from 'lucide-react';
 
@@ -69,7 +70,7 @@ export default function CommentDialog({ open, onClose, task, onCountUpdate, high
             onCountUpdate?.(taskId, res.count);
           }
         })
-        .catch(() => toast.error('Failed to load comments'))
+        .catch((err) => toast.error(getApiErrorMessage(err, 'Failed to load comments')))
         .finally(() => setCommentsLoading(false));
 
       joinTask(taskId);
@@ -171,8 +172,8 @@ export default function CommentDialog({ open, onClose, task, onCountUpdate, high
         setCommentInput('');
         onCountUpdate?.(taskId, updated.filter((c) => !c.deletedAt).length);
       }
-    } catch {
-      toast.error('Failed to send comment');
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Failed to send comment'));
     } finally {
       setCommentSubmitting(false);
     }
@@ -186,8 +187,8 @@ export default function CommentDialog({ open, onClose, task, onCountUpdate, high
         setComments((prev) => prev.map((c) => (c.id === commentId ? res.data : c)));
         setEditingId(null);
       }
-    } catch {
-      toast.error('Failed to update comment');
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Failed to update comment'));
     }
   };
 
@@ -200,8 +201,8 @@ export default function CommentDialog({ open, onClose, task, onCountUpdate, high
       setComments(updated);
       setDeleteConfirmId(null);
       onCountUpdate?.(taskId, updated.filter((c) => !c.deletedAt).length);
-    } catch {
-      toast.error('Failed to delete comment');
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Failed to delete comment'));
     }
   };
 

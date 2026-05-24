@@ -21,8 +21,10 @@ import {
 import type { Task } from '@/types';
 import { useTimeTrackingStore } from '@/store/timeTrackingStore';
 import { useDepartmentStore } from '@/store/departmentStore';
+import { useAuthStore } from '@/store/authStore';
+import { getApiErrorMessage } from '@/services/api';
 import { toast } from 'sonner';
-import { Play, Square, Loader2 as TimerLoader } from 'lucide-react';
+import { Play, Square, Loader2 as TimerLoader, UserCheck } from 'lucide-react';
 
 function toDatetimeLocal(isoStr: string): string {
   const d = new Date(isoStr);
@@ -68,6 +70,13 @@ interface TaskDialogProps {
 export default function TaskDialog({ open, onClose, onSubmit, task, loading, defaultDeadline, defaultScheduledAt }: TaskDialogProps) {
   const { activeSession, elapsedSeconds, loading: timerLoading, startTracking, stopTracking } = useTimeTrackingStore();
   const allMemberships = useDepartmentStore((s) => s.allMemberships);
+  const user = useAuthStore((s) => s.user);
+
+  const isReadOnly = !!(
+    task?.isAssigned &&
+    task?.assignedTo &&
+    (task.assignedTo === user?._id || task.assignedTo === user?.id)
+  );
 
   const isThisTaskTracked = !!task?._id && activeSession?.taskId === task._id;
   const isOtherTaskTracked = !!activeSession && !isThisTaskTracked;
@@ -77,15 +86,15 @@ export default function TaskDialog({ open, onClose, onSubmit, task, loading, def
       try {
         await stopTracking();
         toast.success('Timer stopped');
-      } catch {
-        toast.error('Failed to stop timer');
+      } catch (err) {
+        toast.error(getApiErrorMessage(err, 'Failed to stop timer'));
       }
     } else if (task?._id) {
       try {
         await startTracking(task._id);
         toast.success('Timer started');
-      } catch {
-        toast.error('Failed to start timer');
+      } catch (err) {
+        toast.error(getApiErrorMessage(err, 'Failed to start timer'));
       }
     }
   };
@@ -143,6 +152,7 @@ export default function TaskDialog({ open, onClose, onSubmit, task, loading, def
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
+    if (isReadOnly) return;
     if (!title.trim()) {
       setError('Title is required');
       return;
@@ -202,6 +212,11 @@ export default function TaskDialog({ open, onClose, onSubmit, task, loading, def
             <DialogTitle className="text-xl font-bold flex-1">
               {task?._id ? 'Edit Task' : 'Create New Task'}
             </DialogTitle>
+            {isReadOnly && (
+              <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-600 dark:text-purple-400 shrink-0">
+                <UserCheck size={11} /> Assigned
+              </span>
+            )}
 
             {/* Timer button – edit mode only */}
             {task?._id && (
@@ -244,7 +259,8 @@ export default function TaskDialog({ open, onClose, onSubmit, task, loading, def
               value={title}
               onChange={(e) => { setTitle(e.target.value); setError(''); }}
               className="rounded-xl"
-              autoFocus
+              autoFocus={!isReadOnly}
+              disabled={isReadOnly}
             />
           </div>
 
@@ -256,13 +272,14 @@ export default function TaskDialog({ open, onClose, onSubmit, task, loading, def
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               className="rounded-xl min-h-[80px] resize-none"
+              disabled={isReadOnly}
             />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label>Status</Label>
-              <Select value={status} onValueChange={(v) => setStatus(v as 'todo' | 'doing' | 'done')}>
+              <Select value={status} onValueChange={(v) => setStatus(v as 'todo' | 'doing' | 'done')} disabled={isReadOnly}>
                 <SelectTrigger className="rounded-xl">
                   <SelectValue />
                 </SelectTrigger>
@@ -276,7 +293,7 @@ export default function TaskDialog({ open, onClose, onSubmit, task, loading, def
 
             <div className="space-y-1.5">
               <Label>Priority</Label>
-              <Select value={priority} onValueChange={(v) => setPriority(v as 'low' | 'medium' | 'high')}>
+              <Select value={priority} onValueChange={(v) => setPriority(v as 'low' | 'medium' | 'high')} disabled={isReadOnly}>
                 <SelectTrigger className="rounded-xl">
                   <SelectValue />
                 </SelectTrigger>
@@ -299,6 +316,7 @@ export default function TaskDialog({ open, onClose, onSubmit, task, loading, def
                 value={scheduledAt}
                 onChange={(e) => setScheduledAt(e.target.value)}
                 className="rounded-xl"
+                disabled={isReadOnly}
               />
             </div>
 
@@ -311,6 +329,7 @@ export default function TaskDialog({ open, onClose, onSubmit, task, loading, def
                 value={deadline}
                 onChange={(e) => setDeadline(e.target.value)}
                 className="rounded-xl"
+                disabled={isReadOnly}
               />
             </div>
           </div>
@@ -324,13 +343,14 @@ export default function TaskDialog({ open, onClose, onSubmit, task, loading, def
               value={tagsInput}
               onChange={(e) => setTagsInput(e.target.value)}
               className="rounded-xl"
+              disabled={isReadOnly}
             />
           </div>
 
           {allMemberships.length > 0 && (
             <div className="space-y-1.5">
               <Label>Department</Label>
-              <Select value={departmentId} onValueChange={setDepartmentId}>
+              <Select value={departmentId} onValueChange={setDepartmentId} disabled={isReadOnly}>
                 <SelectTrigger className="rounded-xl">
                   <SelectValue placeholder="None (Personal)" />
                 </SelectTrigger>
@@ -348,55 +368,57 @@ export default function TaskDialog({ open, onClose, onSubmit, task, loading, def
           )}
 
           {/* Recurring task section */}
-          <div className="space-y-3 pt-1">
-            <div className="flex items-center gap-2">
-              <input
-                id="task-recurring"
-                type="checkbox"
-                checked={isRecurring}
-                onChange={(e) => setIsRecurring(e.target.checked)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    setIsRecurring(!isRecurring);
-                  }
-                }}
-                className="w-4 h-4 rounded accent-[#FE812C] cursor-pointer"
-              />
-              <Label htmlFor="task-recurring" className="cursor-pointer font-normal">
-                Make this a recurring task
-              </Label>
-            </div>
-
-            {isRecurring && (
-              <div className="grid grid-cols-2 gap-4 pl-6">
-                <div className="space-y-1.5">
-                  <Label>Repeats</Label>
-                  <Select value={recurrenceType} onValueChange={(v) => setRecurrenceType(v as 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY')}>
-                    <SelectTrigger className="rounded-xl">
-                      <SelectValue placeholder="Select frequency" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="DAILY">Daily</SelectItem>
-                      <SelectItem value="WEEKLY">Weekly</SelectItem>
-                      <SelectItem value="MONTHLY">Monthly</SelectItem>
-                      <SelectItem value="YEARLY">Yearly</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="task-recurrence-end">End date <span className="text-muted-foreground font-normal">(optional)</span></Label>
-                  <Input
-                    id="task-recurrence-end"
-                    type="date"
-                    value={recurrenceEndDate}
-                    onChange={(e) => setRecurrenceEndDate(e.target.value)}
-                    className="rounded-xl"
-                  />
-                </div>
+          {!isReadOnly && (
+            <div className="space-y-3 pt-1">
+              <div className="flex items-center gap-2">
+                <input
+                  id="task-recurring"
+                  type="checkbox"
+                  checked={isRecurring}
+                  onChange={(e) => setIsRecurring(e.target.checked)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      setIsRecurring(!isRecurring);
+                    }
+                  }}
+                  className="w-4 h-4 rounded accent-[#FE812C] cursor-pointer"
+                />
+                <Label htmlFor="task-recurring" className="cursor-pointer font-normal">
+                  Make this a recurring task
+                </Label>
               </div>
-            )}
-          </div>
+
+              {isRecurring && (
+                <div className="grid grid-cols-2 gap-4 pl-6">
+                  <div className="space-y-1.5">
+                    <Label>Repeats</Label>
+                    <Select value={recurrenceType} onValueChange={(v) => setRecurrenceType(v as 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY')}>
+                      <SelectTrigger className="rounded-xl">
+                        <SelectValue placeholder="Select frequency" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="DAILY">Daily</SelectItem>
+                        <SelectItem value="WEEKLY">Weekly</SelectItem>
+                        <SelectItem value="MONTHLY">Monthly</SelectItem>
+                        <SelectItem value="YEARLY">Yearly</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="task-recurrence-end">End date <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                    <Input
+                      id="task-recurrence-end"
+                      type="date"
+                      value={recurrenceEndDate}
+                      onChange={(e) => setRecurrenceEndDate(e.target.value)}
+                      className="rounded-xl"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {task?.createdAt && (
             <div className="space-y-1.5">
@@ -407,17 +429,25 @@ export default function TaskDialog({ open, onClose, onSubmit, task, loading, def
             </div>
           )}
 
+          {isReadOnly && (
+            <p className="text-xs text-muted-foreground text-center py-1 bg-muted/40 rounded-xl px-3">
+              This task was assigned to you. Contact your manager to make changes.
+            </p>
+          )}
+
           <DialogFooter className="pt-2">
             <Button type="button" variant="outline" onClick={onClose} className="rounded-xl">
-              Cancel
+              {isReadOnly ? 'Close' : 'Cancel'}
             </Button>
-            <Button
-              type="submit"
-              disabled={loading}
-              className="rounded-xl bg-[#FE812C] hover:bg-[#e5732a] text-white"
-            >
-              {loading ? 'Saving...' : task?._id ? 'Update Task' : 'Create Task'}
-            </Button>
+            {!isReadOnly && (
+              <Button
+                type="submit"
+                disabled={loading}
+                className="rounded-xl bg-[#FE812C] hover:bg-[#e5732a] text-white"
+              >
+                {loading ? 'Saving...' : task?._id ? 'Update Task' : 'Create Task'}
+              </Button>
+            )}
           </DialogFooter>
         </form>
       </DialogContent>

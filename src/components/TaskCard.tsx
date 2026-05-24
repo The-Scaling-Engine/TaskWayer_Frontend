@@ -5,6 +5,7 @@ import { useTimeTrackingStore } from '@/store/timeTrackingStore';
 import { useDepartmentStore } from '@/store/departmentStore';
 import { useAuthStore } from '@/store/authStore';
 import { toast } from 'sonner';
+import { getApiErrorMessage } from '@/services/api';
 
 function formatElapsed(seconds: number): string {
   const h = Math.floor(seconds / 3600);
@@ -53,8 +54,8 @@ export default function TaskCard({ task, onEdit, onDelete, onComment, onCancelRe
     try {
       await stopTracking();
       toast.success('Timer stopped');
-    } catch {
-      toast.error('Failed to stop timer');
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Failed to stop timer'));
     }
   };
 

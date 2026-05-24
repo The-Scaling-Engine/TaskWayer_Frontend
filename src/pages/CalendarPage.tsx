@@ -8,6 +8,7 @@ import type { DatesSetArg, EventClickArg, EventInput } from '@fullcalendar/core'
 import type { DateClickArg } from '@fullcalendar/interaction';
 import { Plus } from 'lucide-react';
 import { taskService } from '@/services/taskService';
+import { getApiErrorMessage } from '@/services/api';
 import type { Task } from '@/types';
 import TaskDialog from '@/components/TaskDialog';
 import { Button } from '@/components/ui/button';
@@ -149,8 +150,8 @@ export default function CalendarPage() {
       }
       setDialogOpen(false);
       setSelectedTask(null);
-    } catch {
-      toast.error('Operation failed');
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Operation failed'));
     } finally {
       setDialogLoading(false);
     }

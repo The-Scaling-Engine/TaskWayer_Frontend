@@ -1,5 +1,5 @@
 import api from './api';
-import type { DepartmentMember, DepartmentMembersResponse, MyDepartmentMembership, WorkloadResponse, ActiveSessionResponse, TasksResponse } from '@/types';
+import type { DepartmentMember, DepartmentMembersResponse, MyDepartmentMembership, WorkloadResponse, ActiveSessionResponse, TasksResponse, Task } from '@/types';
 
 export const departmentService = {
   getMembers: async (
@@ -70,6 +70,15 @@ export const departmentService = {
     params?: { status?: string; priority?: string; page?: number; limit?: number }
   ): Promise<TasksResponse> => {
     const response = await api.get(`/departments/${deptId}/members/${userId}/tasks`, { params });
+    return response.data;
+  },
+
+  assignTask: async (
+    deptId: string,
+    userId: string,
+    data: { title: string; description?: string; priority?: string; deadline?: string; tags?: string[] }
+  ): Promise<{ success: boolean; message: string; data: Task }> => {
+    const response = await api.post(`/departments/${deptId}/members/${userId}/assign-task`, data);
     return response.data;
   },
 };

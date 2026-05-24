@@ -395,7 +395,7 @@ export interface ActiveSessionResponse {
     session: {
       id: string;
       startedAt: string;
-      task: { id: string; title: string; priority: string; status: string; deadline: string | null };
+      task: { id: string; title: string; priority: string; status: string; deadline: string | null; departmentId?: string | null };
     } | null;
   };
 }

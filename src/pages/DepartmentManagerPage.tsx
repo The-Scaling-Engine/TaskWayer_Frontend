@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useDepartmentStore } from '@/store/departmentStore';
 import { useAuthStore } from '@/store/authStore';
@@ -9,8 +9,13 @@ import { toast } from 'sonner';
 import {
   Building2, ChevronDown, RefreshCw, Loader2, Users, Clock, AlertTriangle, Zap,
   ChevronLeft, ChevronRight, X, UserPlus, UserMinus, Mail, Search, Play, MessageSquare,
+  ClipboardPlus, Plus,
 } from 'lucide-react';
 import CommentDialog from '@/components/CommentDialog';
+import KanbanBoard from '@/components/KanbanBoard';
+import type { KanbanBoardRef } from '@/components/KanbanBoard';
+import { Button } from '@/components/ui/button';
+import { useTaskStore } from '@/store/taskStore';
 import { cn } from '@/lib/utils';
 import type {
   MyDepartmentMembership, MemberWorkload, DepartmentMember, DepartmentMemberRole,
@@ -49,8 +54,11 @@ export default function DepartmentManagerPage() {
   const user = useAuthStore((s) => s.user);
   const { myDepartments, loading: storeLoading, hasFetched, fetchMyDepartments } = useDepartmentStore();
 
+  const boardRef = useRef<KanbanBoardRef>(null);
+  const { resetParams } = useTaskStore();
+
   // ── Page tabs ──────────────────────────────────────────────────────────────
-  const [pageTab, setPageTab] = useState<'workload' | 'members'>('workload');
+  const [pageTab, setPageTab] = useState<'workload' | 'mytasks' | 'members'>('workload');
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [switcherSearch, setSwitcherSearch] = useState('');
   const [refreshing, setRefreshing] = useState(false);
@@ -75,6 +83,14 @@ export default function DepartmentManagerPage() {
   const [memberTaskFilter, setMemberTaskFilter] = useState<'all' | 'todo' | 'doing' | 'done'>('all');
   const [commentTask, setCommentTask] = useState<Task | null>(null);
   const [elapsed, setElapsed] = useState(0);
+
+  // ── Assign Task modal ─────────────────────────────────────────────────────
+  const [assignTaskMember, setAssignTaskMember] = useState<MemberWorkload | null>(null);
+  const [assignTitle, setAssignTitle] = useState('');
+  const [assignDesc, setAssignDesc] = useState('');
+  const [assignPriority, setAssignPriority] = useState<'low' | 'medium' | 'high'>('medium');
+  const [assignDeadline, setAssignDeadline] = useState('');
+  const [assignLoading, setAssignLoading] = useState(false);
 
   // ── Member Management (Step 10.7) ─────────────────────────────────────────
   const [members, setMembers] = useState<DepartmentMember[]>([]);
@@ -158,6 +174,12 @@ export default function DepartmentManagerPage() {
       fetchMembers();
     }
   }, [pageTab, departmentId, currentMembership, fetchMembers]);
+
+  useEffect(() => {
+    if (pageTab === 'mytasks' && departmentId && currentMembership) {
+      resetParams({ departmentId });
+    }
+  }, [pageTab, departmentId, currentMembership, resetParams]);
 
   // ── Detail panel: fetch active session + auto-refresh ─────────────────────
   const fetchMemberSession = useCallback(async (profileId: string) => {
@@ -331,6 +353,30 @@ export default function DepartmentManagerPage() {
     }
   };
 
+  // ── Assign Task ───────────────────────────────────────────────────────────
+  const handleAssignTask = async () => {
+    if (!departmentId || !assignTaskMember || !assignTitle.trim()) {
+      toast.error('Title is required');
+      return;
+    }
+    setAssignLoading(true);
+    try {
+      await departmentService.assignTask(departmentId, assignTaskMember.profile.id, {
+        title: assignTitle.trim(),
+        description: assignDesc.trim() || undefined,
+        priority: assignPriority,
+        deadline: assignDeadline ? new Date(assignDeadline).toISOString() : undefined,
+      });
+      toast.success('Task assigned successfully');
+      setAssignTaskMember(null);
+      setAssignTitle(''); setAssignDesc(''); setAssignPriority('medium'); setAssignDeadline('');
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Failed to assign task'));
+    } finally {
+      setAssignLoading(false);
+    }
+  };
+
   // ── Loading / access guard ─────────────────────────────────────────────────
   if (storeLoading || !currentMembership) {
     return (
@@ -354,6 +400,12 @@ export default function DepartmentManagerPage() {
     if (isOwner) return memberRole !== 'OWNER';
     if (role === 'ADMIN') return memberRole === 'MEMBER' || memberRole === 'VIEWER';
     return false;
+  };
+
+  const canAssignTo = (targetRole: string): boolean => {
+    if (!isOwnerOrAdmin) return false;
+    if (isOwner) return targetRole !== 'OWNER';
+    return targetRole === 'MEMBER' || targetRole === 'VIEWER';
   };
 
   // ── Render ─────────────────────────────────────────────────────────────────
@@ -461,16 +513,16 @@ export default function DepartmentManagerPage() {
 
         {/* Page tabs */}
         <div className="flex items-center gap-1 border-b border-border">
-          {(['workload', 'members'] as const).map((t) => (
+          {(['workload', 'mytasks', 'members'] as const).map((t) => (
             <button
               key={t}
               onClick={() => setPageTab(t)}
               className={cn(
-                'px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors capitalize',
+                'px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors',
                 pageTab === t ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
               )}
             >
-              {t === 'workload' ? 'Workload' : 'Members'}
+              {t === 'workload' ? 'Workload' : t === 'mytasks' ? 'My Tasks' : 'Members'}
             </button>
           ))}
         </div>
@@ -560,6 +612,30 @@ export default function DepartmentManagerPage() {
                 )}
               </>
             )}
+          </div>
+        )}
+
+        {/* ── My Tasks tab ── */}
+        {pageTab === 'mytasks' && (
+          <div className="space-y-3">
+            <div className="flex justify-end">
+              <Button
+                onClick={() => boardRef.current?.openCreateTask()}
+                className="bg-[#FE812C] hover:bg-[#e5732a] text-white rounded-xl shadow-md shadow-[#FE812C]/20 gap-2"
+                size="sm"
+              >
+                <Plus size={16} />
+                Create Task
+              </Button>
+            </div>
+            <KanbanBoard
+              ref={boardRef}
+              hideDeptLabel
+              filterFn={(task) => {
+                const currentUserId = user?._id ?? user?.id;
+                return !(task.isAssigned && task.assignedTo && task.assignedTo !== currentUserId);
+              }}
+            />
           </div>
         )}
 
@@ -737,9 +813,24 @@ export default function DepartmentManagerPage() {
                   </p>
                 </div>
               </div>
-              <button onClick={() => setDetailMember(null)} className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0">
-                <X size={16} />
-              </button>
+              <div className="flex items-center gap-1.5 shrink-0">
+                {canAssignTo(detailMember.role) && detailMember.profile.id !== (user?._id ?? user?.id) && (
+                  <button
+                    onClick={() => {
+                      setAssignTaskMember(detailMember);
+                      setAssignTitle(''); setAssignDesc(''); setAssignPriority('medium'); setAssignDeadline('');
+                    }}
+                    className="flex items-center gap-1.5 px-2.5 py-1.5 bg-[#FE812C]/10 text-[#FE812C] hover:bg-[#FE812C] hover:text-white rounded-xl text-xs font-semibold transition-colors"
+                    title="Assign a task to this member"
+                  >
+                    <ClipboardPlus size={13} />
+                    Assign Task
+                  </button>
+                )}
+                <button onClick={() => setDetailMember(null)} className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
+                  <X size={16} />
+                </button>
+              </div>
             </div>
 
             {/* Detail tabs */}
@@ -771,23 +862,27 @@ export default function DepartmentManagerPage() {
                           {formatElapsed(elapsed)}
                         </span>
                       </div>
-                      <div>
-                        <p className="font-semibold text-foreground text-sm">{memberSession.session.task.title}</p>
-                        <div className="flex items-center gap-2 mt-1.5">
-                          <span className={cn('text-[10px] font-bold uppercase px-1.5 py-0.5 rounded-md', {
-                            'bg-red-500/10 text-red-500': memberSession.session.task.priority === 'high',
-                            'bg-amber-500/10 text-amber-500': memberSession.session.task.priority === 'medium',
-                            'bg-emerald-500/10 text-emerald-500': memberSession.session.task.priority === 'low',
-                          })}>
-                            {memberSession.session.task.priority}
-                          </span>
-                          {memberSession.session.task.deadline && (
-                            <span className={cn('text-[10px] text-muted-foreground', isOverdue(memberSession.session.task.deadline) && 'text-destructive font-semibold')}>
-                              📅 {new Date(memberSession.session.task.deadline).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                      {memberSession.session.task.departmentId ? (
+                        <div>
+                          <p className="font-semibold text-foreground text-sm">{memberSession.session.task.title}</p>
+                          <div className="flex items-center gap-2 mt-1.5">
+                            <span className={cn('text-[10px] font-bold uppercase px-1.5 py-0.5 rounded-md', {
+                              'bg-red-500/10 text-red-500': memberSession.session.task.priority === 'high',
+                              'bg-amber-500/10 text-amber-500': memberSession.session.task.priority === 'medium',
+                              'bg-emerald-500/10 text-emerald-500': memberSession.session.task.priority === 'low',
+                            })}>
+                              {memberSession.session.task.priority}
                             </span>
-                          )}
+                            {memberSession.session.task.deadline && (
+                              <span className={cn('text-[10px] text-muted-foreground', isOverdue(memberSession.session.task.deadline) && 'text-destructive font-semibold')}>
+                                📅 {new Date(memberSession.session.task.deadline).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                              </span>
+                            )}
+                          </div>
                         </div>
-                      </div>
+                      ) : (
+                        <p className="text-sm italic text-muted-foreground">Working on a personal task</p>
+                      )}
                       <p className="text-[10px] text-muted-foreground">
                         Started at {new Date(memberSession.session.startedAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
                       </p>
@@ -965,6 +1060,90 @@ export default function DepartmentManagerPage() {
               <button onClick={closeAddMember} className="px-4 py-2 rounded-xl text-sm font-medium text-muted-foreground hover:bg-muted transition-colors">Cancel</button>
               <button onClick={handleAddMember} disabled={addMemberLoading || !selectedUserId} className="px-4 py-2 rounded-xl text-sm font-medium text-white bg-primary hover:bg-primary/90 disabled:opacity-60 transition-colors">
                 {addMemberLoading ? 'Adding...' : 'Add Member'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Assign Task modal */}
+      {assignTaskMember && (
+        <div className="fixed inset-0 z-[65] flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-card border border-border rounded-2xl p-6 max-w-md w-full shadow-xl space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-[#FE812C]/10 flex items-center justify-center shrink-0">
+                <ClipboardPlus size={16} className="text-[#FE812C]" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-foreground leading-tight">Assign Task</h3>
+                <p className="text-xs text-muted-foreground">
+                  To: {assignTaskMember.profile.name || assignTaskMember.profile.email}
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-semibold text-muted-foreground mb-1 block">Title *</label>
+                <input
+                  autoFocus
+                  type="text"
+                  value={assignTitle}
+                  onChange={(e) => setAssignTitle(e.target.value)}
+                  placeholder="Enter task title..."
+                  className="w-full bg-muted/50 border border-border focus:border-primary/50 rounded-xl px-3 py-2 text-sm outline-none transition-all"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-muted-foreground mb-1 block">Description</label>
+                <textarea
+                  value={assignDesc}
+                  onChange={(e) => setAssignDesc(e.target.value)}
+                  placeholder="Optional description..."
+                  rows={2}
+                  className="w-full bg-muted/50 border border-border focus:border-primary/50 rounded-xl px-3 py-2 text-sm outline-none transition-all resize-none"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-muted-foreground mb-1 block">Priority</label>
+                  <select
+                    value={assignPriority}
+                    onChange={(e) => setAssignPriority(e.target.value as 'low' | 'medium' | 'high')}
+                    className="w-full bg-muted/50 border border-border rounded-xl px-3 py-2 text-sm outline-none cursor-pointer"
+                  >
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-muted-foreground mb-1 block">Deadline</label>
+                  <input
+                    type="datetime-local"
+                    value={assignDeadline}
+                    onChange={(e) => setAssignDeadline(e.target.value)}
+                    className="w-full bg-muted/50 border border-border rounded-xl px-3 py-2 text-sm outline-none transition-all"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setAssignTaskMember(null)}
+                disabled={assignLoading}
+                className="px-4 py-2 rounded-xl text-sm font-medium text-muted-foreground hover:bg-muted transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleAssignTask}
+                disabled={assignLoading || !assignTitle.trim()}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium text-white bg-[#FE812C] hover:bg-[#e5732a] disabled:opacity-60 transition-colors"
+              >
+                {assignLoading ? <Loader2 size={14} className="animate-spin" /> : <ClipboardPlus size={14} />}
+                {assignLoading ? 'Assigning...' : 'Assign Task'}
               </button>
             </div>
           </div>

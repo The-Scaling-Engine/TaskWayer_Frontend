@@ -53,9 +53,8 @@ export const useTimeTrackingStore = create<TimeTrackingState>((set) => ({
         set({ activeSession: res.data, elapsedSeconds: 0 });
         startTick(set);
       }
-    } catch {
-      // rethrow so caller can show toast
-      throw new Error('Failed to start timer');
+    } catch (err) {
+      throw err;
     } finally {
       set({ loading: false });
     }
@@ -69,8 +68,8 @@ export const useTimeTrackingStore = create<TimeTrackingState>((set) => ({
         stopTick();
         set({ activeSession: null, elapsedSeconds: 0 });
       }
-    } catch {
-      throw new Error('Failed to stop timer');
+    } catch (err) {
+      throw err;
     } finally {
       set({ loading: false });
     }

@@ -19,6 +19,7 @@ import CommentDialog from '@/components/CommentDialog';
 import type { Task } from '@/types';
 import { Plus, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { getApiErrorMessage } from '@/services/api';
 
 interface Column {
   id: 'todo' | 'doing' | 'done';
@@ -108,9 +109,10 @@ export interface KanbanBoardRef {
 
 interface KanbanBoardProps {
   hideDeptLabel?: boolean;
+  filterFn?: (task: Task) => boolean;
 }
 
-const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({ hideDeptLabel }, ref) => {
+const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({ hideDeptLabel, filterFn }, ref) => {
   const { tasks, loading, fetchTasks, createTask, updateTask, deleteTask, moveTask, cancelRecurrence, silentFetch } = useTaskStore();
   const { socket } = useSocketStore();
 
@@ -171,8 +173,8 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({ hideDeptLabe
     if (!task || task.status === newStatus) return;
     try {
       await moveTask(taskId, newStatus);
-    } catch {
-      toast.error('Failed to move task');
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Failed to move task'));
     }
   };
 
@@ -198,8 +200,8 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({ hideDeptLabe
       try {
         await deleteTask(deleteConfirm._id);
         toast.success('Task deleted successfully');
-      } catch {
-        toast.error('Failed to delete task');
+      } catch (err) {
+        toast.error(getApiErrorMessage(err, 'Failed to delete task'));
       }
       setDeleteConfirm(null);
     }
@@ -212,8 +214,8 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({ hideDeptLabe
       const message = await cancelRecurrence(cancelRecurringTask._id, keepChildren);
       toast.success(message);
       setCancelRecurringTask(null);
-    } catch {
-      toast.error('Failed to cancel recurring task');
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Failed to cancel recurring task'));
     } finally {
       setCancelRecurringLoading(false);
     }
@@ -228,8 +230,8 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({ hideDeptLabe
         setUpdateConfirm(null);
         setDialogOpen(false);
         setEditingTask(null);
-      } catch {
-        toast.error('Failed to update task');
+      } catch (err) {
+        toast.error(getApiErrorMessage(err, 'Failed to update task'));
       } finally {
         setDialogLoading(false);
       }
@@ -253,8 +255,8 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({ hideDeptLabe
         toast.success('Task created successfully');
         setDialogOpen(false);
         setEditingTask(null);
-      } catch {
-        toast.error('Failed to create task');
+      } catch (err) {
+        toast.error(getApiErrorMessage(err, 'Failed to create task'));
       } finally {
         setDialogLoading(false);
       }
@@ -263,7 +265,7 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({ hideDeptLabe
 
   const getTasksByStatus = (status: string) =>
     tasks
-      .filter((t) => t.status === status)
+      .filter((t) => t.status === status && (!filterFn || filterFn(t)))
       .sort((a, b) => {
         const aTime = a.scheduledAt ? new Date(a.scheduledAt).getTime() : new Date(a.createdAt).getTime();
         const bTime = b.scheduledAt ? new Date(b.scheduledAt).getTime() : new Date(b.createdAt).getTime();
