@@ -6,6 +6,7 @@ import { useDepartmentStore } from '@/store/departmentStore';
 import { useAuthStore } from '@/store/authStore';
 import { toast } from 'sonner';
 import { getApiErrorMessage } from '@/services/api';
+import { DescriptionView } from '@/components/DescriptionEditor';
 
 function formatElapsed(seconds: number): string {
   const h = Math.floor(seconds / 3600);
@@ -145,9 +146,9 @@ export default function TaskCard({ task, onEdit, onDelete, onComment, onCancelRe
 
       {/* Description */}
       {task.description && (
-        <p className="text-xs text-muted-foreground mb-3 line-clamp-2">
-          {task.description}
-        </p>
+        <div className="text-xs text-muted-foreground mb-3 line-clamp-2">
+          <DescriptionView html={task.description} />
+        </div>
       )}
 
       {/* Priority & Tags */}

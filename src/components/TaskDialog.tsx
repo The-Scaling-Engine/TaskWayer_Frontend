@@ -10,7 +10,6 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import {
   Select,
   SelectContent,
@@ -22,6 +21,7 @@ import type { Task } from '@/types';
 import { useDepartmentStore } from '@/store/departmentStore';
 import { useAuthStore } from '@/store/authStore';
 import { UserCheck } from 'lucide-react';
+import DescriptionEditor from '@/components/DescriptionEditor';
 
 function toDatetimeLocal(isoStr: string): string {
   const d = new Date(isoStr);
@@ -33,7 +33,6 @@ function formatCreatedAt(isoStr: string): string {
   const d = new Date(isoStr);
   return d.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
-
 
 interface TaskDialogProps {
   open: boolean;
@@ -60,7 +59,11 @@ interface TaskDialogProps {
   lockedDepartmentName?: string;
 }
 
-export default function TaskDialog({ open, onClose, onSubmit, task, loading, defaultDeadline, defaultScheduledAt, dialogTitle, lockedDepartmentId, lockedDepartmentName }: TaskDialogProps) {
+export default function TaskDialog({
+  open, onClose, onSubmit, task, loading,
+  defaultDeadline, defaultScheduledAt,
+  dialogTitle, lockedDepartmentId, lockedDepartmentName,
+}: TaskDialogProps) {
   const allMemberships = useDepartmentStore((s) => s.allMemberships);
   const user = useAuthStore((s) => s.user);
 
@@ -124,37 +127,22 @@ export default function TaskDialog({ open, onClose, onSubmit, task, loading, def
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     if (isReadOnly) return;
-    if (!title.trim()) {
-      setError('Title is required');
-      return;
-    }
+    if (!title.trim()) { setError('Title is required'); return; }
 
     if (isRecurring) {
-      if (!deadline) {
-        setError('Deadline is required for recurring tasks');
-        return;
-      }
-      if (!recurrenceType) {
-        setError('Please select how often this task repeats');
-        return;
-      }
+      if (!deadline) { setError('Deadline is required for recurring tasks'); return; }
+      if (!recurrenceType) { setError('Please select how often this task repeats'); return; }
     }
 
     if (deadline && !task?._id) {
       const selected = new Date(deadline);
-      if (isNaN(selected.getTime())) {
-        setError('Invalid deadline');
-        return;
-      }
-      if (selected < new Date()) {
-        setError('Deadline cannot be in the past');
-        return;
-      }
+      if (isNaN(selected.getTime())) { setError('Invalid deadline'); return; }
+      if (selected < new Date()) { setError('Deadline cannot be in the past'); return; }
     }
 
     onSubmit({
       title: title.trim(),
-      description: description.trim(),
+      description,
       status,
       deadline: deadline ? new Date(deadline).toISOString() : undefined,
       scheduledAt: scheduledAt ? new Date(scheduledAt).toISOString() : null,
@@ -171,13 +159,10 @@ export default function TaskDialog({ open, onClose, onSubmit, task, loading, def
     <Dialog
       open={open}
       onOpenChange={(isOpen) => {
-        if (!isOpen) {
-          onClose();
-          resetForm();
-        }
+        if (!isOpen) { onClose(); resetForm(); }
       }}
     >
-      <DialogContent className="sm:max-w-[480px] rounded-2xl">
+      <DialogContent className="sm:max-w-[560px] rounded-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader className="pr-8">
           <div className="flex items-center gap-3 flex-wrap">
             <DialogTitle className="text-xl font-bold flex-1">
@@ -191,13 +176,14 @@ export default function TaskDialog({ open, onClose, onSubmit, task, loading, def
           </div>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4 mt-2">
+        <form onSubmit={handleSubmit} className="space-y-3 mt-2">
           {error && (
             <div className="bg-destructive/10 border border-destructive/30 text-destructive rounded-xl px-3 py-2 text-sm">
               {error}
             </div>
           )}
 
+          {/* Title */}
           <div className="space-y-1.5">
             <Label htmlFor="task-title">Title</Label>
             <Input
@@ -211,76 +197,52 @@ export default function TaskDialog({ open, onClose, onSubmit, task, loading, def
             />
           </div>
 
-          <div className="space-y-1.5">
-            <Label htmlFor="task-desc">Description</Label>
-            <Textarea
-              id="task-desc"
-              placeholder="Add a description (optional)..."
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              className="rounded-xl min-h-[80px] resize-none"
-              disabled={isReadOnly}
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
+          {/* Description (8) + Status & Priority (2) — side by side */}
+          <div className="grid grid-cols-[1fr_auto] gap-3 items-start">
+            {/* Description — 8 */}
             <div className="space-y-1.5">
-              <Label>Status</Label>
-              <Select value={status} onValueChange={(v) => setStatus(v as 'todo' | 'doing' | 'done')} disabled={isReadOnly}>
-                <SelectTrigger className="rounded-xl">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="todo">To Do</SelectItem>
-                  <SelectItem value="doing">In Progress</SelectItem>
-                  <SelectItem value="done">Done</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label>Priority</Label>
-              <Select value={priority} onValueChange={(v) => setPriority(v as 'low' | 'medium' | 'high')} disabled={isReadOnly}>
-                <SelectTrigger className="rounded-xl">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="low">Low</SelectItem>
-                  <SelectItem value="medium">Medium</SelectItem>
-                  <SelectItem value="high">High</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="task-scheduled">Scheduled for</Label>
-              <Input
-                id="task-scheduled"
-                type="datetime-local"
-                step="60"
-                value={scheduledAt}
-                onChange={(e) => setScheduledAt(e.target.value)}
-                className="rounded-xl"
+              <Label>Description</Label>
+              <DescriptionEditor
+                key={task?._id ?? (open ? 'new-open' : 'new-closed')}
+                value={description}
+                onChange={setDescription}
                 disabled={isReadOnly}
+                className="min-h-[110px]"
               />
             </div>
 
-            <div className="space-y-1.5">
-              <Label htmlFor="task-deadline">Deadline <span className="text-muted-foreground font-normal">(optional)</span></Label>
-              <Input
-                id="task-deadline"
-                type="datetime-local"
-                step="60"
-                value={deadline}
-                onChange={(e) => setDeadline(e.target.value)}
-                className="rounded-xl"
-                disabled={isReadOnly}
-              />
+            {/* Status + Priority — 2 (narrow column) */}
+            <div className="space-y-2.5 w-[120px] shrink-0">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Status</Label>
+                <Select value={status} onValueChange={(v) => setStatus(v as 'todo' | 'doing' | 'done')} disabled={isReadOnly}>
+                  <SelectTrigger className="rounded-xl text-xs h-8 px-2">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todo">To Do</SelectItem>
+                    <SelectItem value="doing">Doing</SelectItem>
+                    <SelectItem value="done">Done</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Priority</Label>
+                <Select value={priority} onValueChange={(v) => setPriority(v as 'low' | 'medium' | 'high')} disabled={isReadOnly}>
+                  <SelectTrigger className="rounded-xl text-xs h-8 px-2">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="low">Low</SelectItem>
+                    <SelectItem value="medium">Medium</SelectItem>
+                    <SelectItem value="high">High</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </div>
 
+          {/* Tags */}
           <div className="space-y-1.5">
             <Label htmlFor="task-tags">Tags <span className="text-muted-foreground font-normal">(comma-separated)</span></Label>
             <Input
@@ -294,10 +256,39 @@ export default function TaskDialog({ open, onClose, onSubmit, task, loading, def
             />
           </div>
 
+          {/* Scheduled for + Deadline */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="task-scheduled">Scheduled for</Label>
+              <Input
+                id="task-scheduled"
+                type="datetime-local"
+                step="60"
+                value={scheduledAt}
+                onChange={(e) => setScheduledAt(e.target.value)}
+                className="rounded-xl"
+                disabled={isReadOnly}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="task-deadline">Deadline <span className="text-muted-foreground font-normal">(opt.)</span></Label>
+              <Input
+                id="task-deadline"
+                type="datetime-local"
+                step="60"
+                value={deadline}
+                onChange={(e) => setDeadline(e.target.value)}
+                className="rounded-xl"
+                disabled={isReadOnly}
+              />
+            </div>
+          </div>
+
+          {/* Department */}
           {lockedDepartmentId ? (
             <div className="space-y-1.5">
               <Label>Department</Label>
-              <div className="flex items-center h-10 px-3 rounded-xl border border-border bg-muted/50 text-sm text-muted-foreground cursor-not-allowed select-none">
+              <div className="flex items-center h-9 px-3 rounded-xl border border-border bg-muted/50 text-sm text-muted-foreground cursor-not-allowed select-none">
                 {lockedDepartmentName || lockedDepartmentId}
               </div>
             </div>
@@ -321,21 +312,16 @@ export default function TaskDialog({ open, onClose, onSubmit, task, loading, def
             </div>
           )}
 
-          {/* Recurring task section */}
+          {/* Recurring */}
           {!isReadOnly && (
-            <div className="space-y-3 pt-1">
+            <div className="space-y-2.5 pt-0.5">
               <div className="flex items-center gap-2">
                 <input
                   id="task-recurring"
                   type="checkbox"
                   checked={isRecurring}
                   onChange={(e) => setIsRecurring(e.target.checked)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      setIsRecurring(!isRecurring);
-                    }
-                  }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); setIsRecurring(!isRecurring); } }}
                   className="w-4 h-4 rounded accent-[#FE812C] cursor-pointer"
                 />
                 <Label htmlFor="task-recurring" className="cursor-pointer font-normal">
@@ -344,7 +330,7 @@ export default function TaskDialog({ open, onClose, onSubmit, task, loading, def
               </div>
 
               {isRecurring && (
-                <div className="grid grid-cols-2 gap-4 pl-6">
+                <div className="grid grid-cols-2 gap-3 pl-6">
                   <div className="space-y-1.5">
                     <Label>Repeats</Label>
                     <Select value={recurrenceType} onValueChange={(v) => setRecurrenceType(v as 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY')}>
@@ -375,9 +361,9 @@ export default function TaskDialog({ open, onClose, onSubmit, task, loading, def
           )}
 
           {task?.createdAt && (
-            <div className="space-y-1.5">
+            <div className="space-y-1">
               <Label className="text-xs text-muted-foreground">Created at</Label>
-              <p className="text-sm text-muted-foreground px-3 py-2 bg-muted/40 rounded-xl">
+              <p className="text-xs text-muted-foreground px-3 py-1.5 bg-muted/40 rounded-xl">
                 {formatCreatedAt(task.createdAt)}
               </p>
             </div>
@@ -389,7 +375,7 @@ export default function TaskDialog({ open, onClose, onSubmit, task, loading, def
             </p>
           )}
 
-          <DialogFooter className="pt-2">
+          <DialogFooter className="pt-1">
             <Button type="button" variant="outline" onClick={onClose} className="rounded-xl">
               {isReadOnly ? 'Close' : 'Cancel'}
             </Button>
