@@ -351,7 +351,7 @@ export default function CalendarPage() {
 
           /* Hour labels */
           .fc .fc-timegrid-slot-label-cushion {
-            font-size: 0.65rem;
+            font-size: 0.78rem;
             font-weight: 700;
             letter-spacing: 0.03em;
             color: var(--muted-foreground);
