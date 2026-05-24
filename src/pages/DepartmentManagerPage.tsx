@@ -293,8 +293,11 @@ export default function DepartmentManagerPage() {
     setAssignedDeleteLoading(true);
     try {
       await taskService.deleteTask(taskId);
-      toast.success('Task deleted');
+      // Optimistically remove from list immediately — don't wait for re-fetch
+      setAssignedTasks(prev => prev.filter(t => (t._id || t.id) !== taskId));
       setAssignedDeleteTask(null);
+      toast.success('Task deleted');
+      // Background sync to confirm server state
       fetchAssignedTasks(detailMember.profile.id);
     } catch (err) {
       toast.error(getApiErrorMessage(err, 'Failed to delete task'));
@@ -1038,7 +1041,7 @@ export default function DepartmentManagerPage() {
                             )}
                           </div>
                           {/* Delete confirm inline */}
-                          {assignedDeleteTask?._id === task._id && (
+                          {!!assignedDeleteTask && (assignedDeleteTask._id || assignedDeleteTask.id) === (task._id || task.id) && (
                             <div className="flex items-center gap-2 bg-destructive/10 border border-destructive/20 rounded-lg px-3 py-2 mt-1">
                               <span className="text-xs text-destructive flex-1">Delete this task?</span>
                               <button onClick={handleAssignedDeleteConfirm} disabled={assignedDeleteLoading} className="text-xs font-medium text-destructive hover:text-destructive/80 disabled:opacity-50">
