@@ -6,6 +6,7 @@ import type { KanbanBoardRef } from '@/components/KanbanBoard';
 import { Button } from '@/components/ui/button';
 import { useTaskStore } from '@/store/taskStore';
 import { useDepartmentStore } from '@/store/departmentStore';
+import { useAuthStore } from '@/store/authStore';
 import { cn } from '@/lib/utils';
 
 export default function DeptTasksPage() {
@@ -16,6 +17,7 @@ export default function DeptTasksPage() {
   const { resetParams } = useTaskStore();
   const myDepartments = useDepartmentStore((s) => s.myDepartments);
   const updateRecentDept = useDepartmentStore((s) => s.updateRecentDept);
+  const currentUser = useAuthStore((s) => s.user);
 
   const [switcherOpen, setSwitcherOpen] = React.useState(false);
   const [switcherSearch, setSwitcherSearch] = React.useState('');
@@ -41,11 +43,11 @@ export default function DeptTasksPage() {
 
   // Open task from notification link
   React.useEffect(() => {
-    const { openTaskId } = (location.state ?? {}) as { openTaskId?: string };
+    const { openTaskId, highlightCommentId } = (location.state ?? {}) as { openTaskId?: string; highlightCommentId?: string };
     if (!openTaskId) return;
     const timer = setTimeout(() => {
       if (boardRef.current) {
-        boardRef.current.openTaskById(openTaskId);
+        boardRef.current.openTaskById(openTaskId, highlightCommentId);
         navigate(location.pathname, { replace: true, state: {} });
       }
     }, 400);
@@ -144,7 +146,18 @@ export default function DeptTasksPage() {
         </Button>
       </div>
 
-      <KanbanBoard ref={boardRef} hideDeptLabel />
+      <KanbanBoard
+        ref={boardRef}
+        hideDeptLabel
+        filterFn={(task) => {
+          const mongoId = currentUser?._id;
+          const profileUid = currentUser?.id;
+          const isOwner = (!!mongoId && task.userId === mongoId) || (!!profileUid && task.userId === profileUid);
+          const assignedUid = profileUid ?? mongoId;
+          const isAssignedToMe = !!assignedUid && task.isAssigned === true && task.assignedTo === assignedUid;
+          return isOwner || isAssignedToMe;
+        }}
+      />
     </div>
   );
 }

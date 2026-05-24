@@ -65,9 +65,12 @@ interface TaskDialogProps {
   loading?: boolean;
   defaultDeadline?: string;
   defaultScheduledAt?: string;
+  dialogTitle?: string;
+  lockedDepartmentId?: string;
+  lockedDepartmentName?: string;
 }
 
-export default function TaskDialog({ open, onClose, onSubmit, task, loading, defaultDeadline, defaultScheduledAt }: TaskDialogProps) {
+export default function TaskDialog({ open, onClose, onSubmit, task, loading, defaultDeadline, defaultScheduledAt, dialogTitle, lockedDepartmentId, lockedDepartmentName }: TaskDialogProps) {
   const { activeSession, elapsedSeconds, loading: timerLoading, startTracking, stopTracking } = useTimeTrackingStore();
   const allMemberships = useDepartmentStore((s) => s.allMemberships);
   const user = useAuthStore((s) => s.user);
@@ -106,7 +109,7 @@ export default function TaskDialog({ open, onClose, onSubmit, task, loading, def
   const [scheduledAt, setScheduledAt] = useState(task?.scheduledAt ? toDatetimeLocal(task.scheduledAt) : '');
   const [priority, setPriority] = useState<'low' | 'medium' | 'high'>(task?.priority || 'medium');
   const [tagsInput, setTagsInput] = useState(task?.tags?.join(', ') || '');
-  const [departmentId, setDepartmentId] = useState(task?.departmentId || '__none__');
+  const [departmentId, setDepartmentId] = useState(lockedDepartmentId || task?.departmentId || '__none__');
   const [isRecurring, setIsRecurring] = useState(task?.isRecurring ?? false);
   const [recurrenceType, setRecurrenceType] = useState<'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY' | ''>(task?.recurrenceType ?? '');
   const [recurrenceEndDate, setRecurrenceEndDate] = useState(task?.recurrenceEndDate ? task.recurrenceEndDate.substring(0, 10) : '');
@@ -127,7 +130,7 @@ export default function TaskDialog({ open, onClose, onSubmit, task, loading, def
       );
       setPriority(task?.priority || 'medium');
       setTagsInput(task?.tags?.join(', ') || '');
-      setDepartmentId(task?.departmentId || '__none__');
+      setDepartmentId(lockedDepartmentId || task?.departmentId || '__none__');
       setIsRecurring(task?.isRecurring ?? false);
       setRecurrenceType(task?.recurrenceType ?? '');
       setRecurrenceEndDate(task?.recurrenceEndDate ? task.recurrenceEndDate.substring(0, 10) : '');
@@ -210,7 +213,7 @@ export default function TaskDialog({ open, onClose, onSubmit, task, loading, def
         <DialogHeader className="pr-8">
           <div className="flex items-center gap-3 flex-wrap">
             <DialogTitle className="text-xl font-bold flex-1">
-              {task?._id ? 'Edit Task' : 'Create New Task'}
+              {dialogTitle ?? (task?._id ? 'Edit Task' : 'Create New Task')}
             </DialogTitle>
             {isReadOnly && (
               <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-600 dark:text-purple-400 shrink-0">
@@ -347,7 +350,14 @@ export default function TaskDialog({ open, onClose, onSubmit, task, loading, def
             />
           </div>
 
-          {allMemberships.length > 0 && (
+          {lockedDepartmentId ? (
+            <div className="space-y-1.5">
+              <Label>Department</Label>
+              <div className="flex items-center h-10 px-3 rounded-xl border border-border bg-muted/50 text-sm text-muted-foreground cursor-not-allowed select-none">
+                {lockedDepartmentName || lockedDepartmentId}
+              </div>
+            </div>
+          ) : allMemberships.length > 0 && (
             <div className="space-y-1.5">
               <Label>Department</Label>
               <Select value={departmentId} onValueChange={setDepartmentId} disabled={isReadOnly}>

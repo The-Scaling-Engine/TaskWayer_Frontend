@@ -1,19 +1,21 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useDepartmentStore } from '@/store/departmentStore';
 import { useAuthStore } from '@/store/authStore';
 import { departmentService } from '@/services/departmentService';
+import { taskService } from '@/services/taskService';
 import { invitationService } from '@/services/invitationService';
 import { adminService } from '@/services/adminService';
 import { toast } from 'sonner';
 import {
   Building2, ChevronDown, RefreshCw, Loader2, Users, Clock, AlertTriangle, Zap,
   ChevronLeft, ChevronRight, X, UserPlus, UserMinus, Mail, Search, Play, MessageSquare,
-  ClipboardPlus, Plus,
+  ClipboardPlus, Plus, Pencil, Trash2,
 } from 'lucide-react';
 import CommentDialog from '@/components/CommentDialog';
 import KanbanBoard from '@/components/KanbanBoard';
 import type { KanbanBoardRef } from '@/components/KanbanBoard';
+import TaskDialog from '@/components/TaskDialog';
 import { Button } from '@/components/ui/button';
 import { useTaskStore } from '@/store/taskStore';
 import { cn } from '@/lib/utils';
@@ -51,6 +53,7 @@ import { getApiErrorMessage } from '@/services/api';
 export default function DepartmentManagerPage() {
   const { departmentId } = useParams<{ departmentId: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const user = useAuthStore((s) => s.user);
   const { myDepartments, loading: storeLoading, hasFetched, fetchMyDepartments } = useDepartmentStore();
 
@@ -75,21 +78,26 @@ export default function DepartmentManagerPage() {
 
   // ── Member Detail Panel (Step 10.6) ───────────────────────────────────────
   const [detailMember, setDetailMember] = useState<MemberWorkload | null>(null);
-  const [detailTab, setDetailTab] = useState<'activity' | 'tasks'>('activity');
+  const [detailTab, setDetailTab] = useState<'activity' | 'tasks' | 'assigned'>('activity');
   const [memberSession, setMemberSession] = useState<ActiveSessionResponse['data'] | null>(null);
   const [memberSessionLoading, setMemberSessionLoading] = useState(false);
   const [memberTasks, setMemberTasks] = useState<Task[]>([]);
   const [memberTasksLoading, setMemberTasksLoading] = useState(false);
   const [memberTaskFilter, setMemberTaskFilter] = useState<'all' | 'todo' | 'doing' | 'done'>('all');
   const [commentTask, setCommentTask] = useState<Task | null>(null);
+  // ── Assigned tasks tab ───────────────────────────────────────────────────────
+  const [assignedTasks, setAssignedTasks] = useState<Task[]>([]);
+  const [assignedTasksLoading, setAssignedTasksLoading] = useState(false);
+  const [assignedEditTask, setAssignedEditTask] = useState<Task | null>(null);
+  const [assignedEditOpen, setAssignedEditOpen] = useState(false);
+  const [assignedEditLoading, setAssignedEditLoading] = useState(false);
+  const [assignedDeleteTask, setAssignedDeleteTask] = useState<Task | null>(null);
+  const [assignedDeleteLoading, setAssignedDeleteLoading] = useState(false);
   const [elapsed, setElapsed] = useState(0);
 
   // ── Assign Task modal ─────────────────────────────────────────────────────
   const [assignTaskMember, setAssignTaskMember] = useState<MemberWorkload | null>(null);
-  const [assignTitle, setAssignTitle] = useState('');
-  const [assignDesc, setAssignDesc] = useState('');
-  const [assignPriority, setAssignPriority] = useState<'low' | 'medium' | 'high'>('medium');
-  const [assignDeadline, setAssignDeadline] = useState('');
+  const [assignDialogOpen, setAssignDialogOpen] = useState(false);
   const [assignLoading, setAssignLoading] = useState(false);
 
   // ── Member Management (Step 10.7) ─────────────────────────────────────────
@@ -181,6 +189,18 @@ export default function DepartmentManagerPage() {
     }
   }, [pageTab, departmentId, currentMembership, resetParams]);
 
+  // Open task from notification link (owner/admin path)
+  useEffect(() => {
+    const { openTaskId, highlightCommentId } = (location.state ?? {}) as { openTaskId?: string; highlightCommentId?: string };
+    if (!openTaskId) return;
+    setPageTab('mytasks');
+    const timer = setTimeout(() => {
+      boardRef.current?.openTaskById(openTaskId, highlightCommentId);
+      navigate(location.pathname, { replace: true, state: {} });
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [location.state, navigate]);
+
   // ── Detail panel: fetch active session + auto-refresh ─────────────────────
   const fetchMemberSession = useCallback(async (profileId: string) => {
     if (!departmentId) return;
@@ -235,6 +255,71 @@ export default function DepartmentManagerPage() {
     if (!detailMember || detailTab !== 'tasks') return;
     fetchMemberTasks(detailMember.profile.id, memberTaskFilter);
   }, [detailMember, detailTab, memberTaskFilter, fetchMemberTasks]);
+
+  const fetchAssignedTasks = useCallback(async (profileId: string) => {
+    if (!departmentId) return;
+    setAssignedTasksLoading(true);
+    try {
+      const res = await departmentService.getMemberTasks(departmentId, profileId, { limit: 50 });
+      if (res.success) {
+        setAssignedTasks(res.data.filter((t) => t.isAssigned === true));
+      }
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Failed to load assigned tasks'));
+    } finally {
+      setAssignedTasksLoading(false);
+    }
+  }, [departmentId]);
+
+  useEffect(() => {
+    if (!detailMember || detailTab !== 'assigned') return;
+    fetchAssignedTasks(detailMember.profile.id);
+  }, [detailMember, detailTab, fetchAssignedTasks]);
+
+  const handleAssignedEditSubmit = async (data: {
+    title: string; description: string; status: 'todo' | 'doing' | 'done';
+    deadline?: string; scheduledAt?: string | null; priority?: 'low' | 'medium' | 'high';
+    tags?: string[]; isRecurring?: boolean;
+    recurrenceType?: 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY' | null; recurrenceEndDate?: string | null;
+  }) => {
+    if (!assignedEditTask || !detailMember) return;
+    const taskId = assignedEditTask._id || assignedEditTask.id!;
+    setAssignedEditLoading(true);
+    try {
+      await taskService.updateTask(taskId, {
+        title: data.title, description: data.description,
+        status: data.status, priority: data.priority,
+        deadline: data.deadline, scheduledAt: data.scheduledAt ?? undefined,
+        tags: data.tags, isRecurring: data.isRecurring,
+        recurrenceType: data.recurrenceType ?? undefined,
+        recurrenceEndDate: data.recurrenceEndDate ?? undefined,
+      });
+      toast.success('Task updated');
+      setAssignedEditOpen(false);
+      setAssignedEditTask(null);
+      fetchAssignedTasks(detailMember.profile.id);
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Failed to update task'));
+    } finally {
+      setAssignedEditLoading(false);
+    }
+  };
+
+  const handleAssignedDeleteConfirm = async () => {
+    if (!assignedDeleteTask || !detailMember) return;
+    const taskId = assignedDeleteTask._id || assignedDeleteTask.id!;
+    setAssignedDeleteLoading(true);
+    try {
+      await taskService.deleteTask(taskId);
+      toast.success('Task deleted');
+      setAssignedDeleteTask(null);
+      fetchAssignedTasks(detailMember.profile.id);
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Failed to delete task'));
+    } finally {
+      setAssignedDeleteLoading(false);
+    }
+  };
 
   // ── User search for Add Member ─────────────────────────────────────────────
   useEffect(() => {
@@ -354,22 +439,30 @@ export default function DepartmentManagerPage() {
   };
 
   // ── Assign Task ───────────────────────────────────────────────────────────
-  const handleAssignTask = async () => {
-    if (!departmentId || !assignTaskMember || !assignTitle.trim()) {
-      toast.error('Title is required');
-      return;
-    }
+  const handleAssignTask = async (data: {
+    title: string; description: string; status: 'todo' | 'doing' | 'done';
+    deadline?: string; scheduledAt?: string | null;
+    priority?: 'low' | 'medium' | 'high'; tags?: string[];
+    isRecurring?: boolean; recurrenceType?: 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY' | null;
+    recurrenceEndDate?: string | null;
+  }) => {
+    if (!departmentId || !assignTaskMember) return;
     setAssignLoading(true);
     try {
       await departmentService.assignTask(departmentId, assignTaskMember.profile.id, {
-        title: assignTitle.trim(),
-        description: assignDesc.trim() || undefined,
-        priority: assignPriority,
-        deadline: assignDeadline ? new Date(assignDeadline).toISOString() : undefined,
+        title: data.title,
+        description: data.description || undefined,
+        priority: data.priority,
+        deadline: data.deadline,
+        scheduledAt: data.scheduledAt ?? undefined,
+        tags: data.tags,
+        isRecurring: data.isRecurring,
+        recurrenceType: data.recurrenceType,
+        recurrenceEndDate: data.recurrenceEndDate,
       });
       toast.success('Task assigned successfully');
+      setAssignDialogOpen(false);
       setAssignTaskMember(null);
-      setAssignTitle(''); setAssignDesc(''); setAssignPriority('medium'); setAssignDeadline('');
     } catch (err) {
       toast.error(getApiErrorMessage(err, 'Failed to assign task'));
     } finally {
@@ -556,7 +649,7 @@ export default function DepartmentManagerPage() {
                       {workload.map((m) => (
                         <tr
                           key={m.memberId}
-                          onClick={() => { setDetailMember(m); setDetailTab('activity'); setMemberSession(null); setMemberTasks([]); setMemberTaskFilter('all'); }}
+                          onClick={() => { setDetailMember(m); setDetailTab('activity'); setMemberSession(null); setMemberTasks([]); setMemberTaskFilter('all'); setAssignedTasks([]); }}
                           className={cn('transition-colors hover:bg-primary/5 cursor-pointer', m.tasks.overdue > 0 && 'bg-red-500/5')}
                         >
                           <td className="px-5 py-3">
@@ -632,8 +725,13 @@ export default function DepartmentManagerPage() {
               ref={boardRef}
               hideDeptLabel
               filterFn={(task) => {
-                const currentUserId = user?._id ?? user?.id;
-                return !(task.isAssigned && task.assignedTo && task.assignedTo !== currentUserId);
+                const mongoId = user?._id;
+                const profileUid = user?.id;
+                const assignUid = profileUid ?? mongoId;
+                // Exclude tasks assigned to someone else (even if I created them)
+                if (task.isAssigned && task.assignedTo && task.assignedTo !== assignUid) return false;
+                // Show my own tasks
+                return (!!mongoId && task.userId === mongoId) || (!!profileUid && task.userId === profileUid);
               }}
             />
           </div>
@@ -816,10 +914,7 @@ export default function DepartmentManagerPage() {
               <div className="flex items-center gap-1.5 shrink-0">
                 {canAssignTo(detailMember.role) && detailMember.profile.id !== (user?._id ?? user?.id) && (
                   <button
-                    onClick={() => {
-                      setAssignTaskMember(detailMember);
-                      setAssignTitle(''); setAssignDesc(''); setAssignPriority('medium'); setAssignDeadline('');
-                    }}
+                    onClick={() => { setAssignTaskMember(detailMember); setAssignDialogOpen(true); }}
                     className="flex items-center gap-1.5 px-2.5 py-1.5 bg-[#FE812C]/10 text-[#FE812C] hover:bg-[#FE812C] hover:text-white rounded-xl text-xs font-semibold transition-colors"
                     title="Assign a task to this member"
                   >
@@ -835,13 +930,13 @@ export default function DepartmentManagerPage() {
 
             {/* Detail tabs */}
             <div className="flex border-b border-border shrink-0">
-              {(['activity', 'tasks'] as const).map((t) => (
+              {(['activity', 'tasks', 'assigned'] as const).map((t) => (
                 <button
                   key={t}
                   onClick={() => setDetailTab(t)}
-                  className={cn('flex-1 py-2.5 text-xs font-semibold transition-colors capitalize border-b-2 -mb-px', detailTab === t ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground')}
+                  className={cn('flex-1 py-2.5 text-xs font-semibold transition-colors border-b-2 -mb-px', detailTab === t ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground')}
                 >
-                  {t === 'activity' ? 'Current Activity' : 'Tasks'}
+                  {t === 'activity' ? 'Activity' : t === 'tasks' ? 'Tasks' : 'Assigned'}
                 </button>
               ))}
             </div>
@@ -894,6 +989,89 @@ export default function DepartmentManagerPage() {
                       </div>
                       <p className="text-sm">Not currently tracking any task</p>
                     </div>
+                  )}
+                </div>
+              )}
+
+              {/* Assigned tab */}
+              {detailTab === 'assigned' && (
+                <div className="space-y-2">
+                  {assignedTasksLoading ? (
+                    <div className="flex justify-center py-8"><Loader2 className="animate-spin text-primary" size={20} /></div>
+                  ) : assignedTasks.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-10 text-muted-foreground gap-2">
+                      <ClipboardPlus size={28} className="opacity-20" />
+                      <p className="text-sm">No assigned tasks yet</p>
+                    </div>
+                  ) : (
+                    assignedTasks.map((task) => {
+                      const overdue = isOverdue(task.deadline) && task.status !== 'done';
+                      const taskKey = task._id || task.id || '';
+                      return (
+                        <div key={taskKey} className={cn('bg-card border rounded-xl p-3 space-y-1.5', overdue ? 'border-destructive/30 bg-destructive/5' : 'border-border')}>
+                          <div className="flex items-start gap-2">
+                            <span className={cn('shrink-0 mt-0.5 text-[10px] font-bold uppercase px-1.5 py-0.5 rounded-md', {
+                              'bg-red-500/10 text-red-500': task.priority === 'high',
+                              'bg-amber-500/10 text-amber-500': task.priority === 'medium',
+                              'bg-emerald-500/10 text-emerald-500': task.priority === 'low',
+                            })}>
+                              {task.priority}
+                            </span>
+                            <p className={cn('text-sm font-medium flex-1 min-w-0 truncate', task.status === 'done' ? 'line-through text-muted-foreground' : 'text-foreground')}>
+                              {task.title}
+                            </p>
+                            <div className="flex items-center gap-0.5 shrink-0">
+                              <button
+                                onClick={() => setCommentTask(task)}
+                                className="p-1 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                                title="Comments"
+                              >
+                                <MessageSquare size={13} />
+                              </button>
+                              <button
+                                onClick={() => { setAssignedEditTask(task); setAssignedEditOpen(true); }}
+                                className="p-1 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                                title="Edit"
+                              >
+                                <Pencil size={13} />
+                              </button>
+                              <button
+                                onClick={() => setAssignedDeleteTask(task)}
+                                className="p-1 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                                title="Delete"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className={cn('text-[10px] font-semibold px-1.5 py-0.5 rounded-md', {
+                              'bg-blue-500/10 text-blue-600': task.status === 'todo',
+                              'bg-[#FE812C]/10 text-[#FE812C]': task.status === 'doing',
+                              'bg-primary/10 text-primary': task.status === 'done',
+                            })}>
+                              {task.status === 'todo' ? 'To Do' : task.status === 'doing' ? 'In Progress' : 'Done'}
+                            </span>
+                            {task.deadline && (
+                              <span className={cn('text-[10px] flex items-center gap-0.5', overdue ? 'text-destructive font-semibold' : 'text-muted-foreground')}>
+                                {overdue && <AlertTriangle size={9} />}
+                                📅 {new Date(task.deadline).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                              </span>
+                            )}
+                          </div>
+                          {/* Delete confirm inline */}
+                          {assignedDeleteTask?._id === task._id && (
+                            <div className="flex items-center gap-2 bg-destructive/10 border border-destructive/20 rounded-lg px-3 py-2 mt-1">
+                              <span className="text-xs text-destructive flex-1">Delete this task?</span>
+                              <button onClick={handleAssignedDeleteConfirm} disabled={assignedDeleteLoading} className="text-xs font-medium text-destructive hover:text-destructive/80 disabled:opacity-50">
+                                {assignedDeleteLoading ? 'Deleting...' : 'Yes'}
+                              </button>
+                              <button onClick={() => setAssignedDeleteTask(null)} className="text-xs text-muted-foreground hover:text-foreground">No</button>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })
                   )}
                 </div>
               )}
@@ -1066,89 +1244,26 @@ export default function DepartmentManagerPage() {
         </div>
       )}
 
-      {/* Assign Task modal */}
-      {assignTaskMember && (
-        <div className="fixed inset-0 z-[65] flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-card border border-border rounded-2xl p-6 max-w-md w-full shadow-xl space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-[#FE812C]/10 flex items-center justify-center shrink-0">
-                <ClipboardPlus size={16} className="text-[#FE812C]" />
-              </div>
-              <div>
-                <h3 className="text-base font-bold text-foreground leading-tight">Assign Task</h3>
-                <p className="text-xs text-muted-foreground">
-                  To: {assignTaskMember.profile.name || assignTaskMember.profile.email}
-                </p>
-              </div>
-            </div>
+      {/* Assign Task dialog */}
+      <TaskDialog
+        open={assignDialogOpen && !!assignTaskMember}
+        onClose={() => { setAssignDialogOpen(false); setAssignTaskMember(null); }}
+        onSubmit={handleAssignTask}
+        task={null}
+        loading={assignLoading}
+        dialogTitle={assignTaskMember ? `Assign Task — ${assignTaskMember.profile.name || assignTaskMember.profile.email}` : 'Assign Task'}
+        lockedDepartmentId={departmentId}
+        lockedDepartmentName={currentMembership?.department.name}
+      />
 
-            <div className="space-y-3">
-              <div>
-                <label className="text-xs font-semibold text-muted-foreground mb-1 block">Title *</label>
-                <input
-                  autoFocus
-                  type="text"
-                  value={assignTitle}
-                  onChange={(e) => setAssignTitle(e.target.value)}
-                  placeholder="Enter task title..."
-                  className="w-full bg-muted/50 border border-border focus:border-primary/50 rounded-xl px-3 py-2 text-sm outline-none transition-all"
-                />
-              </div>
-              <div>
-                <label className="text-xs font-semibold text-muted-foreground mb-1 block">Description</label>
-                <textarea
-                  value={assignDesc}
-                  onChange={(e) => setAssignDesc(e.target.value)}
-                  placeholder="Optional description..."
-                  rows={2}
-                  className="w-full bg-muted/50 border border-border focus:border-primary/50 rounded-xl px-3 py-2 text-sm outline-none transition-all resize-none"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs font-semibold text-muted-foreground mb-1 block">Priority</label>
-                  <select
-                    value={assignPriority}
-                    onChange={(e) => setAssignPriority(e.target.value as 'low' | 'medium' | 'high')}
-                    className="w-full bg-muted/50 border border-border rounded-xl px-3 py-2 text-sm outline-none cursor-pointer"
-                  >
-                    <option value="low">Low</option>
-                    <option value="medium">Medium</option>
-                    <option value="high">High</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs font-semibold text-muted-foreground mb-1 block">Deadline</label>
-                  <input
-                    type="datetime-local"
-                    value={assignDeadline}
-                    onChange={(e) => setAssignDeadline(e.target.value)}
-                    className="w-full bg-muted/50 border border-border rounded-xl px-3 py-2 text-sm outline-none transition-all"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="flex gap-3 justify-end">
-              <button
-                onClick={() => setAssignTaskMember(null)}
-                disabled={assignLoading}
-                className="px-4 py-2 rounded-xl text-sm font-medium text-muted-foreground hover:bg-muted transition-colors disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleAssignTask}
-                disabled={assignLoading || !assignTitle.trim()}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium text-white bg-[#FE812C] hover:bg-[#e5732a] disabled:opacity-60 transition-colors"
-              >
-                {assignLoading ? <Loader2 size={14} className="animate-spin" /> : <ClipboardPlus size={14} />}
-                {assignLoading ? 'Assigning...' : 'Assign Task'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Edit assigned task dialog */}
+      <TaskDialog
+        open={assignedEditOpen && !!assignedEditTask}
+        onClose={() => { setAssignedEditOpen(false); setAssignedEditTask(null); }}
+        onSubmit={handleAssignedEditSubmit}
+        task={assignedEditTask}
+        loading={assignedEditLoading}
+      />
 
       {/* Comment dialog — opened from member detail panel Tasks tab */}
       {commentTask && (

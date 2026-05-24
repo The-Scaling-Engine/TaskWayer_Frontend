@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useAuthStore } from '@/store/authStore';
 import { useNotificationStore } from '@/store/notificationStore';
+import { useDepartmentStore } from '@/store/departmentStore';
 import { Link, useNavigate } from 'react-router-dom';
 import type { Notification } from '@/types';
 import { cn } from '@/lib/utils';
@@ -26,6 +27,7 @@ export default function Topbar({ sidebarCollapsed }: TopbarProps) {
   const user = useAuthStore((s) => s.user);
   const { notifications, unreadCount, loading, fetchNotifications, fetchUnreadCount, markAsRead, markAllAsRead } =
     useNotificationStore();
+  const myDepartments = useDepartmentStore((s) => s.myDepartments);
   const navigate = useNavigate();
 
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -56,27 +58,35 @@ export default function Topbar({ sidebarCollapsed }: TopbarProps) {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
+  const getDeptTaskRoute = (deptId: string, taskId: string, highlightCommentId?: string) => {
+    const membership = myDepartments.find((m) => m.department.id === deptId);
+    const isManager = membership?.role === 'OWNER' || membership?.role === 'ADMIN';
+    const state = { openTaskId: taskId, ...(highlightCommentId ? { highlightCommentId } : {}) };
+    return isManager
+      ? { path: `/dashboard/departments/${deptId}`, state }
+      : { path: `/dashboard/departments/${deptId}/tasks`, state };
+  };
+
   const handleNotificationClick = (n: Notification) => {
     if (!n.readAt) markAsRead(n.id);
     setDropdownOpen(false);
 
     if (n.entityType === 'task' && n.payload?.taskId) {
       if (typeof n.payload.departmentId === 'string') {
-        navigate(`/dashboard/departments/${n.payload.departmentId}/tasks`, {
-          state: { openTaskId: n.payload.taskId },
-        });
+        const { path, state } = getDeptTaskRoute(n.payload.departmentId, n.payload.taskId as string);
+        navigate(path, { state });
       } else {
-        navigate('/dashboard/tasks', {
-          state: { openTaskId: n.payload.taskId },
-        });
+        navigate('/dashboard/tasks', { state: { openTaskId: n.payload.taskId as string } });
       }
     } else if (n.entityType === 'comment' && n.payload?.taskId) {
-      navigate('/dashboard/tasks', {
-        state: {
-          openTaskId: n.payload.taskId,
-          highlightCommentId: n.payload.commentId,
-        },
-      });
+      if (typeof n.payload.departmentId === 'string') {
+        const { path, state } = getDeptTaskRoute(n.payload.departmentId, n.payload.taskId as string, n.payload.commentId as string | undefined);
+        navigate(path, { state });
+      } else {
+        navigate('/dashboard/tasks', {
+          state: { openTaskId: n.payload.taskId as string, highlightCommentId: n.payload.commentId as string | undefined },
+        });
+      }
     }
   };
 
