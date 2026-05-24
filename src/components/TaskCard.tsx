@@ -146,8 +146,8 @@ export default function TaskCard({ task, onEdit, onDelete, onComment, onCancelRe
 
       {/* Description */}
       {task.description && (
-        <div className="text-xs text-muted-foreground mb-3 line-clamp-2">
-          <DescriptionView html={task.description} />
+        <div className="mb-3">
+          <DescriptionView html={task.description} className="text-xs text-muted-foreground" />
         </div>
       )}
 
