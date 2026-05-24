@@ -242,18 +242,47 @@ export default function TaskDialog({
             </div>
           </div>
 
-          {/* Tags */}
-          <div className="space-y-1.5">
-            <Label htmlFor="task-tags">Tags <span className="text-muted-foreground font-normal">(comma-separated)</span></Label>
-            <Input
-              id="task-tags"
-              type="text"
-              placeholder="bug, feature, etc."
-              value={tagsInput}
-              onChange={(e) => setTagsInput(e.target.value)}
-              className="rounded-xl"
-              disabled={isReadOnly}
-            />
+          {/* Tags + Department (7/3) */}
+          <div className={`grid gap-3 ${lockedDepartmentId || allMemberships.length > 0 ? 'grid-cols-[7fr_3fr]' : 'grid-cols-1'}`}>
+            <div className="space-y-1.5">
+              <Label htmlFor="task-tags">Tags <span className="text-muted-foreground font-normal">(comma-separated)</span></Label>
+              <Input
+                id="task-tags"
+                type="text"
+                placeholder="bug, feature, etc."
+                value={tagsInput}
+                onChange={(e) => setTagsInput(e.target.value)}
+                className="rounded-xl"
+                disabled={isReadOnly}
+              />
+            </div>
+
+            {lockedDepartmentId ? (
+              <div className="space-y-1.5">
+                <Label>Department</Label>
+                <div className="flex items-center h-9 px-3 rounded-xl border border-border bg-muted/50 text-sm text-muted-foreground cursor-not-allowed select-none truncate">
+                  {lockedDepartmentName || lockedDepartmentId}
+                </div>
+              </div>
+            ) : allMemberships.length > 0 ? (
+              <div className="space-y-1.5">
+                <Label>Department</Label>
+                <Select value={departmentId} onValueChange={setDepartmentId} disabled={isReadOnly}>
+                  <SelectTrigger className="rounded-xl">
+                    <SelectValue placeholder="None" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">None (Personal)</SelectItem>
+                    {allMemberships.map((m) => (
+                      <SelectItem key={m.id} value={m.department.id}>
+                        {m.department.name}
+                        <span className="ml-2 text-[10px] text-muted-foreground">[{m.role}]</span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : null}
           </div>
 
           {/* Scheduled for + Deadline */}
@@ -283,34 +312,6 @@ export default function TaskDialog({
               />
             </div>
           </div>
-
-          {/* Department */}
-          {lockedDepartmentId ? (
-            <div className="space-y-1.5">
-              <Label>Department</Label>
-              <div className="flex items-center h-9 px-3 rounded-xl border border-border bg-muted/50 text-sm text-muted-foreground cursor-not-allowed select-none">
-                {lockedDepartmentName || lockedDepartmentId}
-              </div>
-            </div>
-          ) : allMemberships.length > 0 && (
-            <div className="space-y-1.5">
-              <Label>Department</Label>
-              <Select value={departmentId} onValueChange={setDepartmentId} disabled={isReadOnly}>
-                <SelectTrigger className="rounded-xl">
-                  <SelectValue placeholder="None (Personal)" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">None (Personal)</SelectItem>
-                  {allMemberships.map((m) => (
-                    <SelectItem key={m.id} value={m.department.id}>
-                      {m.department.name}
-                      <span className="ml-2 text-[10px] text-muted-foreground">[{m.role}]</span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
 
           {/* Recurring */}
           {!isReadOnly && (
