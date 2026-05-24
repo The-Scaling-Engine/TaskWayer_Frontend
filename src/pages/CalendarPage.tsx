@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback, useLayoutEffect } from 'react';
+import { useRef, useState, useCallback, useLayoutEffect, useMemo } from 'react';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
@@ -14,24 +14,39 @@ import TaskDialog from '@/components/TaskDialog';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { useAuthStore } from '@/store/authStore';
 
-function getEventColor(task: Task): string {
-  const now = new Date();
-  const deadline = task.deadline ? new Date(task.deadline) : null;
-  if (task.status === 'done') return '#22c55e';
-  if (deadline && deadline < now) return '#ef4444';
-  if (task.status === 'doing') return '#f97316';
-  return '#3b82f6';
+const CATEGORY_COLORS = {
+  personal: '#3b82f6',
+  dept: '#FE812C',
+  assigned: '#a855f7',
+} as const;
+
+type TaskCategory = keyof typeof CATEGORY_COLORS;
+type FilterValue = 'all' | TaskCategory;
+
+const FILTER_LABELS: Record<FilterValue, string> = {
+  all: 'All',
+  personal: 'Personal',
+  dept: 'Department',
+  assigned: 'Assigned',
+};
+
+function getTaskCategory(task: Task, userId: string): TaskCategory {
+  if (task.isAssigned && task.assignedTo && task.assignedTo === userId) return 'assigned';
+  if (task.departmentId) return 'dept';
+  return 'personal';
 }
 
-function taskToEvent(task: Task): EventInput {
+function taskToEvent(task: Task, userId: string): EventInput {
+  const color = CATEGORY_COLORS[getTaskCategory(task, userId)];
   return {
     id: task._id || task.id,
     title: task.title,
     start: task.scheduledAt ?? undefined,
     display: 'block',
-    backgroundColor: getEventColor(task),
-    borderColor: getEventColor(task),
+    backgroundColor: color,
+    borderColor: color,
     textColor: '#fff',
     extendedProps: { task },
   };
@@ -48,6 +63,9 @@ function formatCreatedAt(iso: string): string {
 }
 
 export default function CalendarPage() {
+  const user = useAuthStore((s) => s.user);
+  const userId = user?._id || user?.id || '';
+
   const [events, setEvents] = useState<EventInput[]>([]);
   const [loading, setLoading] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -56,6 +74,7 @@ export default function CalendarPage() {
   const [defaultScheduledAt, setDefaultScheduledAt] = useState<string | undefined>();
   const [dialogLoading, setDialogLoading] = useState(false);
   const [currentRange, setCurrentRange] = useState<{ from: string; to: string } | null>(null);
+  const [categoryFilter, setCategoryFilter] = useState<FilterValue>('all');
   const stickyZoneRef = useRef<HTMLDivElement>(null);
   const [stickyH, setStickyH] = useState(111);
 
@@ -68,20 +87,27 @@ export default function CalendarPage() {
     return () => ro.disconnect();
   }, []);
 
-  // 64px = topbar h-16; stickyH = measured height of the page header + legend zone
   const toolbarTop = 64 + stickyH;
 
   const fetchForRange = useCallback(async (from: string, to: string) => {
     setLoading(true);
     try {
       const res = await taskService.getTasks({ scheduledFrom: from, scheduledTo: to, limit: 100 });
-      setEvents(res.data.map(taskToEvent));
+      setEvents(res.data.map(task => taskToEvent(task, userId)));
     } catch {
-      // silent — calendar just shows empty
+      // silent
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [userId]);
+
+  const filteredEvents = useMemo(() => {
+    if (categoryFilter === 'all') return events;
+    return events.filter(ev => {
+      const task = ev.extendedProps?.task as Task;
+      return getTaskCategory(task, userId) === categoryFilter;
+    });
+  }, [events, categoryFilter, userId]);
 
   const handleDatesSet = useCallback((info: DatesSetArg) => {
     const from = info.startStr.substring(0, 10);
@@ -130,20 +156,19 @@ export default function CalendarPage() {
         const inRange = currentRange ? dateStr >= currentRange.from && dateStr <= currentRange.to : true;
         setEvents(prev => {
           const filtered = prev.filter(ev => ev.id !== taskId);
-          return inRange && updated.scheduledAt ? [...filtered, taskToEvent(updated)] : filtered;
+          return inRange && updated.scheduledAt ? [...filtered, taskToEvent(updated, userId)] : filtered;
         });
         toast.success('Task updated');
       } else {
         const res = await taskService.createTask(data);
         const newTask = res.data;
         if (newTask.isRecurring && currentRange) {
-          // Refetch entire range so all pre-generated instances appear immediately
           await fetchForRange(currentRange.from, currentRange.to);
         } else {
           const dateStr = (newTask.scheduledAt ?? newTask.createdAt).substring(0, 10);
           const inRange = currentRange ? dateStr >= currentRange.from && dateStr <= currentRange.to : true;
           if (inRange && newTask.scheduledAt) {
-            setEvents(prev => [...prev, taskToEvent(newTask)]);
+            setEvents(prev => [...prev, taskToEvent(newTask, userId)]);
           }
         }
         toast.success('Task created');
@@ -159,7 +184,7 @@ export default function CalendarPage() {
 
   return (
     <div>
-      {/* Sticky zone — page header + legend. No gap between this and calendar card so content can't bleed through. */}
+      {/* Sticky zone */}
       <div ref={stickyZoneRef} className="sticky top-16 z-10 bg-background -mx-6 px-6 pb-4">
         <div className="flex items-start justify-between pt-2 flex-wrap gap-3">
           <div>
@@ -176,18 +201,39 @@ export default function CalendarPage() {
             </Button>
           </div>
         </div>
-        <div className="flex items-center gap-4 text-xs text-muted-foreground flex-wrap mt-3">
-          {[
-            { color: '#3b82f6', label: 'To Do' },
-            { color: '#f97316', label: 'In Progress' },
-            { color: '#22c55e', label: 'Done' },
-            { color: '#ef4444', label: 'Overdue' },
-          ].map(({ color, label }) => (
-            <div key={label} className="flex items-center gap-1.5">
-              <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: color }} />
-              <span>{label}</span>
-            </div>
-          ))}
+
+        {/* Filter toggles + Legend */}
+        <div className="flex items-center justify-between gap-3 mt-3 flex-wrap">
+          <div className="flex items-center gap-1.5">
+            {(['all', 'personal', 'dept', 'assigned'] as const).map((f) => {
+              const isActive = categoryFilter === f;
+              const color = f !== 'all' ? CATEGORY_COLORS[f] : undefined;
+              return (
+                <button
+                  key={f}
+                  onClick={() => setCategoryFilter(f)}
+                  className={cn(
+                    'px-3 py-1 rounded-full text-xs font-semibold transition-all border',
+                    isActive
+                      ? color ? 'text-white border-transparent' : 'bg-foreground text-background border-transparent'
+                      : 'bg-muted/50 text-muted-foreground border-border hover:text-foreground hover:border-foreground/20'
+                  )}
+                  style={isActive && color ? { backgroundColor: color } : undefined}
+                >
+                  {FILTER_LABELS[f]}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="flex items-center gap-4 text-xs text-muted-foreground">
+            {(Object.entries(CATEGORY_COLORS) as [TaskCategory, string][]).map(([cat, color]) => (
+              <div key={cat} className="flex items-center gap-1.5">
+                <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: color }} />
+                <span>{FILTER_LABELS[cat]}</span>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -199,7 +245,7 @@ export default function CalendarPage() {
         )}
       >
         <style>{`
-          /* ── Base variables (hex-safe, no hsl() wrapper) ── */
+          /* ── Base variables ── */
           .fc {
             --fc-border-color: var(--border);
             --fc-page-bg-color: transparent;
@@ -256,7 +302,7 @@ export default function CalendarPage() {
           /* Day cell grid lines */
           .fc-theme-standard td, .fc-theme-standard th { border-color: var(--border); }
 
-          /* Day number (normal days) */
+          /* Day number */
           .fc .fc-daygrid-day-number {
             font-size: 0.75rem; font-weight: 500;
             color: var(--muted-foreground); text-decoration: none;
@@ -266,17 +312,13 @@ export default function CalendarPage() {
             display: inline-flex; align-items: center; justify-content: center;
             transition: background 0.12s, color 0.12s;
           }
-
-          /* Day hover — highlight the date number */
           .fc .fc-daygrid-day:not(.fc-day-other):not(.fc-day-today):hover .fc-daygrid-day-number {
             background: color-mix(in srgb, var(--primary) 10%, transparent);
             color: var(--primary);
           }
-
-          /* Other-month days — dimmed */
           .fc .fc-day-other .fc-daygrid-day-number { opacity: 0.3; }
 
-          /* ── TODAY — prominent circle on the number ── */
+          /* Today */
           .fc .fc-daygrid-day.fc-day-today {
             background: color-mix(in srgb, var(--primary) 7%, transparent) !important;
           }
@@ -299,10 +341,40 @@ export default function CalendarPage() {
           .fc .fc-event:hover { opacity: 0.85; transform: translateY(-1px); }
           .fc .fc-event-main { background: transparent !important; }
 
-          /* Week/Day time grid */
+          /* ── Time axis column redesign ── */
           .fc .fc-timegrid-slot { height: 2rem; }
+
+          /* Axis background + separator */
+          .fc .fc-timegrid-axis {
+            background: color-mix(in srgb, var(--muted) 30%, transparent);
+          }
+
+          /* Hour labels */
+          .fc .fc-timegrid-slot-label-cushion {
+            font-size: 0.65rem;
+            font-weight: 700;
+            letter-spacing: 0.03em;
+            color: var(--muted-foreground);
+            font-variant-numeric: tabular-nums;
+            text-transform: uppercase;
+            padding-right: 8px;
+          }
+
+          /* Axis cushion (all-day row label) */
           .fc .fc-timegrid-axis-cushion {
-            font-size: 0.68rem; color: var(--muted-foreground);
+            font-size: 0.65rem;
+            font-weight: 600;
+            color: var(--muted-foreground);
+            letter-spacing: 0.02em;
+          }
+
+          /* Half-hour slots: dashed border + hide label */
+          .fc .fc-timegrid-slot.fc-timegrid-slot-minor {
+            border-top-style: dashed !important;
+            border-top-color: color-mix(in srgb, var(--border) 45%, transparent) !important;
+          }
+          .fc .fc-timegrid-slot.fc-timegrid-slot-minor .fc-timegrid-slot-label-cushion {
+            visibility: hidden;
           }
 
           /* List view */
@@ -344,7 +416,7 @@ export default function CalendarPage() {
             right: 'dayGridMonth,timeGridWeek,timeGridDay,listWeek',
           }}
           buttonText={{ today: 'Today', month: 'Month', week: 'Week', day: 'Day', list: 'Agenda' }}
-          events={events}
+          events={filteredEvents}
           datesSet={handleDatesSet}
           dateClick={handleDateClick}
           eventClick={handleEventClick}
