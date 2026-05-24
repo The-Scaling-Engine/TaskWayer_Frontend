@@ -49,7 +49,7 @@ export const useTaskStore = create<TaskState>((set, get) => ({
   },
 
   resetParams: (overrides) => {
-    set({ params: { limit: 50, page: 1, ...overrides } });
+    set({ tasks: [], params: { limit: 50, page: 1, ...overrides } });
     get().fetchTasks();
   },
 

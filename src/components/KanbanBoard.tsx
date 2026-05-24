@@ -113,7 +113,7 @@ interface KanbanBoardProps {
 }
 
 const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({ hideDeptLabel, filterFn }, ref) => {
-  const { tasks, loading, fetchTasks, createTask, updateTask, deleteTask, moveTask, cancelRecurrence, silentFetch } = useTaskStore();
+  const { tasks, loading, createTask, updateTask, deleteTask, moveTask, cancelRecurrence, silentFetch } = useTaskStore();
   const { socket } = useSocketStore();
 
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -132,10 +132,6 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({ hideDeptLabe
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
   );
-
-  useEffect(() => {
-    fetchTasks();
-  }, [fetchTasks]);
 
   useEffect(() => {
     if (!socket) return;
