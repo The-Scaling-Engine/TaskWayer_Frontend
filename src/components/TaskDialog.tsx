@@ -19,12 +19,9 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import type { Task } from '@/types';
-import { useTimeTrackingStore } from '@/store/timeTrackingStore';
 import { useDepartmentStore } from '@/store/departmentStore';
 import { useAuthStore } from '@/store/authStore';
-import { getApiErrorMessage } from '@/services/api';
-import { toast } from 'sonner';
-import { Play, Square, Loader2 as TimerLoader, UserCheck } from 'lucide-react';
+import { UserCheck } from 'lucide-react';
 
 function toDatetimeLocal(isoStr: string): string {
   const d = new Date(isoStr);
@@ -37,13 +34,6 @@ function formatCreatedAt(isoStr: string): string {
   return d.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
-function formatElapsed(seconds: number): string {
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  const s = seconds % 60;
-  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-}
 
 interface TaskDialogProps {
   open: boolean;
@@ -71,7 +61,6 @@ interface TaskDialogProps {
 }
 
 export default function TaskDialog({ open, onClose, onSubmit, task, loading, defaultDeadline, defaultScheduledAt, dialogTitle, lockedDepartmentId, lockedDepartmentName }: TaskDialogProps) {
-  const { activeSession, elapsedSeconds, loading: timerLoading, startTracking, stopTracking } = useTimeTrackingStore();
   const allMemberships = useDepartmentStore((s) => s.allMemberships);
   const user = useAuthStore((s) => s.user);
 
@@ -80,27 +69,6 @@ export default function TaskDialog({ open, onClose, onSubmit, task, loading, def
     task?.assignedTo &&
     (task.assignedTo === user?._id || task.assignedTo === user?.id)
   );
-
-  const isThisTaskTracked = !!task?._id && activeSession?.taskId === task._id;
-  const isOtherTaskTracked = !!activeSession && !isThisTaskTracked;
-
-  const handleTimerToggle = async () => {
-    if (isThisTaskTracked) {
-      try {
-        await stopTracking();
-        toast.success('Timer stopped');
-      } catch (err) {
-        toast.error(getApiErrorMessage(err, 'Failed to stop timer'));
-      }
-    } else if (task?._id) {
-      try {
-        await startTracking(task._id);
-        toast.success('Timer started');
-      } catch (err) {
-        toast.error(getApiErrorMessage(err, 'Failed to start timer'));
-      }
-    }
-  };
 
   const [title, setTitle] = useState(task?.title || '');
   const [description, setDescription] = useState(task?.description || '');
@@ -219,30 +187,6 @@ export default function TaskDialog({ open, onClose, onSubmit, task, loading, def
               <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-600 dark:text-purple-400 shrink-0">
                 <UserCheck size={11} /> Assigned
               </span>
-            )}
-
-            {/* Timer button – edit mode only */}
-            {task?._id && (
-              <button
-                type="button"
-                onClick={handleTimerToggle}
-                disabled={timerLoading || isOtherTaskTracked}
-                title={isOtherTaskTracked ? 'Another task is being tracked' : undefined}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0 ${
-                  isThisTaskTracked
-                    ? 'bg-destructive/10 text-destructive hover:bg-destructive hover:text-white'
-                    : 'bg-primary/10 text-primary hover:bg-primary hover:text-white'
-                }`}
-              >
-                {timerLoading ? (
-                  <TimerLoader size={13} className="animate-spin" />
-                ) : isThisTaskTracked ? (
-                  <Square size={13} />
-                ) : (
-                  <Play size={13} />
-                )}
-                {isThisTaskTracked ? formatElapsed(elapsedSeconds) : 'Start Timer'}
-              </button>
             )}
           </div>
         </DialogHeader>

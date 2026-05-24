@@ -9,7 +9,7 @@ import { adminService } from '@/services/adminService';
 import { toast } from 'sonner';
 import {
   Building2, ChevronDown, RefreshCw, Loader2, Users, Clock, AlertTriangle, Zap,
-  ChevronLeft, ChevronRight, X, UserPlus, UserMinus, Mail, Search, Play, MessageSquare,
+  ChevronLeft, ChevronRight, X, UserPlus, UserMinus, Mail, Search, Timer, MessageSquare,
   ClipboardPlus, Plus, Pencil, Trash2,
 } from 'lucide-react';
 import CommentDialog from '@/components/CommentDialog';
@@ -21,7 +21,7 @@ import { useTaskStore } from '@/store/taskStore';
 import { cn } from '@/lib/utils';
 import type {
   MyDepartmentMembership, MemberWorkload, DepartmentMember, DepartmentMemberRole,
-  DepartmentInvitation, Task, ActiveSessionResponse,
+  DepartmentInvitation, Task,
 } from '@/types';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -33,13 +33,6 @@ const ROLE_COLORS: Record<string, string> = {
   VIEWER: 'bg-muted text-muted-foreground border-border',
 };
 
-function formatElapsed(seconds: number) {
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  const s = seconds % 60;
-  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-}
 
 function isOverdue(deadline?: string | null) {
   if (!deadline) return false;
@@ -79,8 +72,8 @@ export default function DepartmentManagerPage() {
   // ── Member Detail Panel (Step 10.6) ───────────────────────────────────────
   const [detailMember, setDetailMember] = useState<MemberWorkload | null>(null);
   const [detailTab, setDetailTab] = useState<'activity' | 'tasks' | 'assigned'>('activity');
-  const [memberSession, setMemberSession] = useState<ActiveSessionResponse['data'] | null>(null);
-  const [memberSessionLoading, setMemberSessionLoading] = useState(false);
+  const [activityDoingTasks, setActivityDoingTasks] = useState<Task[]>([]);
+  const [activityDoingLoading, setActivityDoingLoading] = useState(false);
   const [memberTasks, setMemberTasks] = useState<Task[]>([]);
   const [memberTasksLoading, setMemberTasksLoading] = useState(false);
   const [memberTaskFilter, setMemberTaskFilter] = useState<'all' | 'todo' | 'doing' | 'done'>('all');
@@ -93,7 +86,6 @@ export default function DepartmentManagerPage() {
   const [assignedEditLoading, setAssignedEditLoading] = useState(false);
   const [assignedDeleteTask, setAssignedDeleteTask] = useState<Task | null>(null);
   const [assignedDeleteLoading, setAssignedDeleteLoading] = useState(false);
-  const [elapsed, setElapsed] = useState(0);
 
   // ── Assign Task modal ─────────────────────────────────────────────────────
   const [assignTaskMember, setAssignTaskMember] = useState<MemberWorkload | null>(null);
@@ -201,34 +193,24 @@ export default function DepartmentManagerPage() {
     return () => clearTimeout(timer);
   }, [location.state, navigate]);
 
-  // ── Detail panel: fetch active session + auto-refresh ─────────────────────
-  const fetchMemberSession = useCallback(async (profileId: string) => {
+  // ── Activity tab: fetch member's doing tasks + auto-refresh ──────────────
+  const fetchActivityDoingTasks = useCallback(async (profileId: string) => {
     if (!departmentId) return;
-    setMemberSessionLoading(true);
+    setActivityDoingLoading(true);
     try {
-      const res = await departmentService.getMemberActiveSession(departmentId, profileId);
-      if (res.success) setMemberSession(res.data);
+      const res = await departmentService.getMemberTasks(departmentId, profileId, { status: 'doing', limit: 50 });
+      if (res.success) setActivityDoingTasks(res.data);
     } catch { /* empty */ } finally {
-      setMemberSessionLoading(false);
+      setActivityDoingLoading(false);
     }
   }, [departmentId]);
 
   useEffect(() => {
     if (!detailMember || detailTab !== 'activity') return;
-    fetchMemberSession(detailMember.profile.id);
-    const interval = setInterval(() => fetchMemberSession(detailMember.profile.id), 30000);
+    fetchActivityDoingTasks(detailMember.profile.id);
+    const interval = setInterval(() => fetchActivityDoingTasks(detailMember.profile.id), 30000);
     return () => clearInterval(interval);
-  }, [detailMember, detailTab, fetchMemberSession]);
-
-  // ── Detail panel: elapsed ticker ──────────────────────────────────────────
-  useEffect(() => {
-    if (!memberSession?.hasActiveSession || !memberSession.session) { setElapsed(0); return; }
-    const startedAt = new Date(memberSession.session.startedAt).getTime();
-    const tick = () => setElapsed(Math.floor((Date.now() - startedAt) / 1000));
-    tick();
-    const id = setInterval(tick, 1000);
-    return () => clearInterval(id);
-  }, [memberSession]);
+  }, [detailMember, detailTab, fetchActivityDoingTasks]);
 
   // ── Detail panel: fetch tasks ──────────────────────────────────────────────
   const fetchMemberTasks = useCallback(async (profileId: string, filter: string) => {
@@ -649,7 +631,7 @@ export default function DepartmentManagerPage() {
                       {workload.map((m) => (
                         <tr
                           key={m.memberId}
-                          onClick={() => { setDetailMember(m); setDetailTab('activity'); setMemberSession(null); setMemberTasks([]); setMemberTaskFilter('all'); setAssignedTasks([]); }}
+                          onClick={() => { setDetailMember(m); setDetailTab('activity'); setMemberTasks([]); setMemberTaskFilter('all'); setAssignedTasks([]); }}
                           className={cn('transition-colors hover:bg-primary/5 cursor-pointer', m.tasks.overdue > 0 && 'bg-red-500/5')}
                         >
                           <td className="px-5 py-3">
@@ -943,52 +925,48 @@ export default function DepartmentManagerPage() {
 
             {/* Panel body */}
             <div className="flex-1 overflow-y-auto p-4">
-              {/* Activity tab */}
+              {/* Activity tab — shows all doing tasks of this member in dept */}
               {detailTab === 'activity' && (
-                <div className="space-y-4">
-                  {memberSessionLoading && !memberSession ? (
+                <div className="space-y-2">
+                  {activityDoingLoading ? (
                     <div className="flex justify-center py-8"><Loader2 className="animate-spin text-primary" size={20} /></div>
-                  ) : memberSession?.hasActiveSession && memberSession.session ? (
-                    <div className="bg-green-500/10 border border-green-500/20 rounded-2xl p-4 space-y-3">
-                      <div className="flex items-center gap-2">
-                        <span className="w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse" />
-                        <span className="text-xs font-semibold text-green-600 dark:text-green-400">Currently tracking</span>
-                        <span className="ml-auto text-xs font-mono font-bold text-green-600 dark:text-green-400">
-                          {formatElapsed(elapsed)}
-                        </span>
+                  ) : activityDoingTasks.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-12 gap-3 text-muted-foreground">
+                      <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center">
+                        <Timer size={18} className="text-muted-foreground/50" />
                       </div>
-                      {memberSession.session.task.departmentId ? (
-                        <div>
-                          <p className="font-semibold text-foreground text-sm">{memberSession.session.task.title}</p>
-                          <div className="flex items-center gap-2 mt-1.5">
-                            <span className={cn('text-[10px] font-bold uppercase px-1.5 py-0.5 rounded-md', {
-                              'bg-red-500/10 text-red-500': memberSession.session.task.priority === 'high',
-                              'bg-amber-500/10 text-amber-500': memberSession.session.task.priority === 'medium',
-                              'bg-emerald-500/10 text-emerald-500': memberSession.session.task.priority === 'low',
+                      <p className="text-sm">No tasks in progress</p>
+                    </div>
+                  ) : (
+                    activityDoingTasks.map(task => {
+                      const overdue = isOverdue(task.deadline) && task.status !== 'done';
+                      const taskKey = task._id || task.id || '';
+                      return (
+                        <div key={taskKey} className={cn('bg-card border rounded-xl p-3 space-y-1.5', overdue ? 'border-destructive/30 bg-destructive/5' : 'border-border')}>
+                          <div className="flex items-start gap-2">
+                            <span className={cn('shrink-0 mt-0.5 text-[10px] font-bold uppercase px-1.5 py-0.5 rounded-md', {
+                              'bg-red-500/10 text-red-500': task.priority === 'high',
+                              'bg-amber-500/10 text-amber-500': task.priority === 'medium',
+                              'bg-emerald-500/10 text-emerald-500': task.priority === 'low',
                             })}>
-                              {memberSession.session.task.priority}
+                              {task.priority}
                             </span>
-                            {memberSession.session.task.deadline && (
-                              <span className={cn('text-[10px] text-muted-foreground', isOverdue(memberSession.session.task.deadline) && 'text-destructive font-semibold')}>
-                                📅 {new Date(memberSession.session.task.deadline).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                            <p className="text-sm font-medium flex-1 min-w-0 truncate text-foreground">{task.title}</p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-[#FE812C]/10 text-[#FE812C]">
+                              In Progress
+                            </span>
+                            {task.deadline && (
+                              <span className={cn('text-[10px] flex items-center gap-0.5', overdue ? 'text-destructive font-semibold' : 'text-muted-foreground')}>
+                                {overdue && <AlertTriangle size={9} />}
+                                📅 {new Date(task.deadline).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                               </span>
                             )}
                           </div>
                         </div>
-                      ) : (
-                        <p className="text-sm italic text-muted-foreground">Working on a personal task</p>
-                      )}
-                      <p className="text-[10px] text-muted-foreground">
-                        Started at {new Date(memberSession.session.startedAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="flex flex-col items-center justify-center py-12 gap-3 text-muted-foreground">
-                      <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center">
-                        <Play size={18} className="text-muted-foreground/50" />
-                      </div>
-                      <p className="text-sm">Not currently tracking any task</p>
-                    </div>
+                      );
+                    })
                   )}
                 </div>
               )}

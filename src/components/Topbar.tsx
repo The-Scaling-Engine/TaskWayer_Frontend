@@ -6,6 +6,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import type { Notification } from '@/types';
 import { cn } from '@/lib/utils';
 import ThemeToggle from '@/components/ThemeToggle';
+import TimerPanel from '@/components/TimerPanel';
 import { Bell, CheckCheck, BellOff } from 'lucide-react';
 
 interface TopbarProps {
@@ -104,6 +105,9 @@ export default function Topbar({ sidebarCollapsed }: TopbarProps) {
       <div className="flex items-center gap-2">
         {/* Theme Toggle */}
         <ThemeToggle />
+
+        {/* Timer Panel */}
+        <TimerPanel />
 
         {/* Notification Bell */}
         <div className="relative" ref={dropdownRef}>
