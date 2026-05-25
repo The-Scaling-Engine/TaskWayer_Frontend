@@ -110,9 +110,11 @@ export interface KanbanBoardRef {
 interface KanbanBoardProps {
   hideDeptLabel?: boolean;
   filterFn?: (task: Task) => boolean;
+  lockedDepartmentId?: string;
+  lockedDepartmentName?: string;
 }
 
-const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({ hideDeptLabel, filterFn }, ref) => {
+const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({ hideDeptLabel, filterFn, lockedDepartmentId, lockedDepartmentName }, ref) => {
   const { tasks, loading, createTask, updateTask, deleteTask, moveTask, cancelRecurrence, silentFetch } = useTaskStore();
   const { socket } = useSocketStore();
 
@@ -352,6 +354,8 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({ hideDeptLabe
         onSubmit={handleSubmit}
         task={editingTask}
         loading={dialogLoading}
+        lockedDepartmentId={!editingTask ? lockedDepartmentId : undefined}
+        lockedDepartmentName={!editingTask ? lockedDepartmentName : undefined}
       />
 
       {/* Update Confirmation Dialog */}

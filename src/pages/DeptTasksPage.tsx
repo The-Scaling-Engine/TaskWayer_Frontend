@@ -153,6 +153,8 @@ export default function DeptTasksPage() {
       <KanbanBoard
         ref={boardRef}
         hideDeptLabel
+        lockedDepartmentId={departmentId}
+        lockedDepartmentName={deptName}
         filterFn={(task) => {
           const mongoId = currentUser?._id;
           const profileUid = currentUser?.id;
