@@ -1,0 +1,677 @@
+import { useEffect, useState } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import {
+  FolderOpen, ArrowLeft, Loader2, UserPlus, UserMinus,
+  Search, X, Check, Trash2, Archive, ArchiveRestore, LogOut,
+} from 'lucide-react';
+import { useProjectStore } from '@/store/projectStore';
+import { useAuthStore } from '@/store/authStore';
+import { userService } from '@/services/userService';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
+import { getApiErrorMessage } from '@/services/api';
+import type { ProjectMemberRole } from '@/types';
+
+const ROLE_COLORS: Record<string, string> = {
+  OWNER: 'bg-[#FE812C]/10 text-[#FE812C] border-[#FE812C]/20',
+  MANAGER: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20',
+  MEMBER: 'bg-primary/10 text-primary border-primary/20',
+  VIEWER: 'bg-muted text-muted-foreground border-border',
+};
+
+export default function ProjectManagerPage() {
+  const { projectId } = useParams<{ projectId: string }>();
+  const navigate = useNavigate();
+  const {
+    currentProject, currentLoading,
+    fetchProject, updateProject, archiveProject, unarchiveProject,
+    deleteProject, leaveProject, transferOwnership,
+    addMember, removeMember, updateMemberRole,
+  } = useProjectStore();
+  const currentUser = useAuthStore((s) => s.user);
+
+  const [tab, setTab] = useState<'members' | 'settings'>('members');
+
+  // ── Settings form state ────────────────────────────────────────────────────
+  const [editName, setEditName] = useState('');
+  const [editDesc, setEditDesc] = useState('');
+  const [settingsSaving, setSettingsSaving] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [leaveConfirm, setLeaveConfirm] = useState(false);
+  const [leaveLoading, setLeaveLoading] = useState(false);
+  const [archiveLoading, setArchiveLoading] = useState(false);
+  const [transferConfirm, setTransferConfirm] = useState<{ profileId: string; label: string } | null>(null);
+  const [transferLoading, setTransferLoading] = useState(false);
+
+  // ── Add member state ───────────────────────────────────────────────────────
+  const [addMemberOpen, setAddMemberOpen] = useState(false);
+  const [memberSearch, setMemberSearch] = useState('');
+  const [memberSearchResults, setMemberSearchResults] = useState<{ id: string; email: string; name?: string | null }[]>([]);
+  const [memberSearchLoading, setMemberSearchLoading] = useState(false);
+  const [selectedProfileId, setSelectedProfileId] = useState('');
+  const [selectedProfileLabel, setSelectedProfileLabel] = useState('');
+  const [addRole, setAddRole] = useState<ProjectMemberRole>('MEMBER');
+  const [addMemberLoading, setAddMemberLoading] = useState(false);
+  const [removeMemberConfirm, setRemoveMemberConfirm] = useState<{ profileId: string; label: string } | null>(null);
+
+  const currentUserId = currentUser?.id ?? currentUser?._id;
+
+  useEffect(() => {
+    if (projectId) fetchProject(projectId);
+  }, [projectId, fetchProject]);
+
+  useEffect(() => {
+    if (currentProject) {
+      setEditName(currentProject.name);
+      setEditDesc(currentProject.description ?? '');
+    }
+  }, [currentProject]);
+
+  const myMembership = currentProject?.members?.find((m) => m.profileId === currentUserId);
+  const myRole = myMembership?.role;
+  const isOwner = myRole === 'OWNER';
+  const isOwnerOrManager = isOwner || myRole === 'MANAGER';
+
+  const canChangeRole = (memberRole: string) => {
+    if (isOwner) return memberRole !== 'OWNER';
+    if (myRole === 'MANAGER') return memberRole === 'MEMBER' || memberRole === 'VIEWER';
+    return false;
+  };
+
+  const canRemove = (memberRole: string) => {
+    if (isOwner) return memberRole !== 'OWNER';
+    if (myRole === 'MANAGER') return memberRole === 'MEMBER' || memberRole === 'VIEWER';
+    return false;
+  };
+
+  // ── User search ────────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!memberSearch.trim()) { setMemberSearchResults([]); return; }
+    const timer = setTimeout(async () => {
+      setMemberSearchLoading(true);
+      try {
+        const res = await userService.searchUsers({ q: memberSearch, limit: 8 });
+        if (res.success) {
+          setMemberSearchResults(res.data.users.map((u) => ({ id: u.id, email: u.email, name: u.name })));
+        }
+      } catch { setMemberSearchResults([]); } finally {
+        setMemberSearchLoading(false);
+      }
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [memberSearch]);
+
+  const closeAddMember = () => {
+    setAddMemberOpen(false);
+    setMemberSearch('');
+    setMemberSearchResults([]);
+    setSelectedProfileId('');
+    setSelectedProfileLabel('');
+    setAddRole('MEMBER');
+  };
+
+  const handleAddMember = async () => {
+    if (!projectId || !selectedProfileId) { toast.error('Please select a user'); return; }
+    setAddMemberLoading(true);
+    try {
+      await addMember(projectId, { profileId: selectedProfileId, role: addRole });
+      toast.success('Member added');
+      closeAddMember();
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Failed to add member'));
+    } finally {
+      setAddMemberLoading(false);
+    }
+  };
+
+  const handleRemoveMember = async () => {
+    if (!projectId || !removeMemberConfirm) return;
+    try {
+      await removeMember(projectId, removeMemberConfirm.profileId);
+      toast.success(`Removed ${removeMemberConfirm.label}`);
+      setRemoveMemberConfirm(null);
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Failed to remove member'));
+    }
+  };
+
+  const handleRoleChange = async (profileId: string, newRole: ProjectMemberRole) => {
+    if (!projectId) return;
+    if (newRole === 'OWNER') {
+      const m = currentProject?.members?.find((x) => x.profileId === profileId);
+      setTransferConfirm({ profileId, label: m?.profile?.name ?? m?.profile?.email ?? profileId });
+      return;
+    }
+    try {
+      await updateMemberRole(projectId, profileId, newRole);
+      toast.success('Role updated');
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Failed to update role'));
+    }
+  };
+
+  const handleTransferOwnership = async () => {
+    if (!projectId || !transferConfirm) return;
+    setTransferLoading(true);
+    try {
+      await transferOwnership(projectId, transferConfirm.profileId);
+      toast.success(`Ownership transferred to ${transferConfirm.label}`);
+      setTransferConfirm(null);
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Failed to transfer ownership'));
+    } finally {
+      setTransferLoading(false);
+    }
+  };
+
+  const handleSaveSettings = async () => {
+    if (!projectId || !editName.trim()) return;
+    setSettingsSaving(true);
+    try {
+      await updateProject(projectId, {
+        name: editName.trim(),
+        description: editDesc.trim() || undefined,
+      });
+      toast.success('Project updated');
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Failed to update project'));
+    } finally {
+      setSettingsSaving(false);
+    }
+  };
+
+  const handleArchive = async () => {
+    if (!projectId || !currentProject) return;
+    setArchiveLoading(true);
+    try {
+      if (currentProject.archivedAt) {
+        await unarchiveProject(projectId);
+        toast.success('Project restored');
+      } else {
+        await archiveProject(projectId);
+        toast.success('Project archived');
+      }
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Failed to update archive status'));
+    } finally {
+      setArchiveLoading(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!projectId) return;
+    setDeleteLoading(true);
+    try {
+      await deleteProject(projectId);
+      toast.success('Project deleted');
+      navigate('/dashboard/projects');
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Failed to delete project'));
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
+  const handleLeave = async () => {
+    if (!projectId) return;
+    setLeaveLoading(true);
+    try {
+      await leaveProject(projectId);
+      toast.success('Left project');
+      navigate('/dashboard/projects');
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Failed to leave project'));
+    } finally {
+      setLeaveLoading(false);
+    }
+  };
+
+  if (currentLoading || !currentProject) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <Loader2 className="animate-spin text-primary" size={28} />
+      </div>
+    );
+  }
+
+  const members = currentProject.members ?? [];
+
+  return (
+    <>
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="flex items-center justify-between pt-2 flex-wrap gap-3">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => navigate('/dashboard/projects')}
+              className="p-2 rounded-lg hover:bg-muted text-muted-foreground transition-colors"
+            >
+              <ArrowLeft size={18} />
+            </button>
+            <div className="w-10 h-10 rounded-xl bg-[#FE812C]/10 flex items-center justify-center shrink-0">
+              <FolderOpen size={18} className="text-[#FE812C]" />
+            </div>
+            <div>
+              <h1 className="font-bold text-xl text-foreground">{currentProject.name}</h1>
+              {currentProject.description && (
+                <p className="text-xs text-muted-foreground">{currentProject.description}</p>
+              )}
+            </div>
+            {myRole && (
+              <span className={cn('text-xs font-bold px-2.5 py-1 rounded-full border', ROLE_COLORS[myRole] ?? '')}>
+                {myRole}
+              </span>
+            )}
+            {currentProject.archivedAt && (
+              <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-muted text-muted-foreground border border-border">
+                ARCHIVED
+              </span>
+            )}
+          </div>
+          <button
+            onClick={() => navigate(`/dashboard/projects/${projectId}/tasks`)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#FE812C]/10 text-[#FE812C] hover:bg-[#FE812C]/20 text-sm font-semibold transition-colors"
+          >
+            <FolderOpen size={14} />
+            View Tasks
+          </button>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex items-center gap-1 border-b border-border">
+          {(['members', 'settings'] as const).map((t) => (
+            <button
+              key={t}
+              onClick={() => setTab(t)}
+              className={cn(
+                'px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors',
+                tab === t
+                  ? 'border-primary text-primary'
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
+              )}
+            >
+              {t === 'members' ? `Members (${members.length})` : 'Settings'}
+            </button>
+          ))}
+        </div>
+
+        {/* ── Members tab ── */}
+        {tab === 'members' && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-muted-foreground">{members.length} member{members.length !== 1 ? 's' : ''}</p>
+              {isOwnerOrManager && (
+                <button
+                  onClick={() => setAddMemberOpen(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-[#FE812C]/10 text-[#FE812C] hover:bg-[#FE812C] hover:text-white rounded-xl text-xs font-semibold transition-colors"
+                >
+                  <UserPlus size={13} /> Add Member
+                </button>
+              )}
+            </div>
+
+            <div className="bg-card border border-border rounded-2xl overflow-hidden">
+              {members.length === 0 ? (
+                <div className="py-10 text-center text-muted-foreground text-sm">No members found.</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-muted/50 border-b border-border">
+                      <tr>
+                        {['Member', 'Role', 'Joined', 'Actions'].map((h, i) => (
+                          <th key={h} className={cn('px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider', i < 3 ? 'text-left' : 'text-right')}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {members.map((member) => (
+                        <tr key={member.id} className="hover:bg-muted/30 transition-colors">
+                          <td className="px-4 py-2.5">
+                            <div className="flex items-center gap-2.5">
+                              {member.profile?.avatar ? (
+                                <img src={member.profile.avatar} alt="" className="w-7 h-7 rounded-full object-cover shrink-0" />
+                              ) : (
+                                <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center text-primary text-xs font-bold shrink-0">
+                                  {(member.profile?.name ?? member.profile?.email ?? '?').charAt(0).toUpperCase()}
+                                </div>
+                              )}
+                              <div className="min-w-0">
+                                {member.profile?.name && (
+                                  <p className="font-medium text-foreground text-xs truncate">{member.profile.name}</p>
+                                )}
+                                <p className={cn('truncate', member.profile?.name ? 'text-[11px] text-muted-foreground' : 'text-xs font-medium text-foreground')}>
+                                  {member.profile?.email}
+                                </p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-4 py-2.5">
+                            {canChangeRole(member.role) ? (
+                              <select
+                                value={member.role}
+                                onChange={(e) => handleRoleChange(member.profileId, e.target.value as ProjectMemberRole)}
+                                className={cn('text-[11px] font-semibold px-2 py-0.5 rounded-full border cursor-pointer outline-none bg-transparent', ROLE_COLORS[member.role] ?? '')}
+                              >
+                                {isOwner && <option value="OWNER">OWNER</option>}
+                                <option value="MANAGER">MANAGER</option>
+                                <option value="MEMBER">MEMBER</option>
+                                <option value="VIEWER">VIEWER</option>
+                              </select>
+                            ) : (
+                              <span className={cn('text-[11px] font-semibold px-2 py-0.5 rounded-full border', ROLE_COLORS[member.role] ?? '')}>{member.role}</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-2.5 text-[11px] text-muted-foreground">
+                            {new Date(member.joinedAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
+                          </td>
+                          <td className="px-4 py-2.5 text-right">
+                            {canRemove(member.role) && member.profileId !== currentUserId && (
+                              <button
+                                onClick={() => setRemoveMemberConfirm({ profileId: member.profileId, label: member.profile?.name ?? member.profile?.email ?? member.profileId })}
+                                className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                                title="Remove member"
+                              >
+                                <UserMinus size={13} />
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {/* Transfer ownership */}
+              {isOwner && members.filter((m) => m.role !== 'OWNER').length > 0 && (
+                <div className="border-t border-border px-4 py-3 flex justify-end">
+                  <button
+                    onClick={() => {
+                      const candidates = members.filter((m) => m.role !== 'OWNER');
+                      if (candidates.length === 1) {
+                        const c = candidates[0];
+                        setTransferConfirm({ profileId: c.profileId, label: c.profile?.name ?? c.profile?.email ?? c.profileId });
+                      }
+                    }}
+                    className="text-xs text-muted-foreground hover:text-[#FE812C] transition-colors"
+                  >
+                    Transfer Ownership…
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ── Settings tab ── */}
+        {tab === 'settings' && (
+          <div className="space-y-6 max-w-lg">
+            {/* Edit name/description */}
+            <div className="bg-card border border-border rounded-2xl p-5 space-y-4">
+              <h3 className="font-semibold text-foreground text-sm">Project Details</h3>
+              <div className="space-y-1.5">
+                <Label htmlFor="project-name">Name</Label>
+                <Input
+                  id="project-name"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  className="rounded-xl"
+                  disabled={!isOwnerOrManager}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="project-desc">Description <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                <Input
+                  id="project-desc"
+                  value={editDesc}
+                  onChange={(e) => setEditDesc(e.target.value)}
+                  placeholder="Project description..."
+                  className="rounded-xl"
+                  disabled={!isOwnerOrManager}
+                />
+              </div>
+              {isOwnerOrManager && (
+                <Button
+                  onClick={handleSaveSettings}
+                  disabled={settingsSaving || !editName.trim()}
+                  className="bg-[#FE812C] hover:bg-[#e5732a] text-white rounded-xl gap-2"
+                >
+                  {settingsSaving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                  {settingsSaving ? 'Saving...' : 'Save Changes'}
+                </Button>
+              )}
+            </div>
+
+            {/* Archive / Restore */}
+            {isOwner && (
+              <div className="bg-card border border-border rounded-2xl p-5 space-y-3">
+                <h3 className="font-semibold text-foreground text-sm">
+                  {currentProject.archivedAt ? 'Restore Project' : 'Archive Project'}
+                </h3>
+                <p className="text-sm text-muted-foreground">
+                  {currentProject.archivedAt
+                    ? 'Restore this project to make it active again.'
+                    : 'Archiving hides the project from active views. You can restore it later.'}
+                </p>
+                <button
+                  onClick={handleArchive}
+                  disabled={archiveLoading}
+                  className={cn(
+                    'flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-colors disabled:opacity-60',
+                    currentProject.archivedAt
+                      ? 'bg-primary/10 text-primary hover:bg-primary hover:text-white'
+                      : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                  )}
+                >
+                  {archiveLoading ? <Loader2 size={14} className="animate-spin" /> : currentProject.archivedAt ? <ArchiveRestore size={14} /> : <Archive size={14} />}
+                  {archiveLoading ? 'Processing...' : currentProject.archivedAt ? 'Restore Project' : 'Archive Project'}
+                </button>
+              </div>
+            )}
+
+            {/* Danger zone */}
+            <div className="bg-destructive/5 border border-destructive/20 rounded-2xl p-5 space-y-4">
+              <h3 className="font-semibold text-destructive text-sm">Danger Zone</h3>
+
+              {!isOwner && (
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-medium text-foreground">Leave Project</p>
+                    <p className="text-xs text-muted-foreground">You will lose access to this project.</p>
+                  </div>
+                  <button
+                    onClick={() => setLeaveConfirm(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-destructive/30 text-destructive hover:bg-destructive hover:text-white text-xs font-semibold transition-colors shrink-0"
+                  >
+                    <LogOut size={13} /> Leave
+                  </button>
+                </div>
+              )}
+
+              {isOwner && (
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-medium text-foreground">Delete Project</p>
+                    <p className="text-xs text-muted-foreground">Permanently delete the project and all associated data.</p>
+                  </div>
+                  <button
+                    onClick={() => setDeleteConfirm(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-destructive/30 text-destructive hover:bg-destructive hover:text-white text-xs font-semibold transition-colors shrink-0"
+                  >
+                    <Trash2 size={13} /> Delete
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ── Add member modal ── */}
+      {addMemberOpen && (
+        <div className="fixed inset-0 z-[65] flex items-center justify-center bg-black/50 p-4 animate-in fade-in duration-200">
+          <div className="bg-card border border-border rounded-2xl p-6 max-w-md w-full shadow-xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-bold">Add Member</h3>
+              <button onClick={closeAddMember} className="p-1 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
+                <X size={16} />
+              </button>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-semibold text-muted-foreground mb-1 block">Search User</label>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={14} />
+                  <input
+                    type="text"
+                    value={memberSearch}
+                    onChange={(e) => {
+                      setMemberSearch(e.target.value);
+                      if (selectedProfileId) { setSelectedProfileId(''); setSelectedProfileLabel(''); }
+                    }}
+                    placeholder="Search by name or email..."
+                    className="w-full bg-muted/50 border border-border focus:border-primary/50 rounded-xl pl-9 pr-3 py-2 text-sm outline-none transition-all"
+                    autoFocus
+                  />
+                </div>
+                {memberSearchLoading && (
+                  <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+                    <Loader2 size={10} className="animate-spin" /> Searching...
+                  </p>
+                )}
+                {memberSearchResults.length > 0 && !selectedProfileId && (
+                  <div className="mt-1 border border-border rounded-xl bg-card shadow-sm overflow-hidden max-h-44 overflow-y-auto">
+                    {memberSearchResults.map((u) => (
+                      <button
+                        key={u.id}
+                        onClick={() => {
+                          setSelectedProfileId(u.id);
+                          setSelectedProfileLabel(u.name ? `${u.name} (${u.email})` : u.email);
+                          setMemberSearch(u.name ?? u.email);
+                          setMemberSearchResults([]);
+                        }}
+                        className="w-full text-left px-3 py-2.5 hover:bg-muted text-sm transition-colors border-b border-border last:border-0"
+                      >
+                        <span className="font-medium text-foreground">{u.name ?? u.email}</span>
+                        {u.name && <span className="text-muted-foreground text-xs ml-2">{u.email}</span>}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {selectedProfileId && (
+                  <p className="text-xs text-[#FE812C] mt-1.5 font-medium">✓ {selectedProfileLabel}</p>
+                )}
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-muted-foreground mb-1 block">Role</label>
+                <select
+                  value={addRole}
+                  onChange={(e) => setAddRole(e.target.value as ProjectMemberRole)}
+                  className="w-full bg-muted/50 border border-border rounded-xl px-3 py-2 text-sm outline-none cursor-pointer"
+                >
+                  <option value="MANAGER">MANAGER</option>
+                  <option value="MEMBER">MEMBER</option>
+                  <option value="VIEWER">VIEWER</option>
+                </select>
+              </div>
+            </div>
+            <div className="flex gap-3 justify-end">
+              <button onClick={closeAddMember} className="px-4 py-2 rounded-xl text-sm font-medium text-muted-foreground hover:bg-muted transition-colors">
+                Cancel
+              </button>
+              <button
+                onClick={handleAddMember}
+                disabled={addMemberLoading || !selectedProfileId}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium text-white bg-[#FE812C] hover:bg-[#e5732a] disabled:opacity-60 transition-colors"
+              >
+                {addMemberLoading && <Loader2 size={14} className="animate-spin" />}
+                {addMemberLoading ? 'Adding...' : 'Add Member'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Remove member confirm */}
+      {removeMemberConfirm && (
+        <div className="fixed inset-0 z-[65] flex items-center justify-center bg-black/50 p-4 animate-in fade-in duration-200">
+          <div className="bg-card border border-border rounded-2xl p-6 max-w-sm w-full shadow-xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <h3 className="text-lg font-bold">Remove Member</h3>
+            <p className="text-sm text-muted-foreground">
+              Remove <span className="font-semibold text-foreground">{removeMemberConfirm.label}</span> from this project?
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button onClick={() => setRemoveMemberConfirm(null)} className="px-4 py-2 rounded-xl text-sm font-medium text-muted-foreground hover:bg-muted transition-colors">Cancel</button>
+              <button onClick={handleRemoveMember} className="px-4 py-2 rounded-xl text-sm font-medium text-white bg-destructive hover:bg-destructive/90 transition-colors">Remove</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Transfer ownership confirm */}
+      {transferConfirm && (
+        <div className="fixed inset-0 z-[65] flex items-center justify-center bg-black/50 p-4 animate-in fade-in duration-200">
+          <div className="bg-card border border-border rounded-2xl p-6 max-w-sm w-full shadow-xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <h3 className="text-lg font-bold">Transfer Ownership</h3>
+            <p className="text-sm text-muted-foreground">
+              Transfer ownership of <span className="font-semibold text-foreground">{currentProject.name}</span> to{' '}
+              <span className="font-semibold text-foreground">{transferConfirm.label}</span>?
+            </p>
+            <p className="text-xs text-muted-foreground bg-muted/50 rounded-xl px-3 py-2">
+              You will be demoted to <span className="font-semibold">MEMBER</span>.
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button onClick={() => setTransferConfirm(null)} disabled={transferLoading} className="px-4 py-2 rounded-xl text-sm font-medium text-muted-foreground hover:bg-muted transition-colors disabled:opacity-50">Cancel</button>
+              <button onClick={handleTransferOwnership} disabled={transferLoading} className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium text-white bg-violet-600 hover:bg-violet-700 disabled:opacity-60 transition-colors">
+                {transferLoading && <Loader2 size={14} className="animate-spin" />}
+                {transferLoading ? 'Transferring...' : 'Transfer'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete confirm */}
+      {deleteConfirm && (
+        <div className="fixed inset-0 z-[65] flex items-center justify-center bg-black/50 p-4 animate-in fade-in duration-200">
+          <div className="bg-card border border-border rounded-2xl p-6 max-w-sm w-full shadow-xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <h3 className="text-lg font-bold">Delete Project</h3>
+            <p className="text-sm text-muted-foreground">
+              Permanently delete <span className="font-semibold text-foreground">{currentProject.name}</span>? This cannot be undone.
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button onClick={() => setDeleteConfirm(false)} className="px-4 py-2 rounded-xl text-sm font-medium text-muted-foreground hover:bg-muted transition-colors">Cancel</button>
+              <button onClick={handleDelete} disabled={deleteLoading} className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium text-white bg-destructive hover:bg-destructive/90 disabled:opacity-60 transition-colors">
+                {deleteLoading && <Loader2 size={14} className="animate-spin" />}
+                {deleteLoading ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Leave confirm */}
+      {leaveConfirm && (
+        <div className="fixed inset-0 z-[65] flex items-center justify-center bg-black/50 p-4 animate-in fade-in duration-200">
+          <div className="bg-card border border-border rounded-2xl p-6 max-w-sm w-full shadow-xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <h3 className="text-lg font-bold">Leave Project</h3>
+            <p className="text-sm text-muted-foreground">
+              Leave <span className="font-semibold text-foreground">{currentProject.name}</span>? You will lose access to this project.
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button onClick={() => setLeaveConfirm(false)} className="px-4 py-2 rounded-xl text-sm font-medium text-muted-foreground hover:bg-muted transition-colors">Cancel</button>
+              <button onClick={handleLeave} disabled={leaveLoading} className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium text-white bg-destructive hover:bg-destructive/90 disabled:opacity-60 transition-colors">
+                {leaveLoading && <Loader2 size={14} className="animate-spin" />}
+                {leaveLoading ? 'Leaving...' : 'Leave Project'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}

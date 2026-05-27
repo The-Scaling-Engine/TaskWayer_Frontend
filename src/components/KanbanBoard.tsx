@@ -32,9 +32,11 @@ interface TaskSubmitData {
   description: string;
   status: 'todo' | 'doing' | 'done';
   deadline?: string;
+  scheduledAt?: string | null;
   priority?: 'low' | 'medium' | 'high';
   tags?: string[];
   departmentId?: string;
+  projectId?: string;
   isRecurring?: boolean;
   recurrenceType?: 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY' | null;
   recurrenceEndDate?: string | null;
@@ -61,9 +63,10 @@ interface DraggableTaskCardProps {
   onCancelRecurring: (task: Task) => void;
   commentCount?: number;
   hideDeptLabel?: boolean;
+  hideProjectLabel?: boolean;
 }
 
-function DraggableTaskCard({ task, isActiveDrag, onEdit, onDelete, onComment, onCancelRecurring, commentCount, hideDeptLabel }: DraggableTaskCardProps) {
+function DraggableTaskCard({ task, isActiveDrag, onEdit, onDelete, onComment, onCancelRecurring, commentCount, hideDeptLabel, hideProjectLabel }: DraggableTaskCardProps) {
   const { attributes, listeners, setNodeRef, transform } = useDraggable({ id: task._id });
   const style = transform ? { transform: CSS.Translate.toString(transform) } : undefined;
 
@@ -83,6 +86,7 @@ function DraggableTaskCard({ task, isActiveDrag, onEdit, onDelete, onComment, on
         onCancelRecurring={onCancelRecurring}
         commentCount={commentCount}
         hideDeptLabel={hideDeptLabel}
+        hideProjectLabel={hideProjectLabel}
       />
     </div>
   );
@@ -109,12 +113,15 @@ export interface KanbanBoardRef {
 
 interface KanbanBoardProps {
   hideDeptLabel?: boolean;
+  hideProjectLabel?: boolean;
   filterFn?: (task: Task) => boolean;
   lockedDepartmentId?: string;
   lockedDepartmentName?: string;
+  lockedProjectId?: string;
+  lockedProjectName?: string;
 }
 
-const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({ hideDeptLabel, filterFn, lockedDepartmentId, lockedDepartmentName }, ref) => {
+const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({ hideDeptLabel, hideProjectLabel, filterFn, lockedDepartmentId, lockedDepartmentName, lockedProjectId, lockedProjectName }, ref) => {
   const { tasks, loading, createTask, updateTask, deleteTask, moveTask, cancelRecurrence, silentFetch } = useTaskStore();
   const { socket } = useSocketStore();
 
@@ -322,6 +329,7 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({ hideDeptLabe
                         onCancelRecurring={(t) => { setKeepChildren(false); setCancelRecurringTask(t); }}
                         commentCount={commentCounts[task._id]}
                         hideDeptLabel={hideDeptLabel}
+                        hideProjectLabel={hideProjectLabel}
                       />
                     ))
                   )}
@@ -341,6 +349,7 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({ hideDeptLabe
                 onComment={(t) => setCommentTask(t)}
                 commentCount={commentCounts[activeTask._id]}
                 hideDeptLabel={hideDeptLabel}
+                hideProjectLabel={hideProjectLabel}
               />
             </div>
           ) : null}
@@ -356,6 +365,8 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({ hideDeptLabe
         loading={dialogLoading}
         lockedDepartmentId={!editingTask ? lockedDepartmentId : undefined}
         lockedDepartmentName={!editingTask ? lockedDepartmentName : undefined}
+        lockedProjectId={!editingTask ? lockedProjectId : undefined}
+        lockedProjectName={!editingTask ? lockedProjectName : undefined}
       />
 
       {/* Update Confirmation Dialog */}

@@ -29,6 +29,7 @@ export interface Task {
   scheduledAt?: string | null;
   completedAt?: string;
   departmentId?: string;
+  projectId?: string | null;
   userId: string;
   createdAt: string;
   updatedAt: string;
@@ -41,6 +42,7 @@ export interface Task {
   assignedBy?: string;
   __v?: number;
   _count?: { comments: number };
+  createdBy?: { name: string | null; email: string | null; avatar: string | null } | null;
 }
 
 // ============================================
@@ -471,6 +473,76 @@ export interface AdminAnalyticsDepartmentsResponse {
   limit: number;
   total: number;
   departments: AdminAnalyticsDeptItem[];
+}
+
+// ============================================
+// PROJECTS
+// ============================================
+export type ProjectMemberRole = 'OWNER' | 'MANAGER' | 'MEMBER' | 'VIEWER';
+
+export interface ProjectProfile {
+  id: string;
+  email: string;
+  name: string | null;
+  username: string | null;
+  avatar: string | null;
+  jobTitle: string | null;
+}
+
+export interface ProjectMember {
+  id: string;
+  projectId: string;
+  profileId: string;
+  role: ProjectMemberRole;
+  joinedAt: string;
+  profile?: ProjectProfile;
+}
+
+export interface ProjectDepartmentLink {
+  id: string;
+  projectId: string;
+  departmentId: string;
+  createdAt: string;
+  department?: {
+    id: string;
+    name: string;
+    description: string | null;
+  };
+}
+
+export interface Project {
+  id: string;
+  name: string;
+  description: string | null;
+  ownerId: string;
+  archivedAt: string | null;
+  deletedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  members?: ProjectMember[];
+  departments?: ProjectDepartmentLink[];
+  _count?: {
+    tasks: number;
+    members: number;
+  };
+}
+
+export interface ProjectsResponse {
+  success: boolean;
+  count: number;
+  data: Project[];
+}
+
+export interface ProjectResponse {
+  success: boolean;
+  data: Project;
+  message?: string;
+}
+
+export interface ProjectMembersResponse {
+  success: boolean;
+  count: number;
+  data: ProjectMember[];
 }
 
 // ============================================

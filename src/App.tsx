@@ -21,12 +21,15 @@ import SettingsPage from '@/pages/SettingsPage';
 import ProfilePage from '@/pages/ProfilePage';
 
 // ── Lazy imports — chunks fetched only when the route is first visited ──
-const CalendarPage         = lazy(() => import('@/pages/CalendarPage'));
-const AnalyticsPage        = lazy(() => import('@/pages/AnalyticsPage'));
+const CalendarPage          = lazy(() => import('@/pages/CalendarPage'));
+const AnalyticsPage         = lazy(() => import('@/pages/AnalyticsPage'));
 const DepartmentManagerPage = lazy(() => import('@/pages/DepartmentManagerPage'));
-const AdminDashboardPage   = lazy(() => import('@/pages/AdminDashboardPage'));
-const AdminUsersPage       = lazy(() => import('@/pages/AdminUsersPage'));
-const AdminDepartmentsPage = lazy(() => import('@/pages/AdminDepartmentsPage'));
+const ProjectsPage          = lazy(() => import('@/pages/ProjectsPage'));
+const ProjectManagerPage    = lazy(() => import('@/pages/ProjectManagerPage'));
+const ProjectTasksPage      = lazy(() => import('@/pages/ProjectTasksPage'));
+const AdminDashboardPage    = lazy(() => import('@/pages/AdminDashboardPage'));
+const AdminUsersPage        = lazy(() => import('@/pages/AdminUsersPage'));
+const AdminDepartmentsPage  = lazy(() => import('@/pages/AdminDepartmentsPage'));
 
 // ── Fallback spinner shown while a lazy chunk is downloading ─────
 function PageLoader() {
@@ -68,6 +71,9 @@ function App() {
             <Route path="profile" element={<ProfilePage />} />
             <Route path="departments/:departmentId" element={<DepartmentManagerPage />} />
             <Route path="departments/:departmentId/tasks" element={<DeptTasksPage />} />
+            <Route path="projects" element={<UserRoute><ProjectsPage /></UserRoute>} />
+            <Route path="projects/:projectId" element={<UserRoute><ProjectManagerPage /></UserRoute>} />
+            <Route path="projects/:projectId/tasks" element={<UserRoute><ProjectTasksPage /></UserRoute>} />
 
             {/* Admin-only routes */}
             <Route path="admin" element={<AdminRoute><AdminDashboardPage /></AdminRoute>} />

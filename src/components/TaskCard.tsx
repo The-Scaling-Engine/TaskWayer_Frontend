@@ -1,8 +1,9 @@
 import type { Task } from '@/types';
 import { Badge } from '@/components/ui/badge';
-import { Pencil, Trash2, Calendar, MessageSquare, Square, Building2, Clock, CircleSlash, Repeat, UserCheck } from 'lucide-react';
+import { Pencil, Trash2, Calendar, MessageSquare, Square, Building2, FolderOpen, Clock, CircleSlash, Repeat, UserCheck, User } from 'lucide-react';
 import { useTimeTrackingStore } from '@/store/timeTrackingStore';
 import { useDepartmentStore } from '@/store/departmentStore';
+import { useProjectStore } from '@/store/projectStore';
 import { useAuthStore } from '@/store/authStore';
 import { toast } from 'sonner';
 import { getApiErrorMessage } from '@/services/api';
@@ -24,6 +25,7 @@ interface TaskCardProps {
   onCancelRecurring?: (task: Task) => void;
   commentCount?: number;
   hideDeptLabel?: boolean;
+  hideProjectLabel?: boolean;
 }
 
 const statusColors: Record<string, string> = {
@@ -38,14 +40,18 @@ const statusLabels: Record<string, string> = {
   done: 'Done',
 };
 
-export default function TaskCard({ task, onEdit, onDelete, onComment, onCancelRecurring, commentCount: commentCountProp, hideDeptLabel }: TaskCardProps) {
+export default function TaskCard({ task, onEdit, onDelete, onComment, onCancelRecurring, commentCount: commentCountProp, hideDeptLabel, hideProjectLabel }: TaskCardProps) {
   const commentCount = commentCountProp ?? task._count?.comments ?? 0;
   const { activeSession, elapsedSeconds, stopTracking } = useTimeTrackingStore();
   const isTracking = activeSession?.taskId === task._id;
   const allMemberships = useDepartmentStore((s) => s.allMemberships);
+  const projects = useProjectStore((s) => s.projects);
   const currentUser = useAuthStore((s) => s.user);
   const deptName = task.departmentId
     ? allMemberships.find((m) => m.department.id === task.departmentId)?.department.name
+    : undefined;
+  const projectName = task.projectId
+    ? projects.find((p) => p.id === task.projectId)?.name
     : undefined;
   const currentUserId = currentUser?.id ?? currentUser?._id;
   const isAssignedToMe = task.isAssigned && task.assignedTo != null && task.assignedTo === currentUserId;
@@ -134,6 +140,16 @@ export default function TaskCard({ task, onEdit, onDelete, onComment, onCancelRe
         {task.title}
       </h4>
 
+      {/* Project badge */}
+      {projectName && !hideProjectLabel && (
+        <div className="flex items-center mb-1.5">
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-violet-500/10 text-violet-600 dark:text-violet-400 text-[10px] font-semibold max-w-full">
+            <FolderOpen size={9} className="shrink-0" />
+            <span className="truncate">{projectName}</span>
+          </span>
+        </div>
+      )}
+
       {/* Department badge */}
       {deptName && !hideDeptLabel && (
         <div className="flex items-center mb-2">
@@ -188,9 +204,23 @@ export default function TaskCard({ task, onEdit, onDelete, onComment, onCancelRe
             </div>
           )}
         </div>
-        <div className="flex items-center gap-1.5 text-xs text-muted-foreground/60">
-          <Clock size={11} className="shrink-0" />
-          <span>Created {new Date(task.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground/60">
+            <Clock size={11} className="shrink-0" />
+            <span>{new Date(task.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+          </div>
+          {task.createdBy && (
+            <div className="flex items-center gap-1 text-xs text-muted-foreground/60 min-w-0">
+              {task.createdBy.avatar ? (
+                <img src={task.createdBy.avatar} alt="" className="w-3.5 h-3.5 rounded-full object-cover shrink-0" />
+              ) : (
+                <User size={11} className="shrink-0" />
+              )}
+              <span className="truncate max-w-[80px]">
+                {task.createdBy.name ?? task.createdBy.email ?? 'Unknown'}
+              </span>
+            </div>
+          )}
         </div>
       </div>
 

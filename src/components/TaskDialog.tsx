@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/select';
 import type { Task } from '@/types';
 import { useDepartmentStore } from '@/store/departmentStore';
+import { useProjectStore } from '@/store/projectStore';
 import { useAuthStore } from '@/store/authStore';
 import { UserCheck } from 'lucide-react';
 import DescriptionEditor from '@/components/DescriptionEditor';
@@ -46,6 +47,7 @@ interface TaskDialogProps {
     priority?: 'low' | 'medium' | 'high';
     tags?: string[];
     departmentId?: string;
+    projectId?: string;
     isRecurring?: boolean;
     recurrenceType?: 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY' | null;
     recurrenceEndDate?: string | null;
@@ -57,14 +59,17 @@ interface TaskDialogProps {
   dialogTitle?: string;
   lockedDepartmentId?: string;
   lockedDepartmentName?: string;
+  lockedProjectId?: string;
+  lockedProjectName?: string;
 }
 
 export default function TaskDialog({
   open, onClose, onSubmit, task, loading,
   defaultDeadline, defaultScheduledAt,
-  dialogTitle, lockedDepartmentId, lockedDepartmentName,
+  dialogTitle, lockedDepartmentId, lockedDepartmentName, lockedProjectId, lockedProjectName,
 }: TaskDialogProps) {
   const allMemberships = useDepartmentStore((s) => s.allMemberships);
+  const projects = useProjectStore((s) => s.projects);
   const user = useAuthStore((s) => s.user);
 
   const isReadOnly = !!(
@@ -81,6 +86,7 @@ export default function TaskDialog({
   const [priority, setPriority] = useState<'low' | 'medium' | 'high'>(task?.priority || 'medium');
   const [tagsInput, setTagsInput] = useState(task?.tags?.join(', ') || '');
   const [departmentId, setDepartmentId] = useState(lockedDepartmentId || task?.departmentId || '__none__');
+  const [projectId, setProjectId] = useState(lockedProjectId || task?.projectId || '__none__');
   const [isRecurring, setIsRecurring] = useState(task?.isRecurring ?? false);
   const [recurrenceType, setRecurrenceType] = useState<'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY' | ''>(task?.recurrenceType ?? '');
   const [recurrenceEndDate, setRecurrenceEndDate] = useState(task?.recurrenceEndDate ? task.recurrenceEndDate.substring(0, 10) : '');
@@ -102,6 +108,7 @@ export default function TaskDialog({
       setPriority(task?.priority || 'medium');
       setTagsInput(task?.tags?.join(', ') || '');
       setDepartmentId(lockedDepartmentId || task?.departmentId || '__none__');
+      setProjectId(lockedProjectId || task?.projectId || '__none__');
       setIsRecurring(task?.isRecurring ?? false);
       setRecurrenceType(task?.recurrenceType ?? '');
       setRecurrenceEndDate(task?.recurrenceEndDate ? task.recurrenceEndDate.substring(0, 10) : '');
@@ -118,6 +125,7 @@ export default function TaskDialog({
     setPriority('medium');
     setTagsInput('');
     setDepartmentId('__none__');
+    setProjectId('__none__');
     setIsRecurring(false);
     setRecurrenceType('');
     setRecurrenceEndDate('');
@@ -149,6 +157,7 @@ export default function TaskDialog({
       priority,
       tags: tagsInput.split(',').map(t => t.trim()).filter(Boolean),
       departmentId: departmentId === '__none__' ? undefined : departmentId || undefined,
+      projectId: projectId === '__none__' ? undefined : projectId || undefined,
       isRecurring,
       recurrenceType: isRecurring ? (recurrenceType as 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY') : null,
       recurrenceEndDate: isRecurring && recurrenceEndDate ? new Date(`${recurrenceEndDate}T23:59:59`).toISOString() : null,
@@ -284,6 +293,32 @@ export default function TaskDialog({
               </div>
             ) : null}
           </div>
+
+          {/* Project */}
+          {(lockedProjectId || projects.filter(p => !p.archivedAt && !p.deletedAt).length > 0) && (
+            <div className="space-y-1.5">
+              <Label>Project <span className="text-muted-foreground font-normal">(optional)</span></Label>
+              {lockedProjectId ? (
+                <div className="flex items-center h-9 px-3 rounded-xl border border-border bg-muted/50 text-sm text-muted-foreground cursor-not-allowed select-none truncate">
+                  {lockedProjectName || lockedProjectId}
+                </div>
+              ) : (
+                <Select value={projectId} onValueChange={setProjectId} disabled={isReadOnly}>
+                  <SelectTrigger className="rounded-xl">
+                    <SelectValue placeholder="None" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">None</SelectItem>
+                    {projects.filter(p => !p.archivedAt && !p.deletedAt).map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+          )}
 
           {/* Scheduled for + Deadline */}
           <div className="grid grid-cols-2 gap-3">

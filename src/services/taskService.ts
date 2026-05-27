@@ -10,6 +10,7 @@ export interface CreateTaskData {
   deadline?: string;
   scheduledAt?: string | null;
   departmentId?: string;
+  projectId?: string;
   isRecurring?: boolean;
   recurrenceType?: 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY' | null;
   recurrenceEndDate?: string | null;
@@ -47,6 +48,7 @@ export const taskService = {
     scheduledTo?: string;
     personal?: boolean;
     departmentId?: string;
+    projectId?: string;
   }): Promise<TasksResponse> => {
     const response = await api.get<TasksResponse>('/tasks', { params });
     return response.data;

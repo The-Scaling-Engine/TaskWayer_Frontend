@@ -16,7 +16,7 @@ function formatElapsed(seconds: number): string {
 }
 
 interface TimerStartButtonProps {
-  fetchParams: { status: 'doing'; personal?: boolean; departmentId?: string; limit: number };
+  fetchParams: { status: 'doing'; personal?: boolean; departmentId?: string; projectId?: string; limit: number };
 }
 
 export default function TimerStartButton({ fetchParams }: TimerStartButtonProps) {

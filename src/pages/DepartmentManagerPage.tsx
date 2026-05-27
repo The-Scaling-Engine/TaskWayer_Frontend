@@ -5,7 +5,7 @@ import { useAuthStore } from '@/store/authStore';
 import { departmentService } from '@/services/departmentService';
 import { taskService } from '@/services/taskService';
 import { invitationService } from '@/services/invitationService';
-import { adminService } from '@/services/adminService';
+import { userService } from '@/services/userService';
 import { toast } from 'sonner';
 import {
   Building2, ChevronDown, RefreshCw, Loader2, Users, Clock, AlertTriangle, Zap,
@@ -312,10 +312,10 @@ export default function DepartmentManagerPage() {
     const timer = setTimeout(async () => {
       setMemberSearchLoading(true);
       try {
-        const res = await adminService.getUsers({ search: memberSearch, limit: 8 });
+        const res = await userService.searchUsers({ q: memberSearch, limit: 8 });
         if (res.success) {
           setMemberSearchResults(res.data.users.map(u => ({
-            id: u.id ?? u._id, email: u.email, name: u.name,
+            id: u.id, email: u.email, name: u.name,
           })));
         }
       } catch { setMemberSearchResults([]); } finally {

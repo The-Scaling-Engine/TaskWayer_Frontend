@@ -13,6 +13,7 @@ interface TaskQueryParams {
   deadlineTo?: string;
   personal?: boolean;
   departmentId?: string;
+  projectId?: string;
 }
 
 interface TaskState {
