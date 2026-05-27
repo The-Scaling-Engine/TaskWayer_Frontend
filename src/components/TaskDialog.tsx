@@ -1,5 +1,5 @@
 /* eslint-disable react-hooks/set-state-in-effect */
-import { useState, useEffect, type FormEvent } from 'react';
+import { useState, useEffect, useRef, useMemo, type FormEvent } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -17,12 +17,37 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import type { Task } from '@/types';
+import type { Task, TaskNote } from '@/types';
 import { useDepartmentStore } from '@/store/departmentStore';
 import { useProjectStore } from '@/store/projectStore';
 import { useAuthStore } from '@/store/authStore';
-import { UserCheck } from 'lucide-react';
+import { UserCheck, Bold, Italic, List, Pencil, Trash2, Check, GripVertical } from 'lucide-react';
 import DescriptionEditor from '@/components/DescriptionEditor';
+import { useEditor, EditorContent } from '@tiptap/react';
+import StarterKit from '@tiptap/starter-kit';
+import Placeholder from '@tiptap/extension-placeholder';
+import DOMPurify from 'dompurify';
+import { cn } from '@/lib/utils';
+import { taskNoteService } from '@/services/taskNoteService';
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  KeyboardSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  useSortable,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  arrayMove,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+
+// ─── Helpers ──────────────────────────────────────────────────
 
 function toDatetimeLocal(isoStr: string): string {
   const d = new Date(isoStr);
@@ -34,6 +59,203 @@ function formatCreatedAt(isoStr: string): string {
   const d = new Date(isoStr);
   return d.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
+
+function formatNoteTime(isoStr: string): string {
+  const d = new Date(isoStr);
+  return d.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+function isNoteEmpty(html: string): boolean {
+  return !html.replace(/<[^>]*>/g, '').trim();
+}
+
+function wasEdited(note: TaskNote): boolean {
+  return new Date(note.updatedAt).getTime() - new Date(note.createdAt).getTime() > 1000;
+}
+
+// ─── NoteItem ─────────────────────────────────────────────────
+
+interface NoteItemProps {
+  note: TaskNote;
+  currentUserEmail?: string;
+  editingNoteId: string | null;
+  confirmDeleteNoteId: string | null;
+  deletingNoteIds: Set<string>;
+  newNoteId: string | null;
+  onToggleDone: (note: TaskNote) => void;
+  onStartEdit: (note: TaskNote) => void;
+  onRequestDelete: (noteId: string) => void;
+  onConfirmDelete: (noteId: string) => void;
+  onCancelDelete: () => void;
+  dragHandle?: React.ReactNode;
+  isDragging?: boolean;
+}
+
+function NoteItem({
+  note,
+  currentUserEmail,
+  editingNoteId,
+  confirmDeleteNoteId,
+  deletingNoteIds,
+  newNoteId,
+  onToggleDone,
+  onStartEdit,
+  onRequestDelete,
+  onConfirmDelete,
+  onCancelDelete,
+  dragHandle,
+  isDragging,
+}: NoteItemProps) {
+  const isOwnNote = note.author.email === currentUserEmail;
+  const isEditing  = editingNoteId === note.id;
+  const isConfirming = confirmDeleteNoteId === note.id;
+  const isDeleting = deletingNoteIds.has(note.id);
+  const isNew  = newNoteId === note.id;
+  const edited = wasEdited(note);
+
+  return (
+    <div
+      className={cn(
+        'group flex items-start gap-2 px-2 py-2.5 rounded-xl transition-all duration-200',
+        'hover:bg-muted/40',
+        isDeleting && 'opacity-0 -translate-y-1 scale-[0.98] pointer-events-none',
+        note.done && !isDeleting && 'opacity-50',
+        isNew && 'animate-in fade-in-0 slide-in-from-bottom-2 duration-300',
+        isDragging && 'opacity-30',
+      )}
+    >
+      {/* Drag handle */}
+      {dragHandle}
+
+      {/* Checkbox */}
+      <button
+        type="button"
+        onClick={() => onToggleDone(note)}
+        className={cn(
+          'shrink-0 mt-0.5 w-[18px] h-[18px] rounded border-2 flex items-center justify-center transition-colors',
+          note.done ? 'bg-primary border-primary' : 'border-border hover:border-primary',
+        )}
+      >
+        {note.done && <Check size={10} className="text-primary-foreground" strokeWidth={3} />}
+      </button>
+
+      {/* Content area */}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1.5 mb-0.5">
+          <span className="text-[11px] text-muted-foreground font-medium truncate">
+            {note.author.name ?? note.author.email.split('@')[0]}
+          </span>
+          <span className="text-muted-foreground/40 text-[10px]">·</span>
+          <span className="text-[11px] text-muted-foreground/70 shrink-0">
+            {formatNoteTime(note.createdAt)}
+            {edited && ' · edited'}
+          </span>
+        </div>
+
+        {!isEditing && (
+          <div
+            className={cn(
+              'text-sm prose prose-sm dark:prose-invert max-w-none',
+              '[&_p]:my-0 [&_ul]:my-0.5 [&_ol]:my-0.5 [&_p]:leading-snug',
+              note.done && '[&_p]:line-through [&_li]:line-through [&_span]:line-through',
+            )}
+            dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(note.content) }}
+          />
+        )}
+
+        {isOwnNote && !isEditing && (
+          isConfirming ? (
+            <div className="flex items-center gap-2 mt-1.5 animate-in fade-in-0 slide-in-from-bottom-1 duration-150">
+              <span className="text-xs text-muted-foreground">Delete this note?</span>
+              <button type="button" onClick={onCancelDelete}
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors px-1.5 py-0.5 rounded-md hover:bg-muted">
+                Keep
+              </button>
+              <button type="button" onClick={() => onConfirmDelete(note.id)}
+                className="text-xs font-medium text-destructive hover:text-destructive/80 transition-colors px-1.5 py-0.5 rounded-md hover:bg-destructive/10">
+                Yes, delete
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5 mt-1 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+              <button type="button" onClick={() => onStartEdit(note)}
+                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors">
+                <Pencil size={10} /> Edit
+              </button>
+              <span className="text-muted-foreground/40 text-xs">·</span>
+              <button type="button" onClick={() => onRequestDelete(note.id)}
+                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive transition-colors">
+                <Trash2 size={10} /> Delete
+              </button>
+            </div>
+          )
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── SortableNoteItem ─────────────────────────────────────────
+
+function SortableNoteItem(props: NoteItemProps) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: props.note.id });
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      {...attributes}
+      className={cn(
+        'rounded-xl',
+        isDragging && 'z-50 shadow-lg bg-background border border-border/60 opacity-90',
+      )}
+    >
+      <NoteItem
+        {...props}
+        dragHandle={
+          <button
+            {...listeners}
+            type="button"
+            tabIndex={-1}
+            className="shrink-0 mt-0.5 opacity-0 group-hover:opacity-100 cursor-grab active:cursor-grabbing text-muted-foreground/40 hover:text-muted-foreground transition-opacity touch-none"
+          >
+            <GripVertical size={14} />
+          </button>
+        }
+      />
+    </div>
+  );
+}
+
+// ─── NoteToolbarBtn ───────────────────────────────────────────
+
+function NoteToolbarBtn({
+  children,
+  onClick,
+  active,
+  title,
+}: {
+  children: React.ReactNode;
+  onClick?: () => void;
+  active?: boolean;
+  title?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      className={cn(
+        'p-1 rounded transition-colors text-muted-foreground hover:text-foreground hover:bg-muted',
+        active && 'bg-muted text-foreground',
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
+// ─── TaskDialogProps ──────────────────────────────────────────
 
 interface TaskDialogProps {
   open: boolean;
@@ -61,12 +283,16 @@ interface TaskDialogProps {
   lockedDepartmentName?: string;
   lockedProjectId?: string;
   lockedProjectName?: string;
+  initialTab?: 'details' | 'notes';
 }
+
+// ─── TaskDialog ───────────────────────────────────────────────
 
 export default function TaskDialog({
   open, onClose, onSubmit, task, loading,
   defaultDeadline, defaultScheduledAt,
   dialogTitle, lockedDepartmentId, lockedDepartmentName, lockedProjectId, lockedProjectName,
+  initialTab,
 }: TaskDialogProps) {
   const allMemberships = useDepartmentStore((s) => s.allMemberships);
   const projects = useProjectStore((s) => s.projects);
@@ -78,6 +304,7 @@ export default function TaskDialog({
     (task.assignedTo === user?._id || task.assignedTo === user?.id)
   );
 
+  // ── Details tab state ──────────────────────────────────────
   const [title, setTitle] = useState(task?.title || '');
   const [description, setDescription] = useState(task?.description || '');
   const [status, setStatus] = useState<'todo' | 'doing' | 'done'>(task?.status || 'todo');
@@ -92,6 +319,42 @@ export default function TaskDialog({
   const [recurrenceEndDate, setRecurrenceEndDate] = useState(task?.recurrenceEndDate ? task.recurrenceEndDate.substring(0, 10) : '');
   const [error, setError] = useState('');
 
+  // ── Update Notes tab state ─────────────────────────────────
+  const [activeTab, setActiveTab] = useState<'details' | 'notes'>('details');
+  const prevTabRef = useRef<'details' | 'notes'>('details');
+  const [notes, setNotes] = useState<TaskNote[]>([]);
+  const [notesLoading, setNotesLoading] = useState(false);
+  const [noteContent, setNoteContent] = useState('');
+  const [noteSubmitting, setNoteSubmitting] = useState(false);
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+  const [confirmDeleteNoteId, setConfirmDeleteNoteId] = useState<string | null>(null);
+  const [deletingNoteIds, setDeletingNoteIds] = useState<Set<string>>(new Set());
+  const [newNoteId, setNewNoteId] = useState<string | null>(null);
+
+  // ── Sorted notes: undone (by order) then done (by createdAt)
+  const sortedNotes = useMemo(() => {
+    const undone = notes.filter(n => !n.done).sort((a, b) => a.order - b.order);
+    const done   = notes.filter(n =>  n.done).sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    return [...undone, ...done];
+  }, [notes]);
+
+  // ── DnD sensors ───────────────────────────────────────────
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+
+  // ── TipTap note editor ─────────────────────────────────────
+  const noteEditor = useEditor({
+    extensions: [
+      StarterKit,
+      Placeholder.configure({ placeholder: 'Write a note...' }),
+    ],
+    content: '',
+    onUpdate: ({ editor }) => setNoteContent(editor.getHTML()),
+  });
+
+  // ── Sync form on open / task change ───────────────────────
   useEffect(() => {
     if (open) {
       setTitle(task?.title || '');
@@ -116,42 +379,82 @@ export default function TaskDialog({
     }
   }, [task, open, defaultDeadline, defaultScheduledAt]);
 
+  // Reset notes state on open/close
+  useEffect(() => {
+    if (open) {
+      const tab = initialTab ?? 'details';
+      setActiveTab(tab);
+      prevTabRef.current = tab;
+    }
+    if (!open) {
+      setActiveTab('details');
+      prevTabRef.current = 'details';
+      setNotes([]);
+      setEditingNoteId(null);
+      setConfirmDeleteNoteId(null);
+      setDeletingNoteIds(new Set());
+      setNewNoteId(null);
+      setNoteContent('');
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      noteEditor?.commands.clearContent();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, initialTab]);
+
+  // Load notes when Update Notes tab activated
+  useEffect(() => {
+    if (activeTab === 'notes' && task?._id && open) {
+      setNotesLoading(true);
+      taskNoteService.getNotes(task._id)
+        .then(res => setNotes(res.data))
+        .catch(() => {})
+        .finally(() => setNotesLoading(false));
+    }
+  }, [activeTab, task?._id, open]);
+
+  // Load editor content when entering edit mode
+  useEffect(() => {
+    if (editingNoteId && noteEditor) {
+      const note = notes.find(n => n.id === editingNoteId);
+      if (note) {
+        noteEditor.commands.setContent(note.content);
+        setNoteContent(note.content);
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editingNoteId]);
+
+  // ── Tab switch ────────────────────────────────────────────
+  const handleTabChange = (tab: 'details' | 'notes') => {
+    prevTabRef.current = activeTab;
+    setActiveTab(tab);
+  };
+
+  // ── Form reset ────────────────────────────────────────────
   const resetForm = () => {
-    setTitle('');
-    setDescription('');
-    setStatus('todo');
-    setDeadline('');
-    setScheduledAt('');
-    setPriority('medium');
-    setTagsInput('');
-    setDepartmentId('__none__');
-    setProjectId('__none__');
-    setIsRecurring(false);
-    setRecurrenceType('');
-    setRecurrenceEndDate('');
+    setTitle(''); setDescription(''); setStatus('todo');
+    setDeadline(''); setScheduledAt(''); setPriority('medium');
+    setTagsInput(''); setDepartmentId('__none__'); setProjectId('__none__');
+    setIsRecurring(false); setRecurrenceType(''); setRecurrenceEndDate('');
     setError('');
   };
 
+  // ── Details form submit ───────────────────────────────────
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     if (isReadOnly) return;
     if (!title.trim()) { setError('Title is required'); return; }
-
     if (isRecurring) {
       if (!deadline) { setError('Deadline is required for recurring tasks'); return; }
       if (!recurrenceType) { setError('Please select how often this task repeats'); return; }
     }
-
     if (deadline && !task?._id) {
-      const selected = new Date(deadline);
-      if (isNaN(selected.getTime())) { setError('Invalid deadline'); return; }
-      if (selected < new Date()) { setError('Deadline cannot be in the past'); return; }
+      const s = new Date(deadline);
+      if (isNaN(s.getTime())) { setError('Invalid deadline'); return; }
+      if (s < new Date()) { setError('Deadline cannot be in the past'); return; }
     }
-
     onSubmit({
-      title: title.trim(),
-      description,
-      status,
+      title: title.trim(), description, status,
       deadline: deadline ? new Date(deadline).toISOString() : undefined,
       scheduledAt: scheduledAt ? new Date(scheduledAt).toISOString() : null,
       priority,
@@ -163,6 +466,99 @@ export default function TaskDialog({
       recurrenceEndDate: isRecurring && recurrenceEndDate ? new Date(`${recurrenceEndDate}T23:59:59`).toISOString() : null,
     });
   };
+
+  // ── Note handlers ─────────────────────────────────────────
+  const handleAddNote = async () => {
+    if (!task?._id || isNoteEmpty(noteContent) || noteSubmitting) return;
+    setNoteSubmitting(true);
+    try {
+      const res = await taskNoteService.addNote(task._id, noteContent);
+      setNotes(prev => [...prev, res.data]);
+      setNewNoteId(res.data.id);
+      setTimeout(() => setNewNoteId(null), 400);
+      noteEditor?.commands.clearContent();
+      setNoteContent('');
+    } catch { /* silent */ } finally { setNoteSubmitting(false); }
+  };
+
+  const handleSaveEdit = async () => {
+    if (!task?._id || !editingNoteId || isNoteEmpty(noteContent) || noteSubmitting) return;
+    setNoteSubmitting(true);
+    try {
+      const res = await taskNoteService.updateNote(task._id, editingNoteId, noteContent);
+      setNotes(prev => prev.map(n => n.id === editingNoteId ? res.data : n));
+      setEditingNoteId(null);
+      noteEditor?.commands.clearContent();
+      setNoteContent('');
+    } catch { /* silent */ } finally { setNoteSubmitting(false); }
+  };
+
+  const handleCancelEdit = () => {
+    setEditingNoteId(null);
+    noteEditor?.commands.clearContent();
+    setNoteContent('');
+  };
+
+  const handleToggleDone = async (note: TaskNote) => {
+    if (!task?._id) return;
+    setNotes(prev => prev.map(n => n.id === note.id ? { ...n, done: !n.done } : n));
+    try {
+      const res = await taskNoteService.toggleDone(task._id, note.id);
+      setNotes(prev => prev.map(n => n.id === note.id ? res.data : n));
+    } catch {
+      setNotes(prev => prev.map(n => n.id === note.id ? note : n));
+    }
+  };
+
+  const handleDeleteNote = (noteId: string) => {
+    if (!task?._id) return;
+    setConfirmDeleteNoteId(null);
+    setDeletingNoteIds(prev => new Set([...prev, noteId]));
+    setTimeout(async () => {
+      try {
+        await taskNoteService.deleteNote(task._id!, noteId);
+        setNotes(prev => prev.filter(n => n.id !== noteId));
+        setDeletingNoteIds(prev => { const s = new Set(prev); s.delete(noteId); return s; });
+        if (editingNoteId === noteId) {
+          setEditingNoteId(null);
+          noteEditor?.commands.clearContent();
+          setNoteContent('');
+        }
+      } catch {
+        setDeletingNoteIds(prev => { const s = new Set(prev); s.delete(noteId); return s; });
+      }
+    }, 220);
+  };
+
+  // ── DnD handlers ─────────────────────────────────────────
+  const handleDragStart = () => {
+    document.body.style.overflow = 'hidden';
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    document.body.style.overflow = '';
+    const { active, over } = event;
+    if (!over || active.id === over.id || !task?._id) return;
+
+    const undone = notes.filter(n => !n.done).sort((a, b) => a.order - b.order);
+    const oldIdx = undone.findIndex(n => n.id === active.id);
+    const newIdx = undone.findIndex(n => n.id === over.id);
+    if (oldIdx === -1 || newIdx === -1) return;
+
+    // Update order field so sortedNotes memo stays stable after reorder
+    const reordered = arrayMove(undone, oldIdx, newIdx).map((n, i) => ({ ...n, order: i }));
+    const done = notes.filter(n => n.done);
+    setNotes([...reordered, ...done]);
+
+    taskNoteService.reorderNotes(task._id, reordered.map(n => n.id)).catch(() => {
+      if (task._id) {
+        taskNoteService.getNotes(task._id).then(res => setNotes(res.data)).catch(() => {});
+      }
+    });
+  };
+
+  // ── Tab slide direction ───────────────────────────────────
+  const slideIn = activeTab === 'notes' ? 'slide-in-from-right-2' : 'slide-in-from-left-2';
 
   return (
     <Dialog
@@ -185,247 +581,343 @@ export default function TaskDialog({
           </div>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-3 mt-2">
-          {error && (
-            <div className="bg-destructive/10 border border-destructive/30 text-destructive rounded-xl px-3 py-2 text-sm">
-              {error}
-            </div>
-          )}
-
-          {/* Title */}
-          <div className="space-y-1.5">
-            <Label htmlFor="task-title">Title</Label>
-            <Input
-              id="task-title"
-              placeholder="Enter task title..."
-              value={title}
-              onChange={(e) => { setTitle(e.target.value); setError(''); }}
-              className="rounded-xl"
-              autoFocus={!isReadOnly}
-              disabled={isReadOnly}
-            />
-          </div>
-
-          {/* Description (8) + Status & Priority (2) — side by side */}
-          <div className="grid grid-cols-[1fr_auto] gap-3 items-start">
-            {/* Description — 8 */}
-            <div className="space-y-1.5">
-              <Label>Description</Label>
-              <DescriptionEditor
-                key={task?._id ?? (open ? 'new-open' : 'new-closed')}
-                value={description}
-                onChange={setDescription}
-                disabled={isReadOnly}
-                className="min-h-[110px]"
-              />
-            </div>
-
-            {/* Status + Priority — 2 (narrow column) */}
-            <div className="space-y-2.5 w-[120px] shrink-0">
-              <div className="space-y-1.5">
-                <Label className="text-xs">Status</Label>
-                <Select value={status} onValueChange={(v) => setStatus(v as 'todo' | 'doing' | 'done')} disabled={isReadOnly}>
-                  <SelectTrigger className="rounded-xl text-xs h-8 px-2">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="todo">To Do</SelectItem>
-                    <SelectItem value="doing">Doing</SelectItem>
-                    <SelectItem value="done">Done</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Priority</Label>
-                <Select value={priority} onValueChange={(v) => setPriority(v as 'low' | 'medium' | 'high')} disabled={isReadOnly}>
-                  <SelectTrigger className="rounded-xl text-xs h-8 px-2">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="low">Low</SelectItem>
-                    <SelectItem value="medium">Medium</SelectItem>
-                    <SelectItem value="high">High</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </div>
-
-          {/* Tags + Department (7/3) */}
-          <div className={`grid gap-3 ${lockedDepartmentId || allMemberships.length > 0 ? 'grid-cols-[7fr_3fr]' : 'grid-cols-1'}`}>
-            <div className="space-y-1.5">
-              <Label htmlFor="task-tags">Tags <span className="text-muted-foreground font-normal">(comma-separated)</span></Label>
-              <Input
-                id="task-tags"
-                type="text"
-                placeholder="bug, feature, etc."
-                value={tagsInput}
-                onChange={(e) => setTagsInput(e.target.value)}
-                className="rounded-xl"
-                disabled={isReadOnly}
-              />
-            </div>
-
-            {lockedDepartmentId ? (
-              <div className="space-y-1.5">
-                <Label>Department</Label>
-                <div className="flex items-center h-9 px-3 rounded-xl border border-border bg-muted/50 text-sm text-muted-foreground cursor-not-allowed select-none truncate">
-                  {lockedDepartmentName || lockedDepartmentId}
-                </div>
-              </div>
-            ) : allMemberships.length > 0 ? (
-              <div className="space-y-1.5">
-                <Label>Department</Label>
-                <Select value={departmentId} onValueChange={setDepartmentId} disabled={isReadOnly}>
-                  <SelectTrigger className="rounded-xl">
-                    <SelectValue placeholder="None" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">None (Personal)</SelectItem>
-                    {allMemberships.map((m) => (
-                      <SelectItem key={m.id} value={m.department.id}>
-                        {m.department.name}
-                        <span className="ml-2 text-[10px] text-muted-foreground">[{m.role}]</span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            ) : null}
-          </div>
-
-          {/* Project */}
-          {(lockedProjectId || projects.filter(p => !p.archivedAt && !p.deletedAt).length > 0) && (
-            <div className="space-y-1.5">
-              <Label>Project <span className="text-muted-foreground font-normal">(optional)</span></Label>
-              {lockedProjectId ? (
-                <div className="flex items-center h-9 px-3 rounded-xl border border-border bg-muted/50 text-sm text-muted-foreground cursor-not-allowed select-none truncate">
-                  {lockedProjectName || lockedProjectId}
-                </div>
-              ) : (
-                <Select value={projectId} onValueChange={setProjectId} disabled={isReadOnly}>
-                  <SelectTrigger className="rounded-xl">
-                    <SelectValue placeholder="None" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">None</SelectItem>
-                    {projects.filter(p => !p.archivedAt && !p.deletedAt).map((p) => (
-                      <SelectItem key={p.id} value={p.id}>
-                        {p.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+        {/* ── Tab bar — only when editing an existing task ─── */}
+        {task?._id && (
+          <div className="flex border-b border-border -mt-1">
+            <button
+              type="button"
+              onClick={() => handleTabChange('details')}
+              className={cn(
+                'px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors',
+                activeTab === 'details'
+                  ? 'border-[#FE812C] text-[#FE812C]'
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
               )}
-            </div>
-          )}
-
-          {/* Scheduled for + Deadline */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="task-scheduled">Scheduled for</Label>
-              <Input
-                id="task-scheduled"
-                type="datetime-local"
-                step="60"
-                value={scheduledAt}
-                onChange={(e) => setScheduledAt(e.target.value)}
-                className="rounded-xl"
-                disabled={isReadOnly}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="task-deadline">Deadline <span className="text-muted-foreground font-normal">(opt.)</span></Label>
-              <Input
-                id="task-deadline"
-                type="datetime-local"
-                step="60"
-                value={deadline}
-                onChange={(e) => setDeadline(e.target.value)}
-                className="rounded-xl"
-                disabled={isReadOnly}
-              />
-            </div>
+            >
+              Details
+            </button>
+            <button
+              type="button"
+              onClick={() => handleTabChange('notes')}
+              className={cn(
+                'px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors flex items-center gap-1.5',
+                activeTab === 'notes'
+                  ? 'border-[#FE812C] text-[#FE812C]'
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
+              )}
+            >
+              Update Notes
+              {notes.length > 0 && (
+                <span className={cn(
+                  'text-[10px] font-semibold px-1.5 py-0.5 rounded-full leading-none',
+                  activeTab === 'notes'
+                    ? 'bg-[#FE812C]/15 text-[#FE812C]'
+                    : 'bg-muted text-muted-foreground'
+                )}>
+                  {notes.length}
+                </span>
+              )}
+            </button>
           </div>
+        )}
 
-          {/* Recurring */}
-          {!isReadOnly && (
-            <div className="space-y-2.5 pt-0.5">
-              <div className="flex items-center gap-2">
-                <input
-                  id="task-recurring"
-                  type="checkbox"
-                  checked={isRecurring}
-                  onChange={(e) => setIsRecurring(e.target.checked)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); setIsRecurring(!isRecurring); } }}
-                  className="w-4 h-4 rounded accent-[#FE812C] cursor-pointer"
+        {/* ── Details tab ─────────────────────────────────── */}
+        {(!task?._id || activeTab === 'details') && (
+          <div
+            key={`details-${task?._id ?? 'new'}`}
+            className={cn(
+              task?._id && 'animate-in fade-in-0 duration-200',
+              task?._id && activeTab === 'details' && 'slide-in-from-left-2',
+            )}
+          >
+            <form onSubmit={handleSubmit} className="space-y-3 mt-2">
+              {error && (
+                <div className="bg-destructive/10 border border-destructive/30 text-destructive rounded-xl px-3 py-2 text-sm">
+                  {error}
+                </div>
+              )}
+
+              <div className="space-y-1.5">
+                <Label htmlFor="task-title">Title</Label>
+                <Input
+                  id="task-title"
+                  placeholder="Enter task title..."
+                  value={title}
+                  onChange={(e) => { setTitle(e.target.value); setError(''); }}
+                  className="rounded-xl"
+                  autoFocus={!isReadOnly}
+                  disabled={isReadOnly}
                 />
-                <Label htmlFor="task-recurring" className="cursor-pointer font-normal">
-                  Make this a recurring task
-                </Label>
               </div>
 
-              {isRecurring && (
-                <div className="grid grid-cols-2 gap-3 pl-6">
+              <div className="grid grid-cols-[1fr_auto] gap-3 items-start">
+                <div className="space-y-1.5">
+                  <Label>Description</Label>
+                  <DescriptionEditor
+                    key={task?._id ?? (open ? 'new-open' : 'new-closed')}
+                    value={description}
+                    onChange={setDescription}
+                    disabled={isReadOnly}
+                    className="min-h-[110px]"
+                  />
+                </div>
+                <div className="space-y-2.5 w-[120px] shrink-0">
                   <div className="space-y-1.5">
-                    <Label>Repeats</Label>
-                    <Select value={recurrenceType} onValueChange={(v) => setRecurrenceType(v as 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY')}>
-                      <SelectTrigger className="rounded-xl">
-                        <SelectValue placeholder="Select frequency" />
-                      </SelectTrigger>
+                    <Label className="text-xs">Status</Label>
+                    <Select value={status} onValueChange={(v) => setStatus(v as 'todo' | 'doing' | 'done')} disabled={isReadOnly}>
+                      <SelectTrigger className="rounded-xl text-xs h-8 px-2"><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="DAILY">Daily</SelectItem>
-                        <SelectItem value="WEEKLY">Weekly</SelectItem>
-                        <SelectItem value="MONTHLY">Monthly</SelectItem>
-                        <SelectItem value="YEARLY">Yearly</SelectItem>
+                        <SelectItem value="todo">To Do</SelectItem>
+                        <SelectItem value="doing">Doing</SelectItem>
+                        <SelectItem value="done">Done</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="space-y-1.5">
-                    <Label htmlFor="task-recurrence-end">End date <span className="text-muted-foreground font-normal">(optional)</span></Label>
-                    <Input
-                      id="task-recurrence-end"
-                      type="date"
-                      value={recurrenceEndDate}
-                      onChange={(e) => setRecurrenceEndDate(e.target.value)}
-                      className="rounded-xl"
-                    />
+                    <Label className="text-xs">Priority</Label>
+                    <Select value={priority} onValueChange={(v) => setPriority(v as 'low' | 'medium' | 'high')} disabled={isReadOnly}>
+                      <SelectTrigger className="rounded-xl text-xs h-8 px-2"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="low">Low</SelectItem>
+                        <SelectItem value="medium">Medium</SelectItem>
+                        <SelectItem value="high">High</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
+              </div>
+
+              <div className={`grid gap-3 ${lockedDepartmentId || allMemberships.length > 0 ? 'grid-cols-[7fr_3fr]' : 'grid-cols-1'}`}>
+                <div className="space-y-1.5">
+                  <Label htmlFor="task-tags">Tags <span className="text-muted-foreground font-normal">(comma-separated)</span></Label>
+                  <Input id="task-tags" placeholder="bug, feature, etc." value={tagsInput} onChange={(e) => setTagsInput(e.target.value)} className="rounded-xl" disabled={isReadOnly} />
+                </div>
+                {lockedDepartmentId ? (
+                  <div className="space-y-1.5">
+                    <Label>Department</Label>
+                    <div className="flex items-center h-9 px-3 rounded-xl border border-border bg-muted/50 text-sm text-muted-foreground cursor-not-allowed select-none truncate">
+                      {lockedDepartmentName || lockedDepartmentId}
+                    </div>
+                  </div>
+                ) : allMemberships.length > 0 ? (
+                  <div className="space-y-1.5">
+                    <Label>Department</Label>
+                    <Select value={departmentId} onValueChange={setDepartmentId} disabled={isReadOnly}>
+                      <SelectTrigger className="rounded-xl"><SelectValue placeholder="None" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">None (Personal)</SelectItem>
+                        {allMemberships.map((m) => (
+                          <SelectItem key={m.id} value={m.department.id}>
+                            {m.department.name}
+                            <span className="ml-2 text-[10px] text-muted-foreground">[{m.role}]</span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ) : null}
+              </div>
+
+              {(lockedProjectId || projects.filter(p => !p.archivedAt && !p.deletedAt).length > 0) && (
+                <div className="space-y-1.5">
+                  <Label>Project <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                  {lockedProjectId ? (
+                    <div className="flex items-center h-9 px-3 rounded-xl border border-border bg-muted/50 text-sm text-muted-foreground cursor-not-allowed select-none truncate">
+                      {lockedProjectName || lockedProjectId}
+                    </div>
+                  ) : (
+                    <Select value={projectId} onValueChange={setProjectId} disabled={isReadOnly}>
+                      <SelectTrigger className="rounded-xl"><SelectValue placeholder="None" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">None</SelectItem>
+                        {projects.filter(p => !p.archivedAt && !p.deletedAt).map((p) => (
+                          <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
               )}
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="task-scheduled">Scheduled for</Label>
+                  <Input id="task-scheduled" type="datetime-local" step="60" value={scheduledAt} onChange={(e) => setScheduledAt(e.target.value)} className="rounded-xl" disabled={isReadOnly} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="task-deadline">Deadline <span className="text-muted-foreground font-normal">(opt.)</span></Label>
+                  <Input id="task-deadline" type="datetime-local" step="60" value={deadline} onChange={(e) => setDeadline(e.target.value)} className="rounded-xl" disabled={isReadOnly} />
+                </div>
+              </div>
+
+              {!isReadOnly && (
+                <div className="space-y-2.5 pt-0.5">
+                  <div className="flex items-center gap-2">
+                    <input
+                      id="task-recurring"
+                      type="checkbox"
+                      checked={isRecurring}
+                      onChange={(e) => setIsRecurring(e.target.checked)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); setIsRecurring(!isRecurring); } }}
+                      className="w-4 h-4 rounded accent-[#FE812C] cursor-pointer"
+                    />
+                    <Label htmlFor="task-recurring" className="cursor-pointer font-normal">Make this a recurring task</Label>
+                  </div>
+                  {isRecurring && (
+                    <div className="grid grid-cols-2 gap-3 pl-6">
+                      <div className="space-y-1.5">
+                        <Label>Repeats</Label>
+                        <Select value={recurrenceType} onValueChange={(v) => setRecurrenceType(v as 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY')}>
+                          <SelectTrigger className="rounded-xl"><SelectValue placeholder="Select frequency" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="DAILY">Daily</SelectItem>
+                            <SelectItem value="WEEKLY">Weekly</SelectItem>
+                            <SelectItem value="MONTHLY">Monthly</SelectItem>
+                            <SelectItem value="YEARLY">Yearly</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="task-recurrence-end">End date <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                        <Input id="task-recurrence-end" type="date" value={recurrenceEndDate} onChange={(e) => setRecurrenceEndDate(e.target.value)} className="rounded-xl" />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {task?.createdAt && (
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">Created at</Label>
+                  <p className="text-xs text-muted-foreground px-3 py-1.5 bg-muted/40 rounded-xl">{formatCreatedAt(task.createdAt)}</p>
+                </div>
+              )}
+
+              {isReadOnly && (
+                <p className="text-xs text-muted-foreground text-center py-1 bg-muted/40 rounded-xl px-3">
+                  This task was assigned to you. Contact your manager to make changes.
+                </p>
+              )}
+
+              <DialogFooter className="pt-1">
+                <Button type="button" variant="outline" onClick={onClose} className="rounded-xl">
+                  {isReadOnly ? 'Close' : 'Cancel'}
+                </Button>
+                {!isReadOnly && (
+                  <Button type="submit" disabled={loading} className="rounded-xl bg-[#FE812C] hover:bg-[#e5732a] text-white">
+                    {loading ? 'Saving...' : task?._id ? 'Update Task' : 'Create Task'}
+                  </Button>
+                )}
+              </DialogFooter>
+            </form>
+          </div>
+        )}
+
+        {/* ── Update Notes tab ─────────────────────────────── */}
+        {task?._id && activeTab === 'notes' && (
+          <div
+            key="notes-content"
+            className={cn('mt-3 space-y-3 animate-in fade-in-0 duration-200', slideIn)}
+          >
+            {/* Notes feed */}
+            <div className="space-y-0.5 max-h-[320px] overflow-y-auto pr-1 -mx-1 px-1">
+              {notesLoading && (
+                <p className="text-sm text-muted-foreground text-center py-8">Loading notes...</p>
+              )}
+              {!notesLoading && sortedNotes.length === 0 && (
+                <div className="text-center py-10 space-y-1">
+                  <p className="text-sm text-muted-foreground">No notes yet.</p>
+                  <p className="text-xs text-muted-foreground/60">Add your first note below.</p>
+                </div>
+              )}
+
+              {!notesLoading && sortedNotes.length > 0 && (() => {
+                const undoneNotes = sortedNotes.filter(n => !n.done);
+                const doneNotes   = sortedNotes.filter(n =>  n.done);
+                const noteProps = {
+                  currentUserEmail: user?.email,
+                  editingNoteId,
+                  confirmDeleteNoteId,
+                  deletingNoteIds,
+                  newNoteId,
+                  onToggleDone: handleToggleDone,
+                  onStartEdit: (n: TaskNote) => setEditingNoteId(n.id),
+                  onRequestDelete: setConfirmDeleteNoteId,
+                  onConfirmDelete: handleDeleteNote,
+                  onCancelDelete: () => setConfirmDeleteNoteId(null),
+                };
+                return (
+                  <DndContext
+                    sensors={sensors}
+                    collisionDetection={closestCenter}
+                    onDragStart={handleDragStart}
+                    onDragEnd={handleDragEnd}
+                    onDragCancel={() => { document.body.style.overflow = ''; }}
+                  >
+                    {/* Undone notes — sortable */}
+                    <SortableContext items={undoneNotes.map(n => n.id)} strategy={verticalListSortingStrategy}>
+                      {undoneNotes.map(note => (
+                        <SortableNoteItem key={note.id} note={note} {...noteProps} />
+                      ))}
+                    </SortableContext>
+
+                    {/* Done notes — fixed at bottom */}
+                    {doneNotes.length > 0 && (
+                      <div className={cn('space-y-0.5', undoneNotes.length > 0 && 'mt-1.5 pt-1.5 border-t border-border/40')}>
+                        {doneNotes.map(note => (
+                          <NoteItem key={note.id} note={note} {...noteProps} />
+                        ))}
+                      </div>
+                    )}
+                  </DndContext>
+                );
+              })()}
             </div>
-          )}
 
-          {task?.createdAt && (
-            <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">Created at</Label>
-              <p className="text-xs text-muted-foreground px-3 py-1.5 bg-muted/40 rounded-xl">
-                {formatCreatedAt(task.createdAt)}
-              </p>
+            {/* Editor area */}
+            <div className="border-t border-border pt-3">
+              {editingNoteId && (
+                <p className="text-xs font-medium text-[#FE812C] mb-1.5 flex items-center gap-1">
+                  <Pencil size={10} /> Editing note
+                </p>
+              )}
+              <div className="border border-input rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-[#FE812C]/20 transition-shadow">
+                <div className="flex items-center gap-0.5 px-2 py-1 border-b border-border bg-muted/30">
+                  <NoteToolbarBtn active={noteEditor?.isActive('bold')} onClick={() => noteEditor?.chain().focus().toggleBold().run()} title="Bold"><Bold size={11} /></NoteToolbarBtn>
+                  <NoteToolbarBtn active={noteEditor?.isActive('italic')} onClick={() => noteEditor?.chain().focus().toggleItalic().run()} title="Italic"><Italic size={11} /></NoteToolbarBtn>
+                  <NoteToolbarBtn active={noteEditor?.isActive('bulletList')} onClick={() => noteEditor?.chain().focus().toggleBulletList().run()} title="Bullet list"><List size={11} /></NoteToolbarBtn>
+                </div>
+                <EditorContent
+                  editor={noteEditor}
+                  className={cn(
+                    'px-3 py-2 min-h-[64px] text-sm',
+                    '[&_.ProseMirror]:outline-none',
+                    '[&_.ProseMirror_p.is-editor-empty:first-child::before]:content-[attr(data-placeholder)]',
+                    '[&_.ProseMirror_p.is-editor-empty:first-child::before]:text-muted-foreground',
+                    '[&_.ProseMirror_p.is-editor-empty:first-child::before]:float-left',
+                    '[&_.ProseMirror_p.is-editor-empty:first-child::before]:pointer-events-none',
+                    '[&_.ProseMirror_p]:my-0.5',
+                  )}
+                />
+              </div>
+              <div className="flex justify-end gap-2 mt-2">
+                {editingNoteId && (
+                  <Button type="button" variant="outline" onClick={handleCancelEdit} className="rounded-xl h-8 px-3 text-xs">
+                    Cancel
+                  </Button>
+                )}
+                <Button
+                  type="button"
+                  onClick={editingNoteId ? handleSaveEdit : handleAddNote}
+                  disabled={noteSubmitting || isNoteEmpty(noteContent)}
+                  className="rounded-xl h-8 px-4 text-xs bg-[#FE812C] hover:bg-[#e5732a] text-white"
+                >
+                  {noteSubmitting ? 'Saving...' : editingNoteId ? 'Save Changes' : 'Add Note'}
+                </Button>
+              </div>
             </div>
-          )}
-
-          {isReadOnly && (
-            <p className="text-xs text-muted-foreground text-center py-1 bg-muted/40 rounded-xl px-3">
-              This task was assigned to you. Contact your manager to make changes.
-            </p>
-          )}
-
-          <DialogFooter className="pt-1">
-            <Button type="button" variant="outline" onClick={onClose} className="rounded-xl">
-              {isReadOnly ? 'Close' : 'Cancel'}
-            </Button>
-            {!isReadOnly && (
-              <Button
-                type="submit"
-                disabled={loading}
-                className="rounded-xl bg-[#FE812C] hover:bg-[#e5732a] text-white"
-              >
-                {loading ? 'Saving...' : task?._id ? 'Update Task' : 'Create Task'}
-              </Button>
-            )}
-          </DialogFooter>
-        </form>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );

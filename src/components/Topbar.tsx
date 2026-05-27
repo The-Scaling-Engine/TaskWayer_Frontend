@@ -72,12 +72,19 @@ export default function Topbar({ sidebarCollapsed }: TopbarProps) {
     if (!n.readAt) markAsRead(n.id);
     setDropdownOpen(false);
 
-    if (n.entityType === 'task' && n.payload?.taskId) {
+    if (n.entityType === 'project' && n.entityId) {
+      navigate(`/dashboard/projects/${n.entityId}/tasks`);
+    } else if (n.entityType === 'task' && n.payload?.taskId) {
+      const taskId = n.payload.taskId as string;
       if (typeof n.payload.departmentId === 'string') {
-        const { path, state } = getDeptTaskRoute(n.payload.departmentId, n.payload.taskId as string);
+        const { path, state } = getDeptTaskRoute(n.payload.departmentId, taskId);
         navigate(path, { state });
+      } else if (typeof n.payload.projectId === 'string') {
+        navigate(`/dashboard/projects/${n.payload.projectId}/tasks`, {
+          state: { openTaskId: taskId, openNotesTab: n.type === 'NOTE_ADDED' },
+        });
       } else {
-        navigate('/dashboard/tasks', { state: { openTaskId: n.payload.taskId as string } });
+        navigate('/dashboard/tasks', { state: { openTaskId: taskId } });
       }
     } else if (n.entityType === 'comment' && n.payload?.taskId) {
       if (typeof n.payload.departmentId === 'string') {

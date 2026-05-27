@@ -46,6 +46,26 @@ export interface Task {
 }
 
 // ============================================
+// TASK NOTE
+// ============================================
+export interface TaskNote {
+  id: string;
+  taskId: string;
+  authorId: string;
+  content: string;
+  done: boolean;
+  order: number;
+  createdAt: string;
+  updatedAt: string;
+  author: {
+    id: string;
+    name: string | null;
+    email: string;
+    avatar: string | null;
+  };
+}
+
+// ============================================
 // TASK STATS
 // ============================================
 export interface TaskStats {
@@ -207,7 +227,9 @@ export type NotificationType =
   | 'DEADLINE_12_HOURS'
   | 'DEADLINE_4_HOURS'
   | 'DEADLINE_1_HOUR'
-  | 'DEPT_MEMBER_JOINED';
+  | 'DEPT_MEMBER_JOINED'
+  | 'NOTE_ADDED'
+  | 'PROJECT_MEMBER_JOINED';
 
 export interface Notification {
   id: string;

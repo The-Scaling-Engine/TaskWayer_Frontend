@@ -46,11 +46,15 @@ export default function ProjectTasksPage() {
 
   // Open task from notification link
   React.useEffect(() => {
-    const { openTaskId, highlightCommentId } = (location.state ?? {}) as { openTaskId?: string; highlightCommentId?: string };
+    const { openTaskId, highlightCommentId, openNotesTab } = (location.state ?? {}) as {
+      openTaskId?: string;
+      highlightCommentId?: string;
+      openNotesTab?: boolean;
+    };
     if (!openTaskId) return;
     const timer = setTimeout(() => {
       if (boardRef.current) {
-        boardRef.current.openTaskById(openTaskId, highlightCommentId);
+        boardRef.current.openTaskById(openTaskId, highlightCommentId, openNotesTab);
         navigate(location.pathname, { replace: true, state: {} });
       }
     }, 400);

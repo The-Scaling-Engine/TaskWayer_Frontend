@@ -57,6 +57,7 @@ export default function ProjectManagerPage() {
   const [addRole, setAddRole] = useState<ProjectMemberRole>('MEMBER');
   const [addMemberLoading, setAddMemberLoading] = useState(false);
   const [removeMemberConfirm, setRemoveMemberConfirm] = useState<{ profileId: string; label: string } | null>(null);
+  const [removeMemberLoading, setRemoveMemberLoading] = useState(false);
 
   const currentUserId = currentUser?.id ?? currentUser?._id;
 
@@ -78,6 +79,7 @@ export default function ProjectManagerPage() {
 
   const canChangeRole = (memberRole: string) => {
     if (isOwner) return memberRole !== 'OWNER';
+    // MANAGER can only change MEMBER or VIEWER (cannot touch OWNER or another MANAGER)
     if (myRole === 'MANAGER') return memberRole === 'MEMBER' || memberRole === 'VIEWER';
     return false;
   };
@@ -130,12 +132,15 @@ export default function ProjectManagerPage() {
 
   const handleRemoveMember = async () => {
     if (!projectId || !removeMemberConfirm) return;
+    setRemoveMemberLoading(true);
     try {
       await removeMember(projectId, removeMemberConfirm.profileId);
       toast.success(`Removed ${removeMemberConfirm.label}`);
       setRemoveMemberConfirm(null);
     } catch (err) {
       toast.error(getApiErrorMessage(err, 'Failed to remove member'));
+    } finally {
+      setRemoveMemberLoading(false);
     }
   };
 
@@ -307,7 +312,7 @@ export default function ProjectManagerPage() {
               {isOwnerOrManager && (
                 <button
                   onClick={() => setAddMemberOpen(true)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-[#FE812C]/10 text-[#FE812C] hover:bg-[#FE812C] hover:text-white rounded-xl text-xs font-semibold transition-colors"
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 text-primary hover:bg-primary hover:text-white rounded-xl text-xs font-semibold transition-colors"
                 >
                   <UserPlus size={13} /> Add Member
                 </button>
@@ -357,7 +362,7 @@ export default function ProjectManagerPage() {
                                 className={cn('text-[11px] font-semibold px-2 py-0.5 rounded-full border cursor-pointer outline-none bg-transparent', ROLE_COLORS[member.role] ?? '')}
                               >
                                 {isOwner && <option value="OWNER">OWNER</option>}
-                                <option value="MANAGER">MANAGER</option>
+                                {isOwner && <option value="MANAGER">MANAGER</option>}
                                 <option value="MEMBER">MEMBER</option>
                                 <option value="VIEWER">VIEWER</option>
                               </select>
@@ -409,8 +414,8 @@ export default function ProjectManagerPage() {
 
         {/* ── Settings tab ── */}
         {tab === 'settings' && (
-          <div className="space-y-6 max-w-lg">
-            {/* Edit name/description */}
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+            {/* Left: Project Details */}
             <div className="bg-card border border-border rounded-2xl p-5 space-y-4">
               <h3 className="font-semibold text-foreground text-sm">Project Details</h3>
               <div className="space-y-1.5">
@@ -446,66 +451,69 @@ export default function ProjectManagerPage() {
               )}
             </div>
 
-            {/* Archive / Restore */}
-            {isOwner && (
-              <div className="bg-card border border-border rounded-2xl p-5 space-y-3">
-                <h3 className="font-semibold text-foreground text-sm">
-                  {currentProject.archivedAt ? 'Restore Project' : 'Archive Project'}
-                </h3>
-                <p className="text-sm text-muted-foreground">
-                  {currentProject.archivedAt
-                    ? 'Restore this project to make it active again.'
-                    : 'Archiving hides the project from active views. You can restore it later.'}
-                </p>
-                <button
-                  onClick={handleArchive}
-                  disabled={archiveLoading}
-                  className={cn(
-                    'flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-colors disabled:opacity-60',
-                    currentProject.archivedAt
-                      ? 'bg-primary/10 text-primary hover:bg-primary hover:text-white'
-                      : 'bg-muted text-muted-foreground hover:bg-muted/80'
-                  )}
-                >
-                  {archiveLoading ? <Loader2 size={14} className="animate-spin" /> : currentProject.archivedAt ? <ArchiveRestore size={14} /> : <Archive size={14} />}
-                  {archiveLoading ? 'Processing...' : currentProject.archivedAt ? 'Restore Project' : 'Archive Project'}
-                </button>
+            {/* Right: Archive + Danger Zone */}
+            <div className="space-y-4">
+              {/* Archive / Restore */}
+              {isOwnerOrManager && (
+                <div className="bg-card border border-border rounded-2xl p-5 space-y-3">
+                  <h3 className="font-semibold text-foreground text-sm">
+                    {currentProject.archivedAt ? 'Restore Project' : 'Archive Project'}
+                  </h3>
+                  <p className="text-sm text-muted-foreground">
+                    {currentProject.archivedAt
+                      ? 'Restore this project to make it active again.'
+                      : 'Archiving hides the project from active views. You can restore it later.'}
+                  </p>
+                  <button
+                    onClick={handleArchive}
+                    disabled={archiveLoading}
+                    className={cn(
+                      'flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-colors disabled:opacity-60',
+                      currentProject.archivedAt
+                        ? 'bg-primary/10 text-primary hover:bg-primary hover:text-white'
+                        : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                    )}
+                  >
+                    {archiveLoading ? <Loader2 size={14} className="animate-spin" /> : currentProject.archivedAt ? <ArchiveRestore size={14} /> : <Archive size={14} />}
+                    {archiveLoading ? 'Processing...' : currentProject.archivedAt ? 'Restore Project' : 'Archive Project'}
+                  </button>
+                </div>
+              )}
+
+              {/* Danger zone */}
+              <div className="bg-destructive/5 border border-destructive/20 rounded-2xl p-5 space-y-4">
+                <h3 className="font-semibold text-destructive text-sm">Danger Zone</h3>
+
+                {!isOwner && (
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-medium text-foreground">Leave Project</p>
+                      <p className="text-xs text-muted-foreground">You will lose access to this project.</p>
+                    </div>
+                    <button
+                      onClick={() => setLeaveConfirm(true)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-destructive/30 text-destructive hover:bg-destructive hover:text-white text-xs font-semibold transition-colors shrink-0"
+                    >
+                      <LogOut size={13} /> Leave
+                    </button>
+                  </div>
+                )}
+
+                {isOwner && (
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-medium text-foreground">Delete Project</p>
+                      <p className="text-xs text-muted-foreground">Permanently delete the project and all associated data.</p>
+                    </div>
+                    <button
+                      onClick={() => setDeleteConfirm(true)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-destructive/30 text-destructive hover:bg-destructive hover:text-white text-xs font-semibold transition-colors shrink-0"
+                    >
+                      <Trash2 size={13} /> Delete
+                    </button>
+                  </div>
+                )}
               </div>
-            )}
-
-            {/* Danger zone */}
-            <div className="bg-destructive/5 border border-destructive/20 rounded-2xl p-5 space-y-4">
-              <h3 className="font-semibold text-destructive text-sm">Danger Zone</h3>
-
-              {!isOwner && (
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-medium text-foreground">Leave Project</p>
-                    <p className="text-xs text-muted-foreground">You will lose access to this project.</p>
-                  </div>
-                  <button
-                    onClick={() => setLeaveConfirm(true)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-destructive/30 text-destructive hover:bg-destructive hover:text-white text-xs font-semibold transition-colors shrink-0"
-                  >
-                    <LogOut size={13} /> Leave
-                  </button>
-                </div>
-              )}
-
-              {isOwner && (
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-medium text-foreground">Delete Project</p>
-                    <p className="text-xs text-muted-foreground">Permanently delete the project and all associated data.</p>
-                  </div>
-                  <button
-                    onClick={() => setDeleteConfirm(true)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-destructive/30 text-destructive hover:bg-destructive hover:text-white text-xs font-semibold transition-colors shrink-0"
-                  >
-                    <Trash2 size={13} /> Delete
-                  </button>
-                </div>
-              )}
             </div>
           </div>
         )}
@@ -605,8 +613,21 @@ export default function ProjectManagerPage() {
               Remove <span className="font-semibold text-foreground">{removeMemberConfirm.label}</span> from this project?
             </p>
             <div className="flex gap-3 justify-end">
-              <button onClick={() => setRemoveMemberConfirm(null)} className="px-4 py-2 rounded-xl text-sm font-medium text-muted-foreground hover:bg-muted transition-colors">Cancel</button>
-              <button onClick={handleRemoveMember} className="px-4 py-2 rounded-xl text-sm font-medium text-white bg-destructive hover:bg-destructive/90 transition-colors">Remove</button>
+              <button
+                onClick={() => setRemoveMemberConfirm(null)}
+                disabled={removeMemberLoading}
+                className="px-4 py-2 rounded-xl text-sm font-medium text-muted-foreground hover:bg-muted transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleRemoveMember}
+                disabled={removeMemberLoading}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium text-white bg-destructive hover:bg-destructive/90 disabled:opacity-60 transition-colors"
+              >
+                {removeMemberLoading && <Loader2 size={14} className="animate-spin" />}
+                {removeMemberLoading ? 'Removing...' : 'Remove'}
+              </button>
             </div>
           </div>
         </div>

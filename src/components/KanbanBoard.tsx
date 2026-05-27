@@ -108,7 +108,7 @@ function DroppableColumn({ id, children }: { id: string; children: React.ReactNo
 
 export interface KanbanBoardRef {
   openCreateTask: () => void;
-  openTaskById: (taskId: string, highlightCommentId?: string) => void;
+  openTaskById: (taskId: string, highlightCommentId?: string, openNotesTab?: boolean) => void;
 }
 
 interface KanbanBoardProps {
@@ -137,6 +137,7 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({ hideDeptLabe
   const [highlightCommentId, setHighlightCommentId] = useState<string | undefined>(undefined);
   const [commentCounts, setCommentCounts] = useState<Record<string, number>>({});
   const [activeTask, setActiveTask] = useState<Task | null>(null);
+  const [openNotesOnNext, setOpenNotesOnNext] = useState(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
@@ -151,13 +152,14 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({ hideDeptLabe
 
   useImperativeHandle(ref, () => ({
     openCreateTask: () => handleCreate(),
-    openTaskById: (taskId: string, hcId?: string) => {
+    openTaskById: (taskId: string, hcId?: string, openNotesTab?: boolean) => {
       const task = tasks.find((t) => t.id === taskId || t._id === taskId);
       if (!task) return;
       if (hcId) {
         setHighlightCommentId(hcId);
         setCommentTask(task);
       } else {
+        if (openNotesTab) setOpenNotesOnNext(true);
         handleEdit(task);
       }
     },
@@ -359,7 +361,7 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({ hideDeptLabe
       {/* Create/Edit Dialog */}
       <TaskDialog
         open={dialogOpen}
-        onClose={() => { setDialogOpen(false); setEditingTask(null); }}
+        onClose={() => { setDialogOpen(false); setEditingTask(null); setOpenNotesOnNext(false); }}
         onSubmit={handleSubmit}
         task={editingTask}
         loading={dialogLoading}
@@ -367,6 +369,7 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({ hideDeptLabe
         lockedDepartmentName={!editingTask ? lockedDepartmentName : undefined}
         lockedProjectId={!editingTask ? lockedProjectId : undefined}
         lockedProjectName={!editingTask ? lockedProjectName : undefined}
+        initialTab={openNotesOnNext ? 'notes' : undefined}
       />
 
       {/* Update Confirmation Dialog */}
