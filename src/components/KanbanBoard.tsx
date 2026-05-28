@@ -62,11 +62,6 @@ interface TaskSubmitData {
   recurrenceEndDate?: string | null;
 }
 
-interface PendingUpdate {
-  taskId: string;
-  taskTitle: string;
-  data: TaskSubmitData;
-}
 
 // ─── Sub-components ────────────────────────────────────────────
 
@@ -194,7 +189,6 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [dialogLoading, setDialogLoading] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<Task | null>(null);
-  const [updateConfirm, setUpdateConfirm] = useState<PendingUpdate | null>(null);
   const [cancelRecurringTask, setCancelRecurringTask] = useState<Task | null>(null);
   const [keepChildren, setKeepChildren] = useState(false);
   const [cancelRecurringLoading, setCancelRecurringLoading] = useState(false);
@@ -394,35 +388,21 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
     } finally { setCancelRecurringLoading(false); }
   };
 
-  const confirmUpdate = async () => {
-    if (!updateConfirm) return;
+  const handleSubmit = async (data: TaskSubmitData) => {
     setDialogLoading(true);
     try {
-      await updateTask(updateConfirm.taskId, updateConfirm.data);
-      toast.success('Task updated successfully');
-      setUpdateConfirm(null);
+      if (editingTask && editingTask._id) {
+        await updateTask(editingTask._id, data);
+        toast.success('Task updated successfully');
+      } else {
+        await createTask({ ...data, ...(data.columnId != null && { columnId: data.columnId }) });
+        toast.success('Task created successfully');
+      }
       setDialogOpen(false);
       setEditingTask(null);
     } catch (err) {
-      toast.error(getApiErrorMessage(err, 'Failed to update task'));
+      toast.error(getApiErrorMessage(err, editingTask?._id ? 'Failed to update task' : 'Failed to create task'));
     } finally { setDialogLoading(false); }
-  };
-
-  const handleSubmit = async (data: TaskSubmitData) => {
-    if (editingTask && editingTask._id) {
-      setDialogOpen(false);
-      setUpdateConfirm({ taskId: editingTask._id, taskTitle: data.title, data });
-    } else {
-      setDialogLoading(true);
-      try {
-        await createTask({ ...data, ...(data.columnId != null && { columnId: data.columnId }) });
-        toast.success('Task created successfully');
-        setDialogOpen(false);
-        setEditingTask(null);
-      } catch (err) {
-        toast.error(getApiErrorMessage(err, 'Failed to create task'));
-      } finally { setDialogLoading(false); }
-    }
   };
 
   // ── Column management handlers ────────────────────────────────
@@ -780,28 +760,6 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
         lockedProjectName={lockedProjectName}
         initialTab={openNotesOnNext ? 'notes' : undefined}
       />
-
-      {/* Update Confirmation */}
-      {updateConfirm && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50">
-          <div className="bg-card border border-border rounded-2xl p-6 max-w-sm w-full mx-4 shadow-xl space-y-4">
-            <h3 className="text-lg font-bold text-foreground">Update Task</h3>
-            <p className="text-sm text-muted-foreground">
-              Are you sure you want to update "{updateConfirm.taskTitle}"?
-            </p>
-            <div className="flex gap-3 justify-end">
-              <button onClick={() => setUpdateConfirm(null)}
-                className="px-4 py-2 rounded-xl text-sm font-medium text-muted-foreground hover:bg-muted transition-colors">
-                Cancel
-              </button>
-              <button onClick={() => void confirmUpdate()} disabled={dialogLoading}
-                className="px-4 py-2 rounded-xl text-sm font-medium bg-[#FE812C] text-white hover:bg-[#e5732a] transition-colors">
-                {dialogLoading ? 'Updating...' : 'Confirm Update'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Comment Dialog */}
       {commentTask && (

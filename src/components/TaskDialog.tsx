@@ -619,7 +619,7 @@ export default function TaskDialog({
         if (!isOpen) { onClose(); resetForm(); }
       }}
     >
-      <DialogContent className="sm:max-w-[560px] rounded-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-[640px] rounded-2xl max-h-[90vh] overflow-y-auto !p-6">
         <DialogHeader className="pr-8">
           <div className="flex items-center gap-3 flex-wrap">
             <DialogTitle className="text-xl font-bold flex-1">
@@ -682,15 +682,15 @@ export default function TaskDialog({
               task?._id && activeTab === 'details' && 'slide-in-from-left-2',
             )}
           >
-            <form onSubmit={handleSubmit} className="space-y-3 mt-2">
+            <form onSubmit={handleSubmit} className="space-y-5 mt-3">
               {error && (
                 <div className="bg-destructive/10 border border-destructive/30 text-destructive rounded-xl px-3 py-2 text-sm">
                   {error}
                 </div>
               )}
 
-              <div className="space-y-1.5">
-                <Label htmlFor="task-title">Title</Label>
+              <div className="space-y-2">
+                <Label htmlFor="task-title" className="font-medium">Title</Label>
                 <Input
                   id="task-title"
                   placeholder="Enter task title..."
@@ -702,15 +702,15 @@ export default function TaskDialog({
                 />
               </div>
 
-              <div className="grid grid-cols-[1fr_auto] gap-3 items-start">
-                <div className="space-y-1.5">
-                  <Label>Description</Label>
+              <div className="grid grid-cols-[1fr_auto] gap-4 items-start">
+                <div className="space-y-2">
+                  <Label className="font-medium">Description</Label>
                   <DescriptionEditor
                     key={task?._id ?? (open ? 'new-open' : 'new-closed')}
                     value={description}
                     onChange={setDescription}
                     disabled={isReadOnly}
-                    className="min-h-[110px]"
+                    className="min-h-[150px]"
                   />
                 </div>
                 <div className="space-y-2.5 w-[120px] shrink-0">
@@ -759,20 +759,20 @@ export default function TaskDialog({
               </div>
 
               <div className={`grid gap-3 ${lockedDepartmentId || allMemberships.length > 0 ? 'grid-cols-[7fr_3fr]' : 'grid-cols-1'}`}>
-                <div className="space-y-1.5">
-                  <Label htmlFor="task-tags">Tags <span className="text-muted-foreground font-normal">(comma-separated)</span></Label>
+                <div className="space-y-2">
+                  <Label htmlFor="task-tags" className="font-medium">Tags <span className="text-muted-foreground font-normal">(comma-separated)</span></Label>
                   <Input id="task-tags" placeholder="bug, feature, etc." value={tagsInput} onChange={(e) => setTagsInput(e.target.value)} className="rounded-xl" disabled={isReadOnly} />
                 </div>
                 {lockedDepartmentId ? (
-                  <div className="space-y-1.5">
-                    <Label>Department</Label>
+                  <div className="space-y-2">
+                    <Label className="font-medium">Department</Label>
                     <div className="flex items-center h-9 px-3 rounded-xl border border-border bg-muted/50 text-sm text-muted-foreground cursor-not-allowed select-none truncate">
                       {lockedDepartmentName || lockedDepartmentId}
                     </div>
                   </div>
                 ) : allMemberships.length > 0 ? (
-                  <div className="space-y-1.5">
-                    <Label>Department</Label>
+                  <div className="space-y-2">
+                    <Label className="font-medium">Department</Label>
                     <Select value={departmentId} onValueChange={setDepartmentId} disabled={isReadOnly}>
                       <SelectTrigger className="rounded-xl"><SelectValue placeholder="None" /></SelectTrigger>
                       <SelectContent>
@@ -790,8 +790,8 @@ export default function TaskDialog({
               </div>
 
               {(lockedProjectId || projects.filter(p => !p.archivedAt && !p.deletedAt).length > 0) && (
-                <div className="space-y-1.5">
-                  <Label>Project <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                <div className="space-y-2">
+                  <Label className="font-medium">Project <span className="text-muted-foreground font-normal">(optional)</span></Label>
                   {lockedProjectId ? (
                     <div className="flex items-center h-9 px-3 rounded-xl border border-border bg-muted/50 text-sm text-muted-foreground cursor-not-allowed select-none truncate">
                       {lockedProjectName || lockedProjectId}
@@ -811,12 +811,12 @@ export default function TaskDialog({
               )}
 
               <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label htmlFor="task-scheduled">Scheduled for</Label>
+                <div className="space-y-2">
+                  <Label htmlFor="task-scheduled" className="font-medium">Scheduled for</Label>
                   <Input id="task-scheduled" type="datetime-local" step="60" value={scheduledAt} onChange={(e) => setScheduledAt(e.target.value)} className="rounded-xl" disabled={isReadOnly} />
                 </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="task-deadline">Deadline <span className="text-muted-foreground font-normal">(opt.)</span></Label>
+                <div className="space-y-2">
+                  <Label htmlFor="task-deadline" className="font-medium">Deadline <span className="text-muted-foreground font-normal">(opt.)</span></Label>
                   {isRecurring ? (
                     <div className="rounded-xl border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground italic">
                       Not applicable for recurring tasks
@@ -845,8 +845,8 @@ export default function TaskDialog({
                   </div>
                   {isRecurring && (
                     <div className="pl-6">
-                      <div className="grid grid-cols-[3fr_3fr_4fr] gap-2 items-end">
-                        <div className="space-y-1.5">
+                      <div className="flex gap-3 items-start">
+                        <div className="space-y-1.5 w-[72px] shrink-0">
                           <Label className="text-xs">Every</Label>
                           <Input
                             type="number"
@@ -860,10 +860,10 @@ export default function TaskDialog({
                             className="rounded-xl h-9 text-center px-2"
                           />
                         </div>
-                        <div className="space-y-1.5">
+                        <div className="space-y-1.5 w-[130px] shrink-0">
                           <Label className="text-xs">Unit</Label>
                           <Select value={recurrenceUnit} onValueChange={(v) => setRecurrenceUnit(v as 'DAILY' | 'WEEKLY' | 'MONTHLY')}>
-                            <SelectTrigger className="rounded-xl h-9"><SelectValue placeholder="Select" /></SelectTrigger>
+                            <SelectTrigger className="rounded-xl !h-9"><SelectValue placeholder="Select" /></SelectTrigger>
                             <SelectContent>
                               <SelectItem value="DAILY">{recurrenceInterval > 1 ? 'Days' : 'Day'}</SelectItem>
                               <SelectItem value="WEEKLY">{recurrenceInterval > 1 ? 'Weeks' : 'Week'}</SelectItem>
@@ -871,7 +871,7 @@ export default function TaskDialog({
                             </SelectContent>
                           </Select>
                         </div>
-                        <div className="space-y-1.5">
+                        <div className="space-y-1.5 w-[185px] shrink-0 ml-1">
                           <Label htmlFor="task-recurrence-end" className="text-xs">End date <span className="text-muted-foreground font-normal">(opt.)</span></Label>
                           <Input id="task-recurrence-end" type="date" value={recurrenceEndDate} onChange={(e) => setRecurrenceEndDate(e.target.value)} className="rounded-xl h-9" />
                         </div>
@@ -894,7 +894,7 @@ export default function TaskDialog({
                 </p>
               )}
 
-              <DialogFooter className="pt-1 flex-col gap-2 sm:flex-row sm:items-center">
+              <DialogFooter className="pt-1 flex-col gap-2 sm:flex-row sm:items-center !-mx-6 !-mb-6">
                 {onCancelFromDate && task?._id && task?.recurrenceParentId && (
                   <div className="flex-1 flex justify-start">
                     {confirmCancelFrom ? (

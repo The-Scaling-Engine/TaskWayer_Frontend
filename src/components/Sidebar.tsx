@@ -164,14 +164,16 @@ export default function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose
                     {!collapsed && (
                       <>
                         <span className="flex-1 truncate">{m.department.name}</span>
-                        <span className={cn(
-                          'text-[10px] font-bold px-1.5 py-0.5 rounded-full shrink-0',
-                          m.role === 'OWNER'
-                            ? 'bg-[#FE812C]/10 text-[#FE812C]'
-                            : 'bg-purple-500/10 text-purple-500'
-                        )}>
-                          {m.role}
-                        </span>
+                        {isManagerRole && (
+                          <span className={cn(
+                            'text-[10px] font-bold px-1.5 py-0.5 rounded-full shrink-0',
+                            m.role === 'OWNER'
+                              ? 'bg-[#FE812C]/10 text-[#FE812C]'
+                              : 'bg-purple-500/10 text-purple-500'
+                          )}>
+                            {m.role}
+                          </span>
+                        )}
                       </>
                     )}
                   </Link>
