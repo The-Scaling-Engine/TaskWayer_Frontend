@@ -3,10 +3,13 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   FolderOpen, ArrowLeft, Loader2, UserPlus, UserMinus,
   Search, X, Check, Trash2, Archive, ArchiveRestore, LogOut,
+  Bell, Send, Webhook,
 } from 'lucide-react';
 import { useProjectStore } from '@/store/projectStore';
 import { useAuthStore } from '@/store/authStore';
 import { userService } from '@/services/userService';
+import { slackConfigService } from '@/services/slackConfigService';
+import type { SlackConfig } from '@/services/slackConfigService';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -47,6 +50,17 @@ export default function ProjectManagerPage() {
   const [transferConfirm, setTransferConfirm] = useState<{ profileId: string; label: string } | null>(null);
   const [transferLoading, setTransferLoading] = useState(false);
 
+  // ── Slack config state ────────────────────────────────────────────────────
+  const [slackConfig, setSlackConfig] = useState<SlackConfig | null>(null);
+  const [slackLoading, setSlackLoading] = useState(false);
+  const [slackSaving, setSlackSaving] = useState(false);
+  const [slackTesting, setSlackTesting] = useState(false);
+  const [slackWebhookUrl, setSlackWebhookUrl] = useState('');
+  const [slackManagerUrl, setSlackManagerUrl] = useState('');
+  const [slackMemberUrl, setSlackMemberUrl] = useState('');
+  const [slackDailyEnabled, setSlackDailyEnabled] = useState(true);
+  const [slackWeeklyEnabled, setSlackWeeklyEnabled] = useState(true);
+
   // ── Add member state ───────────────────────────────────────────────────────
   const [addMemberOpen, setAddMemberOpen] = useState(false);
   const [memberSearch, setMemberSearch] = useState('');
@@ -76,6 +90,74 @@ export default function ProjectManagerPage() {
   const myRole = myMembership?.role;
   const isOwner = myRole === 'OWNER';
   const isOwnerOrManager = isOwner || myRole === 'MANAGER';
+
+  useEffect(() => {
+    if (tab !== 'settings' || !projectId || !isOwnerOrManager) return;
+    setSlackLoading(true);
+    slackConfigService.get(projectId)
+      .then((cfg) => {
+        setSlackConfig(cfg);
+        if (cfg) {
+          setSlackWebhookUrl(cfg.webhookUrl);
+          setSlackManagerUrl(cfg.managerWebhookUrl ?? '');
+          setSlackMemberUrl(cfg.memberWebhookUrl ?? '');
+          setSlackDailyEnabled(cfg.dailyEnabled);
+          setSlackWeeklyEnabled(cfg.weeklyEnabled);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setSlackLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, projectId]);
+
+  const handleSaveSlack = async () => {
+    if (!projectId || !slackWebhookUrl.trim()) return;
+    setSlackSaving(true);
+    try {
+      const saved = await slackConfigService.save(projectId, {
+        webhookUrl: slackWebhookUrl.trim(),
+        dailyEnabled: slackDailyEnabled,
+        weeklyEnabled: slackWeeklyEnabled,
+        managerWebhookUrl: slackManagerUrl.trim() || null,
+        memberWebhookUrl: slackMemberUrl.trim() || null,
+      });
+      setSlackConfig(saved);
+      toast.success('Slack integration saved');
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Failed to save Slack config'));
+    } finally {
+      setSlackSaving(false);
+    }
+  };
+
+  const handleTestSlack = async () => {
+    if (!projectId) return;
+    setSlackTesting(true);
+    try {
+      await slackConfigService.test(projectId);
+      toast.success('Test message sent to Slack');
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Failed to send test message'));
+    } finally {
+      setSlackTesting(false);
+    }
+  };
+
+  const handleRemoveSlack = async () => {
+    if (!projectId) return;
+    try {
+      await slackConfigService.remove(projectId);
+      setSlackConfig(null);
+      setSlackWebhookUrl('');
+      setSlackManagerUrl('');
+      setSlackMemberUrl('');
+      setSlackDailyEnabled(true);
+      setSlackWeeklyEnabled(true);
+      toast.success('Slack integration removed');
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Failed to remove Slack config'));
+    }
+  };
 
   const canChangeRole = (memberRole: string) => {
     if (isOwner) return memberRole !== 'OWNER';
@@ -414,6 +496,7 @@ export default function ProjectManagerPage() {
 
         {/* ── Settings tab ── */}
         {tab === 'settings' && (
+          <div className="space-y-6">
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
             {/* Left: Project Details */}
             <div className="bg-card border border-border rounded-2xl p-5 space-y-4">
@@ -517,6 +600,136 @@ export default function ProjectManagerPage() {
                 )}
               </div>
             </div>
+          </div>
+
+          {/* ── Slack Integration ── */}
+          {isOwnerOrManager && (
+            <div className="bg-card border border-border rounded-2xl p-5 space-y-5">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-[#4A154B]/10 flex items-center justify-center shrink-0">
+                  <Webhook size={14} className="text-[#4A154B] dark:text-violet-400" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-foreground text-sm">Slack Integration</h3>
+                  <p className="text-xs text-muted-foreground">Send daily &amp; weekly digest reports to Slack channels</p>
+                </div>
+                {slackConfig && (
+                  <span className="ml-auto text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                    Connected
+                  </span>
+                )}
+              </div>
+
+              {slackLoading ? (
+                <div className="flex items-center gap-2 text-muted-foreground text-sm">
+                  <Loader2 size={14} className="animate-spin" /> Loading...
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="slack-webhook">Webhook URL <span className="text-destructive">*</span></Label>
+                    <Input
+                      id="slack-webhook"
+                      value={slackWebhookUrl}
+                      onChange={(e) => setSlackWebhookUrl(e.target.value)}
+                      placeholder="https://hooks.slack.com/services/..."
+                      className="rounded-xl font-mono text-xs"
+                    />
+                    <p className="text-[11px] text-muted-foreground">Main channel for digest messages</p>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="slack-manager-url">Manager Webhook <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                      <Input
+                        id="slack-manager-url"
+                        value={slackManagerUrl}
+                        onChange={(e) => setSlackManagerUrl(e.target.value)}
+                        placeholder="https://hooks.slack.com/..."
+                        className="rounded-xl font-mono text-xs"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="slack-member-url">Member Webhook <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                      <Input
+                        id="slack-member-url"
+                        value={slackMemberUrl}
+                        onChange={(e) => setSlackMemberUrl(e.target.value)}
+                        placeholder="https://hooks.slack.com/..."
+                        className="rounded-xl font-mono text-xs"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap gap-4 pt-1">
+                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                      <button
+                        type="button"
+                        onClick={() => setSlackDailyEnabled(!slackDailyEnabled)}
+                        className={cn(
+                          'relative w-9 h-5 rounded-full transition-colors shrink-0',
+                          slackDailyEnabled ? 'bg-[#FE812C]' : 'bg-muted-foreground/30'
+                        )}
+                      >
+                        <span className={cn(
+                          'absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform',
+                          slackDailyEnabled ? 'translate-x-4' : 'translate-x-0'
+                        )} />
+                      </button>
+                      <span className="text-sm font-medium">Daily digest</span>
+                      <Bell size={13} className="text-muted-foreground" />
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                      <button
+                        type="button"
+                        onClick={() => setSlackWeeklyEnabled(!slackWeeklyEnabled)}
+                        className={cn(
+                          'relative w-9 h-5 rounded-full transition-colors shrink-0',
+                          slackWeeklyEnabled ? 'bg-[#FE812C]' : 'bg-muted-foreground/30'
+                        )}
+                      >
+                        <span className={cn(
+                          'absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform',
+                          slackWeeklyEnabled ? 'translate-x-4' : 'translate-x-0'
+                        )} />
+                      </button>
+                      <span className="text-sm font-medium">Weekly digest</span>
+                      <Bell size={13} className="text-muted-foreground" />
+                    </label>
+                  </div>
+
+                  <div className="flex items-center gap-3 pt-1 flex-wrap">
+                    <Button
+                      onClick={handleSaveSlack}
+                      disabled={slackSaving || !slackWebhookUrl.trim()}
+                      className="bg-[#FE812C] hover:bg-[#e5732a] text-white rounded-xl gap-2"
+                    >
+                      {slackSaving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                      {slackSaving ? 'Saving...' : 'Save Integration'}
+                    </Button>
+                    {slackConfig && (
+                      <button
+                        onClick={handleTestSlack}
+                        disabled={slackTesting}
+                        className="flex items-center gap-1.5 px-4 py-2 rounded-xl border border-border text-sm font-medium hover:bg-muted transition-colors disabled:opacity-60"
+                      >
+                        {slackTesting ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+                        {slackTesting ? 'Sending...' : 'Send Test Message'}
+                      </button>
+                    )}
+                    {slackConfig && (
+                      <button
+                        onClick={handleRemoveSlack}
+                        className="flex items-center gap-1.5 px-4 py-2 rounded-xl border border-destructive/30 text-destructive text-sm font-medium hover:bg-destructive hover:text-white transition-colors ml-auto"
+                      >
+                        <X size={14} /> Remove
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
           </div>
         )}
       </div>
