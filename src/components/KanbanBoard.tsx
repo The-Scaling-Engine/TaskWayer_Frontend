@@ -57,7 +57,8 @@ interface TaskSubmitData {
   projectId?: string;
   columnId?: string | null;
   isRecurring?: boolean;
-  recurrenceType?: 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY' | null;
+  recurrenceType?: 'DAILY' | 'WEEKLY' | 'MONTHLY' | null;
+  recurrenceInterval?: number | null;
   recurrenceEndDate?: string | null;
 }
 

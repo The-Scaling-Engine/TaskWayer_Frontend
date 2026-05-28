@@ -35,7 +35,8 @@ export interface Task {
   createdAt: string;
   updatedAt: string;
   isRecurring?: boolean;
-  recurrenceType?: 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY' | null;
+  recurrenceType?: 'DAILY' | 'WEEKLY' | 'BIWEEKLY' | 'MONTHLY' | 'QUARTERLY' | 'YEARLY' | null;
+  recurrenceInterval?: number | null;
   recurrenceEndDate?: string | null;
   recurrenceParentId?: string | null;
   isAssigned?: boolean;

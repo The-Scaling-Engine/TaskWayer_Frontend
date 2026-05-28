@@ -51,6 +51,28 @@ import { CSS } from '@dnd-kit/utilities';
 
 // ─── Helpers ──────────────────────────────────────────────────
 
+function toRecurrenceUnit(task?: { recurrenceType?: string | null } | null): 'DAILY' | 'WEEKLY' | 'MONTHLY' | '' {
+  switch (task?.recurrenceType) {
+    case 'DAILY':   return 'DAILY';
+    case 'WEEKLY':  return 'WEEKLY';
+    case 'BIWEEKLY': return 'WEEKLY';
+    case 'MONTHLY': return 'MONTHLY';
+    case 'QUARTERLY': return 'MONTHLY';
+    case 'YEARLY':  return 'MONTHLY';
+    default: return '';
+  }
+}
+
+function toRecurrenceIntervalValue(task?: { recurrenceType?: string | null; recurrenceInterval?: number | null } | null): number {
+  if (task?.recurrenceInterval && task.recurrenceInterval > 1) return task.recurrenceInterval;
+  switch (task?.recurrenceType) {
+    case 'BIWEEKLY':  return 2;
+    case 'QUARTERLY': return 3;
+    case 'YEARLY':    return 12;
+    default: return 1;
+  }
+}
+
 function toDatetimeLocal(isoStr: string): string {
   const d = new Date(isoStr);
   const pad = (n: number) => String(n).padStart(2, '0');
@@ -274,7 +296,8 @@ interface TaskDialogProps {
     projectId?: string;
     columnId?: string | null;
     isRecurring?: boolean;
-    recurrenceType?: 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY' | null;
+    recurrenceType?: 'DAILY' | 'WEEKLY' | 'MONTHLY' | null;
+    recurrenceInterval?: number | null;
     recurrenceEndDate?: string | null;
   }) => void;
   task?: Task | null;
@@ -287,6 +310,7 @@ interface TaskDialogProps {
   lockedProjectId?: string;
   lockedProjectName?: string;
   initialTab?: 'details' | 'notes';
+  onCancelFromDate?: () => void;
 }
 
 // ─── TaskDialog ───────────────────────────────────────────────
@@ -295,7 +319,7 @@ export default function TaskDialog({
   open, onClose, onSubmit, task, loading,
   defaultDeadline, defaultScheduledAt,
   dialogTitle, lockedDepartmentId, lockedDepartmentName, lockedProjectId, lockedProjectName,
-  initialTab,
+  initialTab, onCancelFromDate,
 }: TaskDialogProps) {
   const allMemberships = useDepartmentStore((s) => s.allMemberships);
   const projects = useProjectStore((s) => s.projects);
@@ -318,7 +342,9 @@ export default function TaskDialog({
   const [departmentId, setDepartmentId] = useState(lockedDepartmentId || task?.departmentId || '__none__');
   const [projectId, setProjectId] = useState(lockedProjectId || task?.projectId || '__none__');
   const [isRecurring, setIsRecurring] = useState(task?.isRecurring ?? false);
-  const [recurrenceType, setRecurrenceType] = useState<'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY' | ''>(task?.recurrenceType ?? '');
+  const [recurrenceUnit, setRecurrenceUnit] = useState<'DAILY' | 'WEEKLY' | 'MONTHLY' | ''>(() => toRecurrenceUnit(task));
+  const [recurrenceInterval, setRecurrenceInterval] = useState<number>(() => toRecurrenceIntervalValue(task));
+  const [confirmCancelFrom, setConfirmCancelFrom] = useState(false);
   const [recurrenceEndDate, setRecurrenceEndDate] = useState(task?.recurrenceEndDate ? task.recurrenceEndDate.substring(0, 10) : '');
   const [columnId, setColumnId] = useState<string | null>(task?.columnId ?? null);
   const [projectColumns, setProjectColumns] = useState<BoardColumn[]>([]);
@@ -378,7 +404,8 @@ export default function TaskDialog({
       setDepartmentId(lockedDepartmentId || task?.departmentId || '__none__');
       setProjectId(lockedProjectId || task?.projectId || '__none__');
       setIsRecurring(task?.isRecurring ?? false);
-      setRecurrenceType(task?.recurrenceType ?? '');
+      setRecurrenceUnit(toRecurrenceUnit(task));
+      setRecurrenceInterval(toRecurrenceIntervalValue(task));
       setRecurrenceEndDate(task?.recurrenceEndDate ? task.recurrenceEndDate.substring(0, 10) : '');
       setColumnId(task?.columnId ?? null);
       setError('');
@@ -458,7 +485,7 @@ export default function TaskDialog({
     setTitle(''); setDescription(''); setStatus('todo');
     setDeadline(''); setScheduledAt(''); setPriority('medium');
     setTagsInput(''); setDepartmentId('__none__'); setProjectId('__none__');
-    setIsRecurring(false); setRecurrenceType(''); setRecurrenceEndDate('');
+    setIsRecurring(false); setRecurrenceUnit(''); setRecurrenceInterval(1); setRecurrenceEndDate('');
     setColumnId(null); setProjectColumns([]);
     setError('');
   };
@@ -469,8 +496,7 @@ export default function TaskDialog({
     if (isReadOnly) return;
     if (!title.trim()) { setError('Title is required'); return; }
     if (isRecurring) {
-      if (!deadline) { setError('Deadline is required for recurring tasks'); return; }
-      if (!recurrenceType) { setError('Please select how often this task repeats'); return; }
+      if (!recurrenceUnit) { setError('Please select how often this task repeats'); return; }
     }
     if (deadline && !task?._id) {
       const s = new Date(deadline);
@@ -487,7 +513,8 @@ export default function TaskDialog({
       projectId: projectId === '__none__' ? undefined : projectId || undefined,
       ...(lockedProjectId && { columnId: columnId ?? null }),
       isRecurring,
-      recurrenceType: isRecurring ? (recurrenceType as 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY') : null,
+      recurrenceType: isRecurring ? (recurrenceUnit as 'DAILY' | 'WEEKLY' | 'MONTHLY') : null,
+      recurrenceInterval: isRecurring && recurrenceInterval > 1 ? recurrenceInterval : null,
       recurrenceEndDate: isRecurring && recurrenceEndDate ? new Date(`${recurrenceEndDate}T23:59:59`).toISOString() : null,
     });
   };
@@ -790,7 +817,13 @@ export default function TaskDialog({
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="task-deadline">Deadline <span className="text-muted-foreground font-normal">(opt.)</span></Label>
-                  <Input id="task-deadline" type="datetime-local" step="60" value={deadline} onChange={(e) => setDeadline(e.target.value)} className="rounded-xl" disabled={isReadOnly} />
+                  {isRecurring ? (
+                    <div className="rounded-xl border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground italic">
+                      Not applicable for recurring tasks
+                    </div>
+                  ) : (
+                    <Input id="task-deadline" type="datetime-local" step="60" value={deadline} onChange={(e) => setDeadline(e.target.value)} className="rounded-xl" disabled={isReadOnly} />
+                  )}
                 </div>
               </div>
 
@@ -801,29 +834,47 @@ export default function TaskDialog({
                       id="task-recurring"
                       type="checkbox"
                       checked={isRecurring}
-                      onChange={(e) => setIsRecurring(e.target.checked)}
-                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); setIsRecurring(!isRecurring); } }}
+                      onChange={(e) => {
+                        setIsRecurring(e.target.checked);
+                        if (e.target.checked) setDeadline('');
+                      }}
+                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); const next = !isRecurring; setIsRecurring(next); if (next) setDeadline(''); } }}
                       className="w-4 h-4 rounded accent-[#FE812C] cursor-pointer"
                     />
                     <Label htmlFor="task-recurring" className="cursor-pointer font-normal">Make this a recurring task</Label>
                   </div>
                   {isRecurring && (
-                    <div className="grid grid-cols-2 gap-3 pl-6">
-                      <div className="space-y-1.5">
-                        <Label>Repeats</Label>
-                        <Select value={recurrenceType} onValueChange={(v) => setRecurrenceType(v as 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY')}>
-                          <SelectTrigger className="rounded-xl"><SelectValue placeholder="Select frequency" /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="DAILY">Daily</SelectItem>
-                            <SelectItem value="WEEKLY">Weekly</SelectItem>
-                            <SelectItem value="MONTHLY">Monthly</SelectItem>
-                            <SelectItem value="YEARLY">Yearly</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label htmlFor="task-recurrence-end">End date <span className="text-muted-foreground font-normal">(optional)</span></Label>
-                        <Input id="task-recurrence-end" type="date" value={recurrenceEndDate} onChange={(e) => setRecurrenceEndDate(e.target.value)} className="rounded-xl" />
+                    <div className="pl-6">
+                      <div className="grid grid-cols-[3fr_3fr_4fr] gap-2 items-end">
+                        <div className="space-y-1.5">
+                          <Label className="text-xs">Every</Label>
+                          <Input
+                            type="number"
+                            min={1}
+                            max={365}
+                            value={recurrenceInterval}
+                            onChange={(e) => {
+                              const v = parseInt(e.target.value, 10);
+                              setRecurrenceInterval(isNaN(v) || v < 1 ? 1 : v > 365 ? 365 : v);
+                            }}
+                            className="rounded-xl h-9 text-center px-2"
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs">Unit</Label>
+                          <Select value={recurrenceUnit} onValueChange={(v) => setRecurrenceUnit(v as 'DAILY' | 'WEEKLY' | 'MONTHLY')}>
+                            <SelectTrigger className="rounded-xl h-9"><SelectValue placeholder="Select" /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="DAILY">{recurrenceInterval > 1 ? 'Days' : 'Day'}</SelectItem>
+                              <SelectItem value="WEEKLY">{recurrenceInterval > 1 ? 'Weeks' : 'Week'}</SelectItem>
+                              <SelectItem value="MONTHLY">{recurrenceInterval > 1 ? 'Months' : 'Month'}</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label htmlFor="task-recurrence-end" className="text-xs">End date <span className="text-muted-foreground font-normal">(opt.)</span></Label>
+                          <Input id="task-recurrence-end" type="date" value={recurrenceEndDate} onChange={(e) => setRecurrenceEndDate(e.target.value)} className="rounded-xl h-9" />
+                        </div>
                       </div>
                     </div>
                   )}
@@ -843,7 +894,23 @@ export default function TaskDialog({
                 </p>
               )}
 
-              <DialogFooter className="pt-1">
+              <DialogFooter className="pt-1 flex-col gap-2 sm:flex-row sm:items-center">
+                {onCancelFromDate && task?._id && task?.recurrenceParentId && (
+                  <div className="flex-1 flex justify-start">
+                    {confirmCancelFrom ? (
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground">Cancel all future occurrences?</span>
+                        <Button type="button" size="sm" variant="ghost" onClick={() => setConfirmCancelFrom(false)} className="h-7 px-2 text-xs rounded-lg">Keep</Button>
+                        <Button type="button" size="sm" variant="destructive" onClick={() => { setConfirmCancelFrom(false); onCancelFromDate(); }} className="h-7 px-2 text-xs rounded-lg">Yes, cancel</Button>
+                      </div>
+                    ) : (
+                      <Button type="button" variant="ghost" size="sm" onClick={() => setConfirmCancelFrom(true)}
+                        className="text-destructive hover:text-destructive hover:bg-destructive/10 rounded-xl text-xs h-8 px-3">
+                        Cancel from this date onwards
+                      </Button>
+                    )}
+                  </div>
+                )}
                 <Button type="button" variant="outline" onClick={onClose} className="rounded-xl">
                   {isReadOnly ? 'Close' : 'Cancel'}
                 </Button>

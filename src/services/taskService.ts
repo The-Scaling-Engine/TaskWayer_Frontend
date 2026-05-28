@@ -13,7 +13,8 @@ export interface CreateTaskData {
   projectId?: string;
   columnId?: string | null;
   isRecurring?: boolean;
-  recurrenceType?: 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY' | null;
+  recurrenceType?: 'DAILY' | 'WEEKLY' | 'BIWEEKLY' | 'MONTHLY' | 'QUARTERLY' | 'YEARLY' | null;
+  recurrenceInterval?: number | null;
   recurrenceEndDate?: string | null;
 }
 
@@ -28,7 +29,8 @@ export interface UpdateTaskData {
   departmentId?: string;
   columnId?: string | null;
   isRecurring?: boolean;
-  recurrenceType?: 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY' | null;
+  recurrenceType?: 'DAILY' | 'WEEKLY' | 'BIWEEKLY' | 'MONTHLY' | 'QUARTERLY' | 'YEARLY' | null;
+  recurrenceInterval?: number | null;
   recurrenceEndDate?: string | null;
 }
 
@@ -78,6 +80,11 @@ export const taskService = {
 
   cancelRecurrence: async (id: string, keepChildren: boolean): Promise<{ success: boolean; message: string; data: { deletedCount: number } }> => {
     const response = await api.post(`/tasks/${id}/cancel-recurrence`, { keepChildren });
+    return response.data;
+  },
+
+  cancelFromDate: async (parentId: string, fromDate: string): Promise<{ success: boolean; message: string; data: { cancelled: number } }> => {
+    const response = await api.post(`/tasks/${parentId}/cancel-from`, { fromDate });
     return response.data;
   },
 };

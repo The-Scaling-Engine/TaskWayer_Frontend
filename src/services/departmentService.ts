@@ -79,7 +79,7 @@ export const departmentService = {
     data: {
       title: string; description?: string; priority?: string; deadline?: string;
       scheduledAt?: string; tags?: string[];
-      isRecurring?: boolean; recurrenceType?: string | null; recurrenceEndDate?: string | null;
+      isRecurring?: boolean; recurrenceType?: string | null; recurrenceInterval?: number | null; recurrenceEndDate?: string | null;
     }
   ): Promise<{ success: boolean; message: string; data: Task }> => {
     const response = await api.post(`/departments/${deptId}/members/${userId}/assign-task`, data);

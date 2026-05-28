@@ -8,6 +8,7 @@ import type { DatesSetArg, EventClickArg, EventInput } from '@fullcalendar/core'
 import type { DateClickArg } from '@fullcalendar/interaction';
 import { Plus } from 'lucide-react';
 import { taskService } from '@/services/taskService';
+import type { CreateTaskData } from '@/services/taskService';
 import { getApiErrorMessage } from '@/services/api';
 import type { Task } from '@/types';
 import TaskDialog from '@/components/TaskDialog';
@@ -138,14 +139,21 @@ export default function CalendarPage() {
     setDialogOpen(true);
   };
 
-  const handleDialogSubmit = async (data: {
-    title: string; description: string;
-    status: 'todo' | 'doing' | 'done'; deadline?: string;
-    priority?: 'low' | 'medium' | 'high'; tags?: string[]; departmentId?: string;
-    isRecurring?: boolean;
-    recurrenceType?: 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY' | null;
-    recurrenceEndDate?: string | null;
-  }) => {
+  const handleCancelFromDate = async () => {
+    if (!selectedTask?.recurrenceParentId || !selectedTask?.scheduledAt) return;
+    const fromDate = selectedTask.scheduledAt.substring(0, 10);
+    try {
+      await taskService.cancelFromDate(selectedTask.recurrenceParentId, fromDate);
+      setDialogOpen(false);
+      setSelectedTask(null);
+      if (currentRange) fetchForRange(currentRange.from, currentRange.to);
+      toast.success('Cancelled occurrences from this date onwards');
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Failed to cancel occurrences'));
+    }
+  };
+
+  const handleDialogSubmit = async (data: CreateTaskData & { status: 'todo' | 'doing' | 'done'; description: string }) => {
     setDialogLoading(true);
     try {
       if (selectedTask) {
@@ -451,6 +459,11 @@ export default function CalendarPage() {
         loading={dialogLoading}
         defaultDeadline={defaultDeadline}
         defaultScheduledAt={defaultScheduledAt}
+        onCancelFromDate={
+          selectedTask?.isRecurring && selectedTask?.recurrenceParentId
+            ? handleCancelFromDate
+            : undefined
+        }
       />
     </div>
   );

@@ -262,7 +262,8 @@ export default function DepartmentManagerPage() {
     title: string; description: string; status: 'todo' | 'doing' | 'done';
     deadline?: string; scheduledAt?: string | null; priority?: 'low' | 'medium' | 'high';
     tags?: string[]; isRecurring?: boolean;
-    recurrenceType?: 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY' | null; recurrenceEndDate?: string | null;
+    recurrenceType?: 'DAILY' | 'WEEKLY' | 'MONTHLY' | null;
+    recurrenceInterval?: number | null; recurrenceEndDate?: string | null;
   }) => {
     if (!assignedEditTask || !detailMember) return;
     const taskId = assignedEditTask._id || assignedEditTask.id!;
@@ -274,6 +275,7 @@ export default function DepartmentManagerPage() {
         deadline: data.deadline, scheduledAt: data.scheduledAt ?? undefined,
         tags: data.tags, isRecurring: data.isRecurring,
         recurrenceType: data.recurrenceType ?? undefined,
+        recurrenceInterval: data.recurrenceInterval ?? undefined,
         recurrenceEndDate: data.recurrenceEndDate ?? undefined,
       });
       toast.success('Task updated');
@@ -428,8 +430,8 @@ export default function DepartmentManagerPage() {
     title: string; description: string; status: 'todo' | 'doing' | 'done';
     deadline?: string; scheduledAt?: string | null;
     priority?: 'low' | 'medium' | 'high'; tags?: string[];
-    isRecurring?: boolean; recurrenceType?: 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY' | null;
-    recurrenceEndDate?: string | null;
+    isRecurring?: boolean; recurrenceType?: 'DAILY' | 'WEEKLY' | 'MONTHLY' | null;
+    recurrenceInterval?: number | null; recurrenceEndDate?: string | null;
   }) => {
     if (!departmentId || !assignTaskMember) return;
     setAssignLoading(true);
@@ -443,6 +445,7 @@ export default function DepartmentManagerPage() {
         tags: data.tags,
         isRecurring: data.isRecurring,
         recurrenceType: data.recurrenceType,
+        recurrenceInterval: data.recurrenceInterval,
         recurrenceEndDate: data.recurrenceEndDate,
       });
       toast.success('Task assigned successfully');
