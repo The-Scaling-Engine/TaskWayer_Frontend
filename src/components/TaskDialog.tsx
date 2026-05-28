@@ -1,5 +1,7 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 import { useState, useEffect, useRef, useMemo, type FormEvent } from 'react';
+import { boardColumnService } from '@/services/boardColumnService';
+import type { BoardColumn } from '@/types';
 import {
   Dialog,
   DialogContent,
@@ -270,6 +272,7 @@ interface TaskDialogProps {
     tags?: string[];
     departmentId?: string;
     projectId?: string;
+    columnId?: string | null;
     isRecurring?: boolean;
     recurrenceType?: 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY' | null;
     recurrenceEndDate?: string | null;
@@ -317,6 +320,8 @@ export default function TaskDialog({
   const [isRecurring, setIsRecurring] = useState(task?.isRecurring ?? false);
   const [recurrenceType, setRecurrenceType] = useState<'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY' | ''>(task?.recurrenceType ?? '');
   const [recurrenceEndDate, setRecurrenceEndDate] = useState(task?.recurrenceEndDate ? task.recurrenceEndDate.substring(0, 10) : '');
+  const [columnId, setColumnId] = useState<string | null>(task?.columnId ?? null);
+  const [projectColumns, setProjectColumns] = useState<BoardColumn[]>([]);
   const [error, setError] = useState('');
 
   // ── Update Notes tab state ─────────────────────────────────
@@ -375,9 +380,27 @@ export default function TaskDialog({
       setIsRecurring(task?.isRecurring ?? false);
       setRecurrenceType(task?.recurrenceType ?? '');
       setRecurrenceEndDate(task?.recurrenceEndDate ? task.recurrenceEndDate.substring(0, 10) : '');
+      setColumnId(task?.columnId ?? null);
       setError('');
     }
   }, [task, open, defaultDeadline, defaultScheduledAt]);
+
+  // Fetch columns for project context
+  useEffect(() => {
+    if (!open || !lockedProjectId) { setProjectColumns([]); return; }
+    boardColumnService.getColumns(lockedProjectId)
+      .then(res => {
+        const cols = [...res.data].sort((a, b) => a.order - b.order);
+        setProjectColumns(cols);
+        // Auto-select default column if none is selected
+        setColumnId(prev => {
+          if (prev && cols.some(c => c.id === prev)) return prev;
+          return cols.find(c => c.isDefault)?.id ?? (cols[0]?.id ?? null);
+        });
+      })
+      .catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, lockedProjectId]);
 
   // Reset notes state on open/close
   useEffect(() => {
@@ -436,6 +459,7 @@ export default function TaskDialog({
     setDeadline(''); setScheduledAt(''); setPriority('medium');
     setTagsInput(''); setDepartmentId('__none__'); setProjectId('__none__');
     setIsRecurring(false); setRecurrenceType(''); setRecurrenceEndDate('');
+    setColumnId(null); setProjectColumns([]);
     setError('');
   };
 
@@ -461,6 +485,7 @@ export default function TaskDialog({
       tags: tagsInput.split(',').map(t => t.trim()).filter(Boolean),
       departmentId: departmentId === '__none__' ? undefined : departmentId || undefined,
       projectId: projectId === '__none__' ? undefined : projectId || undefined,
+      ...(lockedProjectId && { columnId: columnId ?? null }),
       isRecurring,
       recurrenceType: isRecurring ? (recurrenceType as 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY') : null,
       recurrenceEndDate: isRecurring && recurrenceEndDate ? new Date(`${recurrenceEndDate}T23:59:59`).toISOString() : null,
@@ -663,15 +688,34 @@ export default function TaskDialog({
                 </div>
                 <div className="space-y-2.5 w-[120px] shrink-0">
                   <div className="space-y-1.5">
-                    <Label className="text-xs">Status</Label>
-                    <Select value={status} onValueChange={(v) => setStatus(v as 'todo' | 'doing' | 'done')} disabled={isReadOnly}>
-                      <SelectTrigger className="rounded-xl text-xs h-8 px-2"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="todo">To Do</SelectItem>
-                        <SelectItem value="doing">Doing</SelectItem>
-                        <SelectItem value="done">Done</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    {lockedProjectId && projectColumns.length > 0 ? (
+                      <>
+                        <Label className="text-xs">Column</Label>
+                        <Select
+                          value={columnId ?? ''}
+                          onValueChange={setColumnId}
+                          disabled={isReadOnly}>
+                          <SelectTrigger className="rounded-xl text-xs h-8 px-2"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {projectColumns.map(col => (
+                              <SelectItem key={col.id} value={col.id}>{col.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </>
+                    ) : (
+                      <>
+                        <Label className="text-xs">Status</Label>
+                        <Select value={status} onValueChange={(v) => setStatus(v as 'todo' | 'doing' | 'done')} disabled={isReadOnly}>
+                          <SelectTrigger className="rounded-xl text-xs h-8 px-2"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="todo">To Do</SelectItem>
+                            <SelectItem value="doing">Doing</SelectItem>
+                            <SelectItem value="done">Done</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </>
+                    )}
                   </div>
                   <div className="space-y-1.5">
                     <Label className="text-xs">Priority</Label>

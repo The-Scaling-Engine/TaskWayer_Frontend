@@ -28,6 +28,7 @@ interface TaskState {
   createTask: (data: CreateTaskData) => Promise<void>;
   updateTask: (id: string, data: UpdateTaskData) => Promise<void>;
   moveTask: (id: string, status: 'todo' | 'doing' | 'done') => Promise<void>;
+  moveTaskToColumn: (id: string, columnId: string) => Promise<void>;
   cancelRecurrence: (id: string, keepChildren: boolean) => Promise<string>;
   deleteTask: (id: string) => Promise<void>;
   silentFetch: () => Promise<void>;
@@ -79,6 +80,17 @@ export const useTaskStore = create<TaskState>((set, get) => ({
     set({ tasks: prev.map((t) => (t._id === id ? { ...t, status } : t)) });
     try {
       await taskService.updateTask(id, { status });
+    } catch (err) {
+      set({ tasks: prev });
+      throw err;
+    }
+  },
+
+  moveTaskToColumn: async (id: string, columnId: string) => {
+    const prev = get().tasks;
+    set({ tasks: prev.map((t) => (t._id === id ? { ...t, columnId } : t)) });
+    try {
+      await taskService.updateTask(id, { columnId });
     } catch (err) {
       set({ tasks: prev });
       throw err;

@@ -1,4 +1,4 @@
-import { useEffect, useState, forwardRef, useImperativeHandle } from 'react';
+import { useEffect, useState, useRef, forwardRef, useImperativeHandle } from 'react';
 import {
   DndContext,
   DragOverlay,
@@ -10,22 +10,40 @@ import {
   type DragStartEvent,
   type DragEndEvent,
 } from '@dnd-kit/core';
+import {
+  SortableContext,
+  useSortable,
+  horizontalListSortingStrategy,
+  arrayMove,
+} from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useTaskStore } from '@/store/taskStore';
 import { useSocketStore } from '@/store/socketStore';
+import { boardColumnService } from '@/services/boardColumnService';
 import TaskCard from '@/components/TaskCard';
 import TaskDialog from '@/components/TaskDialog';
 import CommentDialog from '@/components/CommentDialog';
-import type { Task } from '@/types';
-import { Plus, Loader2 } from 'lucide-react';
+import type { Task, BoardColumn } from '@/types';
+import { Plus, Loader2, ArrowUpDown, MoreHorizontal, Palette, Trash2, GripVertical } from 'lucide-react';
 import { toast } from 'sonner';
 import { getApiErrorMessage } from '@/services/api';
+import { cn } from '@/lib/utils';
 
-interface Column {
+// ─── Static column definition (non-project mode) ──────────────
+
+interface StaticColumn {
   id: 'todo' | 'doing' | 'done';
   title: string;
   color: string;
 }
+
+const STATIC_COLUMNS: StaticColumn[] = [
+  { id: 'todo',  title: 'To Do',       color: 'bg-blue-500' },
+  { id: 'doing', title: 'In Progress',  color: 'bg-[#FE812C]' },
+  { id: 'done',  title: 'Done',         color: 'bg-primary' },
+];
+
+// ─── Submit data ───────────────────────────────────────────────
 
 interface TaskSubmitData {
   title: string;
@@ -37,6 +55,7 @@ interface TaskSubmitData {
   tags?: string[];
   departmentId?: string;
   projectId?: string;
+  columnId?: string | null;
   isRecurring?: boolean;
   recurrenceType?: 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY' | null;
   recurrenceEndDate?: string | null;
@@ -48,63 +67,87 @@ interface PendingUpdate {
   data: TaskSubmitData;
 }
 
-const columns: Column[] = [
-  { id: 'todo', title: 'To Do', color: 'bg-blue-500' },
-  { id: 'doing', title: 'In Progress', color: 'bg-[#FE812C]' },
-  { id: 'done', title: 'Done', color: 'bg-primary' },
-];
+// ─── Sub-components ────────────────────────────────────────────
 
-interface DraggableTaskCardProps {
-  task: Task;
-  isActiveDrag: boolean;
-  onEdit: (task: Task) => void;
-  onDelete: (task: Task) => void;
-  onComment: (task: Task) => void;
-  onCancelRecurring: (task: Task) => void;
-  commentCount?: number;
-  hideDeptLabel?: boolean;
-  hideProjectLabel?: boolean;
-}
-
-function DraggableTaskCard({ task, isActiveDrag, onEdit, onDelete, onComment, onCancelRecurring, commentCount, hideDeptLabel, hideProjectLabel }: DraggableTaskCardProps) {
-  const { attributes, listeners, setNodeRef, transform } = useDraggable({ id: task._id });
+function DraggableTaskCard({
+  task, isActiveDrag, onEdit, onDelete, onComment, onCancelRecurring, commentCount, hideDeptLabel, hideProjectLabel,
+}: {
+  task: Task; isActiveDrag: boolean;
+  onEdit: (t: Task) => void; onDelete: (t: Task) => void;
+  onComment: (t: Task) => void; onCancelRecurring: (t: Task) => void;
+  commentCount?: number; hideDeptLabel?: boolean; hideProjectLabel?: boolean;
+}) {
+  const { attributes, listeners, setNodeRef, transform } = useDraggable({
+    id: task._id,
+    data: { type: 'task' },
+  });
   const style = transform ? { transform: CSS.Translate.toString(transform) } : undefined;
-
   return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      {...attributes}
-      {...listeners}
-      className={isActiveDrag ? 'opacity-30' : undefined}
-    >
-      <TaskCard
-        task={task}
-        onEdit={onEdit}
-        onDelete={onDelete}
-        onComment={onComment}
-        onCancelRecurring={onCancelRecurring}
-        commentCount={commentCount}
-        hideDeptLabel={hideDeptLabel}
-        hideProjectLabel={hideProjectLabel}
-      />
+    <div ref={setNodeRef} style={style} {...attributes} {...listeners}
+      className={isActiveDrag ? 'opacity-30' : undefined}>
+      <TaskCard task={task} onEdit={onEdit} onDelete={onDelete} onComment={onComment}
+        onCancelRecurring={onCancelRecurring} commentCount={commentCount}
+        hideDeptLabel={hideDeptLabel} hideProjectLabel={hideProjectLabel} />
     </div>
   );
 }
 
+// Drop zone for task drops (static mode — keyed by status)
 function DroppableColumn({ id, children }: { id: string; children: React.ReactNode }) {
   const { setNodeRef, isOver } = useDroppable({ id });
   return (
-    <div
-      ref={setNodeRef}
+    <div ref={setNodeRef}
       className={`space-y-2.5 min-h-[120px] rounded-xl p-2.5 transition-colors duration-150 ${
         isOver ? 'bg-primary/10 ring-2 ring-primary/30 ring-inset' : 'bg-muted/30'
-      }`}
-    >
+      }`}>
       {children}
     </div>
   );
 }
+
+// Drop zone for task drops (project mode — keyed by columnId)
+function ProjectTaskDropZone({ columnId, children }: { columnId: string; children: React.ReactNode }) {
+  const { setNodeRef, isOver } = useDroppable({
+    id: `task-drop-${columnId}`,
+    data: { type: 'task-target', columnId },
+  });
+  return (
+    <div ref={setNodeRef}
+      className={`space-y-2.5 min-h-[120px] rounded-xl p-2.5 transition-colors duration-150 ${
+        isOver ? 'bg-primary/10 ring-2 ring-primary/30 ring-inset' : 'bg-muted/30'
+      }`}>
+      {children}
+    </div>
+  );
+}
+
+// Sortable shell for column drag-to-reorder
+function SortableColumnShell({
+  col, isNew, children,
+}: {
+  col: BoardColumn;
+  isNew?: boolean;
+  children: (opts: { dragListeners: React.HTMLAttributes<Element> | undefined }) => React.ReactNode;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: `col-${col.id}`,
+    data: { type: 'column', columnId: col.id },
+  });
+  return (
+    <div ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      {...attributes}
+      className={cn(
+        'shrink-0 w-72',
+        isDragging && 'opacity-40',
+        isNew && 'animate-in fade-in-0 slide-in-from-right-4 duration-300',
+      )}>
+      {children({ dragListeners: listeners })}
+    </div>
+  );
+}
+
+// ─── Ref / Props ───────────────────────────────────────────────
 
 export interface KanbanBoardRef {
   openCreateTask: () => void;
@@ -121,10 +164,31 @@ interface KanbanBoardProps {
   lockedProjectName?: string;
 }
 
-const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({ hideDeptLabel, hideProjectLabel, filterFn, lockedDepartmentId, lockedDepartmentName, lockedProjectId, lockedProjectName }, ref) => {
-  const { tasks, loading, createTask, updateTask, deleteTask, moveTask, cancelRecurrence, silentFetch } = useTaskStore();
+// ─── Constants ────────────────────────────────────────────────
+
+const PRIORITY_ORDER: Record<string, number> = { high: 0, medium: 1, low: 2 };
+type SortOption = 'created' | 'priority' | 'dueDate';
+
+// ─── KanbanBoard ───────────────────────────────────────────────
+
+const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
+  hideDeptLabel, hideProjectLabel, filterFn,
+  lockedDepartmentId, lockedDepartmentName, lockedProjectId, lockedProjectName,
+}, ref) => {
+  const { tasks, loading, createTask, updateTask, deleteTask, moveTask, moveTaskToColumn, cancelRecurrence, silentFetch } = useTaskStore();
   const { socket } = useSocketStore();
 
+  // ── Sort ────────────────────────────────────────────────────
+  const sortStorageKey = `kanban-sort-${lockedProjectId ?? lockedDepartmentId ?? 'personal'}`;
+  const [sortBy, setSortBy] = useState<SortOption>(() =>
+    (localStorage.getItem(sortStorageKey) as SortOption) ?? 'created'
+  );
+  const handleSortChange = (value: SortOption) => {
+    setSortBy(value);
+    localStorage.setItem(sortStorageKey, value);
+  };
+
+  // ── Dialog state ────────────────────────────────────────────
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [dialogLoading, setDialogLoading] = useState(false);
@@ -136,13 +200,29 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({ hideDeptLabe
   const [commentTask, setCommentTask] = useState<Task | null>(null);
   const [highlightCommentId, setHighlightCommentId] = useState<string | undefined>(undefined);
   const [commentCounts, setCommentCounts] = useState<Record<string, number>>({});
-  const [activeTask, setActiveTask] = useState<Task | null>(null);
   const [openNotesOnNext, setOpenNotesOnNext] = useState(false);
 
+  // ── DnD state ───────────────────────────────────────────────
+  const [activeTask, setActiveTask] = useState<Task | null>(null);
+  const [activeColumn, setActiveColumn] = useState<BoardColumn | null>(null);
+
+  // ── Dynamic columns (project mode) ─────────────────────────
+  const [boardColumns, setBoardColumns] = useState<BoardColumn[]>([]);
+  const [columnsLoading, setColumnsLoading] = useState(false);
+  const [addingColumn, setAddingColumn] = useState(false);
+  const [newColumnName, setNewColumnName] = useState('');
+  const [renamingColumnId, setRenamingColumnId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState('');
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const addColumnInFlight = useRef(false);
+  const [newColumnId, setNewColumnId] = useState<string | null>(null);
+
+  // ── Sensors ─────────────────────────────────────────────────
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
   );
 
+  // ── Socket ──────────────────────────────────────────────────
   useEffect(() => {
     if (!socket) return;
     const handler = () => { void silentFetch(); };
@@ -150,6 +230,25 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({ hideDeptLabe
     return () => { socket.off('task:statusUpdated', handler); };
   }, [socket, silentFetch]);
 
+  // ── Fetch columns ────────────────────────────────────────────
+  useEffect(() => {
+    if (!lockedProjectId) return;
+    setColumnsLoading(true);
+    boardColumnService.getColumns(lockedProjectId)
+      .then(res => setBoardColumns([...res.data].sort((a, b) => a.order - b.order)))
+      .catch(() => toast.error('Failed to load columns'))
+      .finally(() => setColumnsLoading(false));
+  }, [lockedProjectId]);
+
+  // ── Close column menu on outside click ───────────────────────
+  useEffect(() => {
+    if (!openMenuId) return;
+    const handleClose = () => setOpenMenuId(null);
+    document.addEventListener('mousedown', handleClose);
+    return () => document.removeEventListener('mousedown', handleClose);
+  }, [openMenuId]);
+
+  // ── Imperative handle ────────────────────────────────────────
   useImperativeHandle(ref, () => ({
     openCreateTask: () => handleCreate(),
     openTaskById: (taskId: string, hcId?: string, openNotesTab?: boolean) => {
@@ -165,53 +264,121 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({ hideDeptLabe
     },
   }));
 
+  // ── Sort helper ──────────────────────────────────────────────
+  const sortTasks = (filtered: Task[]) =>
+    [...filtered].sort((a, b) => {
+      if (sortBy === 'priority') {
+        const pa = PRIORITY_ORDER[a.priority ?? ''] ?? 3;
+        const pb = PRIORITY_ORDER[b.priority ?? ''] ?? 3;
+        if (pa !== pb) return pa - pb;
+        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      }
+      if (sortBy === 'dueDate') {
+        const hasA = !!a.deadline, hasB = !!b.deadline;
+        if (hasA && !hasB) return -1;
+        if (!hasA && hasB) return 1;
+        if (hasA && hasB) return new Date(a.deadline!).getTime() - new Date(b.deadline!).getTime();
+        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      }
+      const aTime = a.scheduledAt ? new Date(a.scheduledAt).getTime() : new Date(a.createdAt).getTime();
+      const bTime = b.scheduledAt ? new Date(b.scheduledAt).getTime() : new Date(b.createdAt).getTime();
+      return aTime - bTime;
+    });
+
+  const getTasksByStatus = (status: string) =>
+    sortTasks(tasks.filter((t) => t.status === status && (!filterFn || filterFn(t))));
+
+  const getTasksByColumn = (col: BoardColumn) =>
+    sortTasks(tasks.filter((t) => {
+      if (filterFn && !filterFn(t)) return false;
+      return col.isDefault ? (!t.columnId || t.columnId === col.id) : t.columnId === col.id;
+    }));
+
+  // ── Drag handlers ────────────────────────────────────────────
   const handleDragStart = (event: DragStartEvent) => {
-    const task = tasks.find((t) => t._id === event.active.id);
-    setActiveTask(task ?? null);
+    const data = event.active.data.current as Record<string, unknown> | undefined;
+    if (data?.type === 'column') {
+      setActiveColumn(boardColumns.find(c => c.id === data.columnId) ?? null);
+      setActiveTask(null);
+    } else {
+      setActiveTask(tasks.find((t) => t._id === event.active.id) ?? null);
+      setActiveColumn(null);
+    }
   };
 
   const handleDragEnd = async (event: DragEndEvent) => {
     setActiveTask(null);
+    setActiveColumn(null);
     const { active, over } = event;
     if (!over) return;
+
+    const activeData = active.data.current as Record<string, unknown> | undefined;
+
+    // Column reorder
+    if (activeData?.type === 'column') {
+      const overData = over.data.current as Record<string, unknown> | undefined;
+      const fromId = activeData.columnId as string;
+      const toId = overData?.columnId as string | undefined;
+      if (!fromId || !toId || fromId === toId || !lockedProjectId) return;
+      const oldIds = boardColumns.map(c => c.id);
+      const newIds = arrayMove(oldIds, oldIds.indexOf(fromId), oldIds.indexOf(toId));
+      setBoardColumns(prev => {
+        const map = new Map(prev.map(c => [c.id, c]));
+        return newIds.map((id, i) => ({ ...map.get(id)!, order: i }));
+      });
+      void boardColumnService.reorderColumns(lockedProjectId, newIds).catch(() => {
+        setBoardColumns(prev => [...prev].sort((a, b) => a.order - b.order));
+        toast.error('Failed to reorder columns');
+      });
+      return;
+    }
+
+    // Task move
     const taskId = active.id as string;
-    const newStatus = over.id as 'todo' | 'doing' | 'done';
     const task = tasks.find((t) => t._id === taskId);
-    if (!task || task.status === newStatus) return;
-    try {
-      await moveTask(taskId, newStatus);
-    } catch (err) {
-      toast.error(getApiErrorMessage(err, 'Failed to move task'));
+    if (!task) return;
+
+    if (lockedProjectId) {
+      const overId = over.id as string;
+      if (!overId.startsWith('task-drop-')) return;
+      const newColumnId = overId.replace('task-drop-', '');
+      if (task.columnId === newColumnId) return;
+      try { await moveTaskToColumn(taskId, newColumnId); }
+      catch (err) { toast.error(getApiErrorMessage(err, 'Failed to move task')); }
+    } else {
+      const newStatus = over.id as 'todo' | 'doing' | 'done';
+      if (task.status === newStatus) return;
+      try { await moveTask(taskId, newStatus); }
+      catch (err) { toast.error(getApiErrorMessage(err, 'Failed to move task')); }
     }
   };
 
-  const handleCreate = (columnStatus?: 'todo' | 'doing' | 'done') => {
+  // ── Task create/edit handlers ────────────────────────────────
+  const handleCreate = (opts?: { status?: 'todo' | 'doing' | 'done'; columnId?: string }) => {
     setEditingTask(null);
-    if (columnStatus) {
-      setEditingTask({ _id: '', title: '', description: '', status: columnStatus, userId: '', createdAt: '', updatedAt: '' } as Task);
+    if (opts?.status || opts?.columnId) {
+      setEditingTask({
+        _id: '', title: '', description: '',
+        status: opts.status ?? 'todo',
+        columnId: opts.columnId ?? null,
+        userId: '', createdAt: '', updatedAt: '',
+      } as Task);
     }
     setDialogOpen(true);
   };
 
-  const handleEdit = (task: Task) => {
-    setEditingTask(task);
-    setDialogOpen(true);
-  };
-
-  const handleDelete = async (task: Task) => {
-    setDeleteConfirm(task);
-  };
+  const handleEdit = (task: Task) => { setEditingTask(task); setDialogOpen(true); };
+  const handleDelete = (task: Task) => setDeleteConfirm(task);
 
   const confirmDelete = async () => {
-    if (deleteConfirm) {
-      try {
-        await deleteTask(deleteConfirm._id);
-        toast.success('Task deleted successfully');
-      } catch (err) {
-        toast.error(getApiErrorMessage(err, 'Failed to delete task'));
-      }
-      setDeleteConfirm(null);
+    if (!deleteConfirm) return;
+    try {
+      await deleteTask(deleteConfirm._id);
+      toast.success('Task deleted successfully');
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Failed to delete task'));
     }
+    setDeleteConfirm(null);
   };
 
   const confirmCancelRecurring = async () => {
@@ -223,61 +390,126 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({ hideDeptLabe
       setCancelRecurringTask(null);
     } catch (err) {
       toast.error(getApiErrorMessage(err, 'Failed to cancel recurring task'));
-    } finally {
-      setCancelRecurringLoading(false);
-    }
+    } finally { setCancelRecurringLoading(false); }
   };
 
   const confirmUpdate = async () => {
-    if (updateConfirm) {
-      setDialogLoading(true);
-      try {
-        await updateTask(updateConfirm.taskId, updateConfirm.data);
-        toast.success('Task updated successfully');
-        setUpdateConfirm(null);
-        setDialogOpen(false);
-        setEditingTask(null);
-      } catch (err) {
-        toast.error(getApiErrorMessage(err, 'Failed to update task'));
-      } finally {
-        setDialogLoading(false);
-      }
-    }
+    if (!updateConfirm) return;
+    setDialogLoading(true);
+    try {
+      await updateTask(updateConfirm.taskId, updateConfirm.data);
+      toast.success('Task updated successfully');
+      setUpdateConfirm(null);
+      setDialogOpen(false);
+      setEditingTask(null);
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Failed to update task'));
+    } finally { setDialogLoading(false); }
   };
 
   const handleSubmit = async (data: TaskSubmitData) => {
     if (editingTask && editingTask._id) {
-      // Close the edit dialog first, then show update confirmation popup
       setDialogOpen(false);
-      setUpdateConfirm({
-        taskId: editingTask._id,
-        taskTitle: data.title,
-        data,
-      });
+      setUpdateConfirm({ taskId: editingTask._id, taskTitle: data.title, data });
     } else {
-      // Create directly (no confirmation needed)
       setDialogLoading(true);
       try {
-        await createTask(data);
+        await createTask({ ...data, ...(data.columnId != null && { columnId: data.columnId }) });
         toast.success('Task created successfully');
         setDialogOpen(false);
         setEditingTask(null);
       } catch (err) {
         toast.error(getApiErrorMessage(err, 'Failed to create task'));
-      } finally {
-        setDialogLoading(false);
-      }
+      } finally { setDialogLoading(false); }
     }
   };
 
-  const getTasksByStatus = (status: string) =>
-    tasks
-      .filter((t) => t.status === status && (!filterFn || filterFn(t)))
-      .sort((a, b) => {
-        const aTime = a.scheduledAt ? new Date(a.scheduledAt).getTime() : new Date(a.createdAt).getTime();
-        const bTime = b.scheduledAt ? new Date(b.scheduledAt).getTime() : new Date(b.createdAt).getTime();
-        return aTime - bTime;
-      });
+  // ── Column management handlers ────────────────────────────────
+  const handleAddColumn = async () => {
+    const name = newColumnName.trim();
+    if (!lockedProjectId || !name || addColumnInFlight.current) return;
+    addColumnInFlight.current = true;
+
+    // Optimistic: close input + show column immediately
+    const tempId = `temp-${Date.now()}`;
+    const tempColumn: BoardColumn = {
+      id: tempId,
+      projectId: lockedProjectId,
+      name,
+      color: '#94a3b8',
+      order: (boardColumns[boardColumns.length - 1]?.order ?? -1) + 1,
+      isDefault: false,
+      createdAt: new Date().toISOString(),
+    };
+    setNewColumnName('');
+    setAddingColumn(false);
+    setBoardColumns(prev => [...prev, tempColumn]);
+    setNewColumnId(tempId);
+    setTimeout(() => setNewColumnId(null), 400);
+
+    try {
+      const res = await boardColumnService.createColumn(lockedProjectId, { name });
+      // Swap temp column with real one (same position, real ID)
+      setBoardColumns(prev => prev.map(c => c.id === tempId ? res.data : c));
+    } catch (err) {
+      // Rollback: remove temp column + reopen input
+      setBoardColumns(prev => prev.filter(c => c.id !== tempId));
+      setAddingColumn(true);
+      setNewColumnName(name);
+      toast.error(getApiErrorMessage(err, 'Failed to create column'));
+    } finally {
+      addColumnInFlight.current = false;
+    }
+  };
+
+  const handleRenameColumn = async (columnId: string) => {
+    if (!lockedProjectId || !renameValue.trim()) { setRenamingColumnId(null); return; }
+    const original = boardColumns.find(c => c.id === columnId)?.name;
+    if (renameValue.trim() === original) { setRenamingColumnId(null); return; }
+    try {
+      const res = await boardColumnService.updateColumn(lockedProjectId, columnId, { name: renameValue.trim() });
+      setBoardColumns(prev => prev.map(c => c.id === columnId ? res.data : c));
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Failed to rename column'));
+    }
+    setRenamingColumnId(null);
+  };
+
+  const handleColumnColorChange = async (columnId: string, color: string) => {
+    if (!lockedProjectId) return;
+    setBoardColumns(prev => prev.map(c => c.id === columnId ? { ...c, color } : c));
+    try {
+      await boardColumnService.updateColumn(lockedProjectId, columnId, { color });
+    } catch {
+      toast.error('Failed to save color');
+      boardColumnService.getColumns(lockedProjectId)
+        .then(res => setBoardColumns([...res.data].sort((a, b) => a.order - b.order)))
+        .catch(() => {});
+    }
+  };
+
+  const handleDeleteColumn = async (columnId: string) => {
+    if (!lockedProjectId) return;
+    try {
+      await boardColumnService.deleteColumn(lockedProjectId, columnId);
+      setBoardColumns(prev => prev.filter(c => c.id !== columnId));
+      toast.success('Column deleted. Tasks moved to default column.');
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Failed to delete column'));
+    }
+  };
+
+  // ── Render helpers ────────────────────────────────────────────
+  const renderTaskCards = (colTasks: Task[]) =>
+    colTasks.map((task) => (
+      <DraggableTaskCard key={task._id} task={task}
+        isActiveDrag={activeTask?._id === task._id}
+        onEdit={handleEdit} onDelete={handleDelete}
+        onComment={(t) => setCommentTask(t)}
+        onCancelRecurring={(t) => { setKeepChildren(false); setCancelRecurringTask(t); }}
+        commentCount={commentCounts[task._id]}
+        hideDeptLabel={hideDeptLabel} hideProjectLabel={hideProjectLabel} />
+    ));
 
   if (loading) {
     return (
@@ -290,69 +522,245 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({ hideDeptLabe
   return (
     <>
       <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-          {columns.map((col) => {
-            const colTasks = getTasksByStatus(col.id);
-            return (
-              <div key={col.id} className="space-y-3">
-                {/* Column Header */}
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className={`w-2.5 h-2.5 rounded-full ${col.color}`} />
-                    <h3 className="font-semibold text-foreground text-sm">{col.title}</h3>
-                    <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full font-medium">
-                      {colTasks.length}
-                    </span>
-                  </div>
-                  <button
-                    onClick={() => handleCreate(col.id)}
-                    className="p-1 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-                    title={`Add task to ${col.title}`}
-                  >
-                    <Plus size={16} />
-                  </button>
-                </div>
+        {/* Sort control */}
+        <div className="flex items-center justify-end mb-4 gap-2">
+          <ArrowUpDown size={13} className="text-muted-foreground" />
+          <span className="text-xs text-muted-foreground">Sort by</span>
+          <select value={sortBy} onChange={(e) => handleSortChange(e.target.value as SortOption)}
+            className="text-xs bg-muted border border-border rounded-lg px-2.5 py-1 text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer">
+            <option value="created">Created</option>
+            <option value="priority">Priority</option>
+            <option value="dueDate">Due Date</option>
+          </select>
+        </div>
 
-                {/* Column Body */}
-                <DroppableColumn id={col.id}>
-                  {colTasks.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
-                      <p className="text-xs">No tasks yet</p>
+        {/* ── Project mode: dynamic columns ── */}
+        {lockedProjectId ? (
+          columnsLoading ? (
+            <div className="flex items-center justify-center py-20">
+              <Loader2 className="animate-spin text-primary" size={28} />
+            </div>
+          ) : (
+            <SortableContext
+              items={boardColumns.map(c => `col-${c.id}`)}
+              strategy={horizontalListSortingStrategy}>
+              <div className="flex gap-5 overflow-x-auto pb-4 min-h-[200px]">
+                {boardColumns.map(col => {
+                  const colTasks = getTasksByColumn(col);
+                  const isRenaming = renamingColumnId === col.id;
+                  const isMenuOpen = openMenuId === col.id;
+
+                  return (
+                    <SortableColumnShell key={col.id} col={col} isNew={col.id === newColumnId}>
+                      {({ dragListeners }) => (
+                        <div className="group space-y-3 w-full">
+                          {/* Column Header */}
+                          <div className="flex items-center gap-1.5">
+                            {/* Drag handle */}
+                            <button
+                              {...dragListeners}
+                              type="button"
+                              className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground/50 hover:text-muted-foreground cursor-grab active:cursor-grabbing touch-none shrink-0"
+                            >
+                              <GripVertical size={14} />
+                            </button>
+
+                            {/* Color dot */}
+                            <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: col.color }} />
+
+                            {/* Name or rename input */}
+                            {isRenaming ? (
+                              <input
+                                autoFocus
+                                value={renameValue}
+                                onChange={(e) => setRenameValue(e.target.value)}
+                                onBlur={() => { void handleRenameColumn(col.id); }}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') { void handleRenameColumn(col.id); }
+                                  if (e.key === 'Escape') { setRenamingColumnId(null); }
+                                }}
+                                className="flex-1 min-w-0 text-sm font-semibold bg-transparent border-b border-primary outline-none"
+                              />
+                            ) : (
+                              <h3
+                                className="flex-1 min-w-0 font-semibold text-foreground text-sm truncate cursor-default select-none"
+                                onDoubleClick={() => { setRenamingColumnId(col.id); setRenameValue(col.name); }}
+                                title="Double-click to rename"
+                              >
+                                {col.name}
+                              </h3>
+                            )}
+
+                            {/* Task count */}
+                            <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full font-medium shrink-0">
+                              {colTasks.length}
+                            </span>
+
+                            {/* Add task */}
+                            <button
+                              onClick={() => handleCreate({ columnId: col.id })}
+                              className="p-1 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                              title={`Add task to ${col.name}`}>
+                              <Plus size={15} />
+                            </button>
+
+                            {/* Column menu */}
+                            <div className="relative shrink-0" onMouseDown={(e) => e.stopPropagation()}>
+                              <button
+                                onClick={() => setOpenMenuId(isMenuOpen ? null : col.id)}
+                                className="p-1 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors opacity-0 group-hover:opacity-100"
+                              >
+                                <MoreHorizontal size={14} />
+                              </button>
+
+                              {isMenuOpen && (
+                                <div className="absolute right-0 top-7 z-50 bg-popover border border-border rounded-xl shadow-lg p-1 min-w-[160px]">
+                                  {/* Rename */}
+                                  <button
+                                    onMouseDown={(e) => e.stopPropagation()}
+                                    onClick={() => {
+                                      setOpenMenuId(null);
+                                      setRenamingColumnId(col.id);
+                                      setRenameValue(col.name);
+                                    }}
+                                    className="w-full flex items-center gap-2 text-sm px-3 py-2 rounded-lg hover:bg-muted text-foreground">
+                                    Rename
+                                  </button>
+
+                                  {/* Color picker */}
+                                  <div
+                                    onMouseDown={(e) => e.stopPropagation()}
+                                    className="flex items-center gap-2 text-sm px-3 py-2 rounded-lg hover:bg-muted text-foreground cursor-pointer">
+                                    <Palette size={13} className="text-muted-foreground" />
+                                    <span>Color</span>
+                                    <input
+                                      type="color"
+                                      defaultValue={col.color}
+                                      onChange={(e) => {
+                                        setBoardColumns(prev => prev.map(c => c.id === col.id ? { ...c, color: e.target.value } : c));
+                                      }}
+                                      onBlur={(e) => { void handleColumnColorChange(col.id, e.target.value); }}
+                                      className="ml-auto w-8 h-6 cursor-pointer rounded border-0 p-0"
+                                    />
+                                  </div>
+
+                                  {/* Delete (not for default column) */}
+                                  {!col.isDefault && (
+                                    <button
+                                      onMouseDown={(e) => e.stopPropagation()}
+                                      onClick={() => {
+                                        setOpenMenuId(null);
+                                        void handleDeleteColumn(col.id);
+                                      }}
+                                      className="w-full flex items-center gap-2 text-sm px-3 py-2 rounded-lg hover:bg-destructive/10 text-destructive">
+                                      <Trash2 size={13} /> Delete column
+                                    </button>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Column Body */}
+                          <ProjectTaskDropZone columnId={col.id}>
+                            {colTasks.length === 0 ? (
+                              <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
+                                <p className="text-xs">No tasks yet</p>
+                              </div>
+                            ) : renderTaskCards(colTasks)}
+                          </ProjectTaskDropZone>
+                        </div>
+                      )}
+                    </SortableColumnShell>
+                  );
+                })}
+
+                {/* Add column button */}
+                <div className="shrink-0 w-64">
+                  {addingColumn ? (
+                    <div className="bg-muted/30 rounded-2xl p-3 space-y-2 animate-in fade-in-0 slide-in-from-bottom-2 duration-150">
+                      <input
+                        autoFocus
+                        value={newColumnName}
+                        onChange={(e) => setNewColumnName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') { void handleAddColumn(); }
+                          if (e.key === 'Escape') { setAddingColumn(false); setNewColumnName(''); }
+                        }}
+                        placeholder="Column name..."
+                        className="w-full text-sm bg-background border border-border rounded-xl px-3 py-2 focus:outline-none focus:ring-1 focus:ring-primary"
+                      />
+                      <div className="flex gap-2">
+                        <button onClick={() => void handleAddColumn()}
+                          className="text-xs px-3 py-1.5 rounded-xl bg-[#FE812C] text-white hover:bg-[#e5732a] transition-colors">
+                          Add
+                        </button>
+                        <button onClick={() => { setAddingColumn(false); setNewColumnName(''); }}
+                          className="text-xs px-3 py-1.5 rounded-xl text-muted-foreground hover:bg-muted transition-colors">
+                          Cancel
+                        </button>
+                      </div>
                     </div>
                   ) : (
-                    colTasks.map((task) => (
-                      <DraggableTaskCard
-                        key={task._id}
-                        task={task}
-                        isActiveDrag={activeTask?._id === task._id}
-                        onEdit={handleEdit}
-                        onDelete={handleDelete}
-                        onComment={(t) => setCommentTask(t)}
-                        onCancelRecurring={(t) => { setKeepChildren(false); setCancelRecurringTask(t); }}
-                        commentCount={commentCounts[task._id]}
-                        hideDeptLabel={hideDeptLabel}
-                        hideProjectLabel={hideProjectLabel}
-                      />
-                    ))
+                    <button
+                      onClick={() => setAddingColumn(true)}
+                      className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-2xl px-4 py-3 w-full transition-colors border-2 border-dashed border-border/50 hover:border-border">
+                      <Plus size={15} />
+                      Add column
+                    </button>
                   )}
-                </DroppableColumn>
+                </div>
               </div>
-            );
-          })}
-        </div>
+            </SortableContext>
+          )
+        ) : (
+          /* ── Static mode: 3-column status board ── */
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+            {STATIC_COLUMNS.map((col) => {
+              const colTasks = getTasksByStatus(col.id);
+              return (
+                <div key={col.id} className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className={`w-2.5 h-2.5 rounded-full ${col.color}`} />
+                      <h3 className="font-semibold text-foreground text-sm">{col.title}</h3>
+                      <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full font-medium">
+                        {colTasks.length}
+                      </span>
+                    </div>
+                    <button onClick={() => handleCreate({ status: col.id })}
+                      className="p-1 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                      title={`Add task to ${col.title}`}>
+                      <Plus size={16} />
+                    </button>
+                  </div>
+                  <DroppableColumn id={col.id}>
+                    {colTasks.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
+                        <p className="text-xs">No tasks yet</p>
+                      </div>
+                    ) : renderTaskCards(colTasks)}
+                  </DroppableColumn>
+                </div>
+              );
+            })}
+          </div>
+        )}
 
         <DragOverlay dropAnimation={null}>
           {activeTask ? (
             <div className="rotate-2 opacity-90 shadow-2xl">
-              <TaskCard
-                task={activeTask}
-                onEdit={handleEdit}
-                onDelete={handleDelete}
+              <TaskCard task={activeTask} onEdit={handleEdit} onDelete={handleDelete}
                 onComment={(t) => setCommentTask(t)}
                 commentCount={commentCounts[activeTask._id]}
-                hideDeptLabel={hideDeptLabel}
-                hideProjectLabel={hideProjectLabel}
-              />
+                hideDeptLabel={hideDeptLabel} hideProjectLabel={hideProjectLabel} />
+            </div>
+          ) : activeColumn ? (
+            <div className="opacity-90 shadow-2xl bg-card border border-border/60 rounded-2xl p-3 w-72">
+              <div className="flex items-center gap-2">
+                <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: activeColumn.color }} />
+                <span className="font-semibold text-sm text-foreground">{activeColumn.name}</span>
+              </div>
             </div>
           ) : null}
         </DragOverlay>
@@ -365,14 +773,14 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({ hideDeptLabe
         onSubmit={handleSubmit}
         task={editingTask}
         loading={dialogLoading}
-        lockedDepartmentId={!editingTask ? lockedDepartmentId : undefined}
-        lockedDepartmentName={!editingTask ? lockedDepartmentName : undefined}
-        lockedProjectId={!editingTask ? lockedProjectId : undefined}
-        lockedProjectName={!editingTask ? lockedProjectName : undefined}
+        lockedDepartmentId={editingTask?._id ? undefined : lockedDepartmentId}
+        lockedDepartmentName={editingTask?._id ? undefined : lockedDepartmentName}
+        lockedProjectId={lockedProjectId}
+        lockedProjectName={lockedProjectName}
         initialTab={openNotesOnNext ? 'notes' : undefined}
       />
 
-      {/* Update Confirmation Dialog */}
+      {/* Update Confirmation */}
       {updateConfirm && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50">
           <div className="bg-card border border-border rounded-2xl p-6 max-w-sm w-full mx-4 shadow-xl space-y-4">
@@ -381,17 +789,12 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({ hideDeptLabe
               Are you sure you want to update "{updateConfirm.taskTitle}"?
             </p>
             <div className="flex gap-3 justify-end">
-              <button
-                onClick={() => setUpdateConfirm(null)}
-                className="px-4 py-2 rounded-xl text-sm font-medium text-muted-foreground hover:bg-muted transition-colors"
-              >
+              <button onClick={() => setUpdateConfirm(null)}
+                className="px-4 py-2 rounded-xl text-sm font-medium text-muted-foreground hover:bg-muted transition-colors">
                 Cancel
               </button>
-              <button
-                onClick={confirmUpdate}
-                disabled={dialogLoading}
-                className="px-4 py-2 rounded-xl text-sm font-medium bg-[#FE812C] text-white hover:bg-[#e5732a] transition-colors"
-              >
+              <button onClick={() => void confirmUpdate()} disabled={dialogLoading}
+                className="px-4 py-2 rounded-xl text-sm font-medium bg-[#FE812C] text-white hover:bg-[#e5732a] transition-colors">
                 {dialogLoading ? 'Updating...' : 'Confirm Update'}
               </button>
             </div>
@@ -401,15 +804,13 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({ hideDeptLabe
 
       {/* Comment Dialog */}
       {commentTask && (
-        <CommentDialog
-          open={!!commentTask}
+        <CommentDialog open={!!commentTask}
           onClose={() => { setCommentTask(null); setHighlightCommentId(undefined); }}
           task={commentTask}
           onCountUpdate={(taskId, count) =>
             setCommentCounts((prev) => ({ ...prev, [taskId]: count }))
           }
-          highlightCommentId={highlightCommentId}
-        />
+          highlightCommentId={highlightCommentId} />
       )}
 
       {/* Cancel Recurring Dialog */}
@@ -422,26 +823,16 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({ hideDeptLabe
             </p>
             <div className="space-y-2.5">
               <label className="flex items-start gap-3 cursor-pointer">
-                <input
-                  type="radio"
-                  name="keepChildren"
-                  checked={!keepChildren}
-                  onChange={() => setKeepChildren(false)}
-                  className="mt-0.5 accent-[#FE812C]"
-                />
+                <input type="radio" name="keepChildren" checked={!keepChildren}
+                  onChange={() => setKeepChildren(false)} className="mt-0.5 accent-[#FE812C]" />
                 <div>
                   <p className="text-sm font-medium text-foreground">Delete unstarted copies</p>
                   <p className="text-xs text-muted-foreground">Remove all "To Do" copies. Keep "In Progress" and "Done" copies.</p>
                 </div>
               </label>
               <label className="flex items-start gap-3 cursor-pointer">
-                <input
-                  type="radio"
-                  name="keepChildren"
-                  checked={keepChildren}
-                  onChange={() => setKeepChildren(true)}
-                  className="mt-0.5 accent-[#FE812C]"
-                />
+                <input type="radio" name="keepChildren" checked={keepChildren}
+                  onChange={() => setKeepChildren(true)} className="mt-0.5 accent-[#FE812C]" />
                 <div>
                   <p className="text-sm font-medium text-foreground">Keep all existing copies</p>
                   <p className="text-xs text-muted-foreground">Only stop generating new copies. All existing copies remain.</p>
@@ -449,17 +840,12 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({ hideDeptLabe
               </label>
             </div>
             <div className="flex gap-3 justify-end">
-              <button
-                onClick={() => setCancelRecurringTask(null)}
-                className="px-4 py-2 rounded-xl text-sm font-medium text-muted-foreground hover:bg-muted transition-colors"
-              >
+              <button onClick={() => setCancelRecurringTask(null)}
+                className="px-4 py-2 rounded-xl text-sm font-medium text-muted-foreground hover:bg-muted transition-colors">
                 Cancel
               </button>
-              <button
-                onClick={confirmCancelRecurring}
-                disabled={cancelRecurringLoading}
-                className="px-4 py-2 rounded-xl text-sm font-medium bg-amber-500 text-white hover:bg-amber-600 transition-colors"
-              >
+              <button onClick={() => void confirmCancelRecurring()} disabled={cancelRecurringLoading}
+                className="px-4 py-2 rounded-xl text-sm font-medium bg-amber-500 text-white hover:bg-amber-600 transition-colors">
                 {cancelRecurringLoading ? 'Processing...' : 'Confirm'}
               </button>
             </div>
@@ -467,7 +853,7 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({ hideDeptLabe
         </div>
       )}
 
-      {/* Delete Confirmation Dialog */}
+      {/* Delete Task Confirmation */}
       {deleteConfirm && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50">
           <div className="bg-card border border-border rounded-2xl p-6 max-w-sm w-full mx-4 shadow-xl space-y-4">
@@ -476,16 +862,12 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({ hideDeptLabe
               Are you sure you want to delete "{deleteConfirm.title}"? This action cannot be undone.
             </p>
             <div className="flex gap-3 justify-end">
-              <button
-                onClick={() => setDeleteConfirm(null)}
-                className="px-4 py-2 rounded-xl text-sm font-medium text-muted-foreground hover:bg-muted transition-colors"
-              >
+              <button onClick={() => setDeleteConfirm(null)}
+                className="px-4 py-2 rounded-xl text-sm font-medium text-muted-foreground hover:bg-muted transition-colors">
                 Cancel
               </button>
-              <button
-                onClick={confirmDelete}
-                className="px-4 py-2 rounded-xl text-sm font-medium bg-destructive text-white hover:bg-destructive/90 transition-colors"
-              >
+              <button onClick={() => void confirmDelete()}
+                className="px-4 py-2 rounded-xl text-sm font-medium bg-destructive text-white hover:bg-destructive/90 transition-colors">
                 Delete
               </button>
             </div>

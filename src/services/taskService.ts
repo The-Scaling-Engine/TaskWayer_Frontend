@@ -11,6 +11,7 @@ export interface CreateTaskData {
   scheduledAt?: string | null;
   departmentId?: string;
   projectId?: string;
+  columnId?: string | null;
   isRecurring?: boolean;
   recurrenceType?: 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY' | null;
   recurrenceEndDate?: string | null;
@@ -25,6 +26,7 @@ export interface UpdateTaskData {
   deadline?: string;
   scheduledAt?: string | null;
   departmentId?: string;
+  columnId?: string | null;
   isRecurring?: boolean;
   recurrenceType?: 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY' | null;
   recurrenceEndDate?: string | null;

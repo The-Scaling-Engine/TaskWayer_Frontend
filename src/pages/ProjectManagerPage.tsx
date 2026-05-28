@@ -440,14 +440,16 @@ export default function ProjectManagerPage() {
                 />
               </div>
               {isOwnerOrManager && (
-                <Button
-                  onClick={handleSaveSettings}
-                  disabled={settingsSaving || !editName.trim()}
-                  className="bg-[#FE812C] hover:bg-[#e5732a] text-white rounded-xl gap-2"
-                >
-                  {settingsSaving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-                  {settingsSaving ? 'Saving...' : 'Save Changes'}
-                </Button>
+                <div className="flex justify-end">
+                  <Button
+                    onClick={handleSaveSettings}
+                    disabled={settingsSaving || !editName.trim()}
+                    className="bg-[#FE812C] hover:bg-[#e5732a] text-white rounded-xl gap-2"
+                  >
+                    {settingsSaving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                    {settingsSaving ? 'Saving...' : 'Save Changes'}
+                  </Button>
+                </div>
               )}
             </div>
 

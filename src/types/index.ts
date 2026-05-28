@@ -30,6 +30,7 @@ export interface Task {
   completedAt?: string;
   departmentId?: string;
   projectId?: string | null;
+  columnId?: string | null;
   userId: string;
   createdAt: string;
   updatedAt: string;
@@ -495,6 +496,25 @@ export interface AdminAnalyticsDepartmentsResponse {
   limit: number;
   total: number;
   departments: AdminAnalyticsDeptItem[];
+}
+
+// ============================================
+// BOARD COLUMNS
+// ============================================
+export interface BoardColumn {
+  id: string;
+  projectId: string;
+  name: string;
+  color: string;
+  order: number;
+  isDefault: boolean;
+  createdAt: string;
+}
+
+export interface BoardColumnsResponse {
+  success: boolean;
+  count: number;
+  data: BoardColumn[];
 }
 
 // ============================================
