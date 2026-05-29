@@ -5,6 +5,7 @@ import type {
   ProjectsResponse,
   ProjectResponse,
   ProjectMembersResponse,
+  ProjectDepartmentLink,
 } from '@/types';
 
 export interface CreateProjectData {
@@ -100,6 +101,11 @@ export const projectService = {
   },
 
   // ── Departments ───────────────────────────────────────────────
+
+  getDepartments: async (projectId: string): Promise<{ success: boolean; data: ProjectDepartmentLink[] }> => {
+    const response = await api.get(`/projects/${projectId}/departments`);
+    return response.data;
+  },
 
   linkDepartment: async (
     projectId: string,

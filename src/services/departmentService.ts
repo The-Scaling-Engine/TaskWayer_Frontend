@@ -73,6 +73,11 @@ export const departmentService = {
     return response.data;
   },
 
+  getLinkable: async (): Promise<{ id: string; name: string }[]> => {
+    const response = await api.get('/departments/linkable');
+    return response.data?.data ?? [];
+  },
+
   assignTask: async (
     deptId: string,
     userId: string,

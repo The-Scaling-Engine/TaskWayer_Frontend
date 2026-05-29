@@ -3,13 +3,16 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   FolderOpen, ArrowLeft, Loader2, UserPlus, UserMinus,
   Search, X, Check, Trash2, Archive, ArchiveRestore, LogOut,
-  Bell, Send, Webhook,
+  Bell, Send, Building2, Plus,
 } from 'lucide-react';
 import { useProjectStore } from '@/store/projectStore';
 import { useAuthStore } from '@/store/authStore';
 import { userService } from '@/services/userService';
+import { projectService } from '@/services/projectService';
+import { departmentService } from '@/services/departmentService';
 import { slackConfigService } from '@/services/slackConfigService';
 import type { SlackConfig } from '@/services/slackConfigService';
+import type { ProjectDepartmentLink } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -47,8 +50,17 @@ export default function ProjectManagerPage() {
   const [leaveConfirm, setLeaveConfirm] = useState(false);
   const [leaveLoading, setLeaveLoading] = useState(false);
   const [archiveLoading, setArchiveLoading] = useState(false);
+  const [archiveConfirm, setArchiveConfirm] = useState(false);
   const [transferConfirm, setTransferConfirm] = useState<{ profileId: string; label: string } | null>(null);
   const [transferLoading, setTransferLoading] = useState(false);
+
+  // ── Linked departments state ──────────────────────────────────────────────
+  const [linkedDepts, setLinkedDepts] = useState<ProjectDepartmentLink[]>([]);
+  const [linkableDepts, setLinkableDepts] = useState<{ id: string; name: string }[]>([]);
+  const [selectedDeptId, setSelectedDeptId] = useState('');
+  const [linkingDept, setLinkingDept] = useState(false);
+  const [unlinkingDeptId, setUnlinkingDeptId] = useState<string | null>(null);
+  const [deptsLoading, setDeptsLoading] = useState(false);
 
   // ── Slack config state ────────────────────────────────────────────────────
   const [slackConfig, setSlackConfig] = useState<SlackConfig | null>(null);
@@ -93,6 +105,7 @@ export default function ProjectManagerPage() {
 
   useEffect(() => {
     if (tab !== 'settings' || !projectId || !isOwnerOrManager) return;
+
     setSlackLoading(true);
     slackConfigService.get(projectId)
       .then((cfg) => {
@@ -107,6 +120,18 @@ export default function ProjectManagerPage() {
       })
       .catch(() => {})
       .finally(() => setSlackLoading(false));
+
+    setDeptsLoading(true);
+    Promise.all([
+      projectService.getDepartments(projectId),
+      departmentService.getLinkable(),
+    ])
+      .then(([deptRes, linkable]) => {
+        setLinkedDepts(deptRes.data ?? []);
+        setLinkableDepts(linkable);
+      })
+      .catch(() => {})
+      .finally(() => setDeptsLoading(false));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, projectId]);
 
@@ -255,6 +280,37 @@ export default function ProjectManagerPage() {
     }
   };
 
+  const handleLinkDept = async () => {
+    if (!projectId || !selectedDeptId) return;
+    setLinkingDept(true);
+    try {
+      await projectService.linkDepartment(projectId, selectedDeptId);
+      const res = await projectService.getDepartments(projectId);
+      setLinkedDepts(res.data ?? []);
+      setSelectedDeptId('');
+      toast.success('Department linked');
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Failed to link department'));
+    } finally {
+      setLinkingDept(false);
+    }
+  };
+
+  const handleUnlinkDept = async (departmentId: string) => {
+    if (!projectId) return;
+    setUnlinkingDeptId(departmentId);
+    try {
+      await projectService.unlinkDepartment(projectId, departmentId);
+      const res = await projectService.getDepartments(projectId);
+      setLinkedDepts(res.data ?? []);
+      toast.success('Department unlinked');
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Failed to unlink department'));
+    } finally {
+      setUnlinkingDeptId(null);
+    }
+  };
+
   const handleSaveSettings = async () => {
     if (!projectId || !editName.trim()) return;
     setSettingsSaving(true);
@@ -282,6 +338,7 @@ export default function ProjectManagerPage() {
         await archiveProject(projectId);
         toast.success('Project archived');
       }
+      setArchiveConfirm(false);
     } catch (err) {
       toast.error(getApiErrorMessage(err, 'Failed to update archive status'));
     } finally {
@@ -326,6 +383,9 @@ export default function ProjectManagerPage() {
   }
 
   const members = currentProject.members ?? [];
+  const availableDepts = linkableDepts.filter(
+    (dept) => !linkedDepts.some((ld) => ld.departmentId === dept.id)
+  );
 
   return (
     <>
@@ -497,9 +557,16 @@ export default function ProjectManagerPage() {
         {/* ── Settings tab ── */}
         {tab === 'settings' && (
           <div className="space-y-6">
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-            {/* Left: Project Details */}
-            <div className="bg-card border border-border rounded-2xl p-5 space-y-4">
+          {/* ── Top row: Project Details | Linked Departments | Archive + Danger ── */}
+          <div className={cn(
+            'grid gap-6',
+            isOwnerOrManager ? 'grid-cols-1 xl:grid-cols-10' : 'grid-cols-1 xl:grid-cols-2'
+          )}>
+            {/* Project Details — 3/10 */}
+            <div className={cn(
+              'bg-card border border-border rounded-2xl p-5 space-y-4',
+              isOwnerOrManager && 'xl:col-span-3'
+            )}>
               <h3 className="font-semibold text-foreground text-sm">Project Details</h3>
               <div className="space-y-1.5">
                 <Label htmlFor="project-name">Name</Label>
@@ -536,32 +603,114 @@ export default function ProjectManagerPage() {
               )}
             </div>
 
-            {/* Right: Archive + Danger Zone */}
-            <div className="space-y-4">
+            {/* Linked Departments — 4/10 (isOwnerOrManager only) */}
+            {isOwnerOrManager && (
+              <div className="xl:col-span-4 bg-card border border-border rounded-2xl p-5 space-y-4">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                    <Building2 size={14} className="text-primary" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-foreground text-sm">Linked Departments</h3>
+                    <p className="text-xs text-muted-foreground">Organizational context for this project</p>
+                  </div>
+                </div>
+
+                {deptsLoading ? (
+                  <div className="flex items-center gap-2 text-muted-foreground text-sm">
+                    <Loader2 size={14} className="animate-spin" /> Loading...
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {linkedDepts.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {linkedDepts.map((link) => (
+                          <span
+                            key={link.departmentId}
+                            className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-semibold border border-primary/20"
+                          >
+                            {link.department?.name ?? link.departmentId}
+                            <button
+                              onClick={() => handleUnlinkDept(link.departmentId)}
+                              disabled={unlinkingDeptId === link.departmentId}
+                              className="hover:text-destructive transition-colors disabled:opacity-50 ml-0.5"
+                              title="Unlink department"
+                            >
+                              {unlinkingDeptId === link.departmentId
+                                ? <Loader2 size={10} className="animate-spin" />
+                                : <X size={10} />}
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={selectedDeptId}
+                        onChange={(e) => setSelectedDeptId(e.target.value)}
+                        className="flex-1 bg-muted/50 border border-border rounded-xl px-3 py-2 text-sm outline-none cursor-pointer"
+                      >
+                        <option value="">Select a department...</option>
+                        {availableDepts.map((dept) => (
+                          <option key={dept.id} value={dept.id}>{dept.name}</option>
+                        ))}
+                      </select>
+                      <button
+                        onClick={handleLinkDept}
+                        disabled={linkingDept || !selectedDeptId}
+                        className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold bg-primary/10 text-primary hover:bg-primary hover:text-white disabled:opacity-50 transition-colors shrink-0"
+                      >
+                        {linkingDept ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+                        Link
+                      </button>
+                    </div>
+
+                    {linkedDepts.length === 0 && availableDepts.length === 0 && !deptsLoading && (
+                      <p className="text-sm text-muted-foreground">No departments available to link.</p>
+                    )}
+
+                    <p className="text-xs text-muted-foreground bg-muted/30 rounded-xl px-3 py-2">
+                      Department OWNER/ADMIN can view this project. Project membership must still be managed explicitly.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Archive + Danger Zone — 3/10 */}
+            <div className={cn(
+              'flex flex-col gap-4',
+              isOwnerOrManager && 'xl:col-span-3'
+            )}>
               {/* Archive / Restore */}
               {isOwnerOrManager && (
-                <div className="bg-card border border-border rounded-2xl p-5 space-y-3">
-                  <h3 className="font-semibold text-foreground text-sm">
-                    {currentProject.archivedAt ? 'Restore Project' : 'Archive Project'}
-                  </h3>
-                  <p className="text-sm text-muted-foreground">
-                    {currentProject.archivedAt
-                      ? 'Restore this project to make it active again.'
-                      : 'Archiving hides the project from active views. You can restore it later.'}
-                  </p>
-                  <button
-                    onClick={handleArchive}
-                    disabled={archiveLoading}
-                    className={cn(
-                      'flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-colors disabled:opacity-60',
-                      currentProject.archivedAt
-                        ? 'bg-primary/10 text-primary hover:bg-primary hover:text-white'
-                        : 'bg-muted text-muted-foreground hover:bg-muted/80'
-                    )}
-                  >
-                    {archiveLoading ? <Loader2 size={14} className="animate-spin" /> : currentProject.archivedAt ? <ArchiveRestore size={14} /> : <Archive size={14} />}
-                    {archiveLoading ? 'Processing...' : currentProject.archivedAt ? 'Restore Project' : 'Archive Project'}
-                  </button>
+                <div className="bg-card border border-border rounded-2xl p-5">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <h3 className="font-semibold text-foreground text-sm">
+                        {currentProject.archivedAt ? 'Restore Project' : 'Archive Project'}
+                      </h3>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        {currentProject.archivedAt
+                          ? 'Restore this project to make it active again.'
+                          : 'Archiving hides the project from active views. You can restore it later.'}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => setArchiveConfirm(true)}
+                      disabled={archiveLoading}
+                      className={cn(
+                        'flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-colors disabled:opacity-60 shrink-0',
+                        currentProject.archivedAt
+                          ? 'bg-primary/10 text-primary hover:bg-primary hover:text-white'
+                          : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                      )}
+                    >
+                      {currentProject.archivedAt ? <ArchiveRestore size={14} /> : <Archive size={14} />}
+                      {currentProject.archivedAt ? 'Restore' : 'Archive'}
+                    </button>
+                  </div>
                 </div>
               )}
 
@@ -607,7 +756,12 @@ export default function ProjectManagerPage() {
             <div className="bg-card border border-border rounded-2xl p-5 space-y-5">
               <div className="flex items-center gap-2">
                 <div className="w-7 h-7 rounded-lg bg-[#4A154B]/10 flex items-center justify-center shrink-0">
-                  <Webhook size={14} className="text-[#4A154B] dark:text-violet-400" />
+                  <svg viewBox="0 0 122.8 122.8" className="w-4 h-4" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M25.8 77.6c0 7.1-5.8 12.9-12.9 12.9S0 84.7 0 77.6s5.8-12.9 12.9-12.9h12.9v12.9zm6.5 0c0-7.1 5.8-12.9 12.9-12.9s12.9 5.8 12.9 12.9v32.3c0 7.1-5.8 12.9-12.9 12.9s-12.9-5.8-12.9-12.9V77.6z" fill="#e01e5a"/>
+                    <path d="M45.2 25.8c-7.1 0-12.9-5.8-12.9-12.9S38.1 0 45.2 0s12.9 5.8 12.9 12.9v12.9H45.2zm0 6.5c7.1 0 12.9 5.8 12.9 12.9s-5.8 12.9-12.9 12.9H12.9C5.8 58.1 0 52.3 0 45.2s5.8-12.9 12.9-12.9h32.3z" fill="#36c5f0"/>
+                    <path d="M97 45.2c0-7.1 5.8-12.9 12.9-12.9s12.9 5.8 12.9 12.9-5.8 12.9-12.9 12.9H97V45.2zm-6.5 0c0 7.1-5.8 12.9-12.9 12.9s-12.9-5.8-12.9-12.9V12.9C64.7 5.8 70.5 0 77.6 0s12.9 5.8 12.9 12.9v32.3z" fill="#2eb67d"/>
+                    <path d="M77.6 97c7.1 0 12.9 5.8 12.9 12.9s-5.8 12.9-12.9 12.9-12.9-5.8-12.9-12.9V97h12.9zm0-6.5c-7.1 0-12.9-5.8-12.9-12.9s5.8-12.9 12.9-12.9h32.3c7.1 0 12.9 5.8 12.9 12.9s-5.8 12.9-12.9 12.9H77.6z" fill="#ecb22e"/>
+                  </svg>
                 </div>
                 <div>
                   <h3 className="font-semibold text-foreground text-sm">Slack Integration</h3>
@@ -733,6 +887,46 @@ export default function ProjectManagerPage() {
           </div>
         )}
       </div>
+
+      {/* Archive confirm */}
+      {archiveConfirm && (
+        <div className="fixed inset-0 z-[65] flex items-center justify-center bg-black/50 p-4 animate-in fade-in duration-200">
+          <div className="bg-card border border-border rounded-2xl p-6 max-w-sm w-full shadow-xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <h3 className="text-lg font-bold">
+              {currentProject.archivedAt ? 'Restore Project' : 'Archive Project'}
+            </h3>
+            <p className="text-sm text-muted-foreground">
+              {currentProject.archivedAt ? (
+                <>Restore <span className="font-semibold text-foreground">{currentProject.name}</span>? It will become active again.</>
+              ) : (
+                <>Archive <span className="font-semibold text-foreground">{currentProject.name}</span>? It will be hidden from active views.</>
+              )}
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setArchiveConfirm(false)}
+                disabled={archiveLoading}
+                className="px-4 py-2 rounded-xl text-sm font-medium text-muted-foreground hover:bg-muted transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleArchive}
+                disabled={archiveLoading}
+                className={cn(
+                  'flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium text-white transition-colors disabled:opacity-60',
+                  currentProject.archivedAt
+                    ? 'bg-primary hover:bg-primary/90'
+                    : 'bg-amber-500 hover:bg-amber-600'
+                )}
+              >
+                {archiveLoading && <Loader2 size={14} className="animate-spin" />}
+                {archiveLoading ? 'Processing...' : currentProject.archivedAt ? 'Restore' : 'Archive'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Add member modal ── */}
       {addMemberOpen && (
