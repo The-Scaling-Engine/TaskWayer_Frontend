@@ -3,10 +3,11 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   FolderOpen, ArrowLeft, Loader2, UserPlus, UserMinus,
   Search, X, Check, Trash2, Archive, ArchiveRestore, LogOut,
-  Bell, Send, Building2, Plus,
+  Bell, Send, Building2, Plus, Info,
 } from 'lucide-react';
 import { useProjectStore } from '@/store/projectStore';
 import { useAuthStore } from '@/store/authStore';
+import { useDepartmentStore } from '@/store/departmentStore';
 import { userService } from '@/services/userService';
 import { projectService } from '@/services/projectService';
 import { departmentService } from '@/services/departmentService';
@@ -38,6 +39,7 @@ export default function ProjectManagerPage() {
     addMember, removeMember, updateMemberRole,
   } = useProjectStore();
   const currentUser = useAuthStore((s) => s.user);
+  const allMemberships = useDepartmentStore((s) => s.allMemberships);
 
   const [tab, setTab] = useState<'members' | 'settings'>('members');
 
@@ -102,6 +104,13 @@ export default function ProjectManagerPage() {
   const myRole = myMembership?.role;
   const isOwner = myRole === 'OWNER';
   const isOwnerOrManager = isOwner || myRole === 'MANAGER';
+  const isReadOnly = !myMembership && (currentProject?.departments ?? []).some((link) =>
+    allMemberships.some(
+      (m) => m.department.id === link.departmentId &&
+             ['OWNER', 'ADMIN'].includes(m.role) &&
+             m.status === 'ACTIVE'
+    )
+  );
 
   useEffect(() => {
     if (tab !== 'settings' || !projectId || !isOwnerOrManager) return;
@@ -427,6 +436,14 @@ export default function ProjectManagerPage() {
             View Tasks
           </button>
         </div>
+
+        {/* Read-only notice */}
+        {isReadOnly && (
+          <div className="flex items-center gap-2.5 px-4 py-2.5 bg-blue-500/10 border border-blue-500/20 rounded-xl text-sm text-blue-700 dark:text-blue-300">
+            <Info size={14} className="shrink-0" />
+            You have view-only access to this project via department membership.
+          </div>
+        )}
 
         {/* Tabs */}
         <div className="flex items-center gap-1 border-b border-border">

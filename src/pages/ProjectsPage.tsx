@@ -2,10 +2,11 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   FolderOpen, Plus, Users, Archive, Trash2, Settings2, Loader2,
-  ArchiveRestore, FolderX,
+  ArchiveRestore, FolderX, Building2,
 } from 'lucide-react';
 import { useProjectStore } from '@/store/projectStore';
 import { useAuthStore } from '@/store/authStore';
+import { useDepartmentStore } from '@/store/departmentStore';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -20,6 +21,7 @@ export default function ProjectsPage() {
     fetchProjects, createProject, archiveProject, unarchiveProject, deleteProject,
   } = useProjectStore();
   const currentUser = useAuthStore((s) => s.user);
+  const allMemberships = useDepartmentStore((s) => s.allMemberships);
 
   const [tab, setTab] = useState<'active' | 'archived'>('active');
   const [createOpen, setCreateOpen] = useState(false);
@@ -161,6 +163,15 @@ export default function ProjectsPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {displayProjects.map((project) => {
             const isOwner = project.ownerId === currentUserId;
+            const myRole = project.members?.find((m) => m.profileId === currentUserId)?.role;
+            const isOwnerOrManager = isOwner || myRole === 'MANAGER';
+            const managedLinkedDepts = (project.departments ?? []).filter((link) =>
+              allMemberships.some(
+                (m) => m.department.id === link.departmentId &&
+                       ['OWNER', 'ADMIN'].includes(m.role) &&
+                       m.status === 'ACTIVE'
+              )
+            );
             return (
               <div
                 key={project.id}
@@ -182,6 +193,16 @@ export default function ProjectsPage() {
                       OWNER
                     </span>
                   )}
+                  {project.visibilitySource === 'DEPARTMENT' && (
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 shrink-0">
+                      via {project.departments?.[0]?.department?.name ?? 'Department'}
+                    </span>
+                  )}
+                  {project.visibilitySource === 'ORG_ADMIN' && (
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-violet-500/10 text-violet-600 dark:text-violet-400 border border-violet-500/20 shrink-0">
+                      Admin view
+                    </span>
+                  )}
                 </div>
 
                 {/* Stats */}
@@ -194,6 +215,19 @@ export default function ProjectsPage() {
                     <FolderOpen size={11} />
                     {project._count?.tasks ?? 0} tasks
                   </span>
+                  {managedLinkedDepts.length > 0 && (
+                    <span
+                      className="flex items-center gap-1"
+                      title={managedLinkedDepts.map((l) => l.department?.name ?? l.departmentId).join(', ')}
+                    >
+                      <Building2 size={11} />
+                      {managedLinkedDepts.length === 1
+                        ? (managedLinkedDepts[0].department?.name ?? 'Department')
+                        : managedLinkedDepts.length === 2
+                          ? `${managedLinkedDepts[0].department?.name ?? 'Dept'} +1`
+                          : `${managedLinkedDepts.length} depts`}
+                    </span>
+                  )}
                 </div>
 
                 {/* Actions */}
@@ -205,7 +239,7 @@ export default function ProjectsPage() {
                     <FolderOpen size={12} />
                     Tasks
                   </button>
-                  {isOwner && (
+                  {isOwnerOrManager && (
                     <button
                       onClick={() => navigate(`/dashboard/projects/${project.id}`)}
                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl hover:bg-muted text-muted-foreground hover:text-foreground text-xs font-semibold transition-colors"
@@ -214,7 +248,7 @@ export default function ProjectsPage() {
                       Manage
                     </button>
                   )}
-                  {isOwner && tab === 'active' && (
+                  {isOwnerOrManager && tab === 'active' && (
                     <button
                       onClick={() => handleArchive(project.id)}
                       className="p-1.5 rounded-xl hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
@@ -223,7 +257,7 @@ export default function ProjectsPage() {
                       <Archive size={14} />
                     </button>
                   )}
-                  {isOwner && tab === 'archived' && (
+                  {isOwnerOrManager && tab === 'archived' && (
                     <button
                       onClick={() => handleUnarchive(project.id)}
                       className="p-1.5 rounded-xl hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"

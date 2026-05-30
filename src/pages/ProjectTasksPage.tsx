@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import TimerStartButton from '@/components/TimerStartButton';
 import { useTaskStore } from '@/store/taskStore';
 import { useProjectStore } from '@/store/projectStore';
+import { useAuthStore } from '@/store/authStore';
 import { cn } from '@/lib/utils';
 
 export default function ProjectTasksPage() {
@@ -22,6 +23,9 @@ export default function ProjectTasksPage() {
   const [switcherOpen, setSwitcherOpen] = React.useState(false);
   const [switcherSearch, setSwitcherSearch] = React.useState('');
 
+  const currentUser = useAuthStore((s) => s.user);
+  const currentUserId = currentUser?.id ?? currentUser?._id;
+
   const activeProjects = useMemo(
     () => projects.filter((p) => !p.archivedAt && !p.deletedAt),
     [projects]
@@ -29,6 +33,11 @@ export default function ProjectTasksPage() {
 
   const currentProject = activeProjects.find((p) => p.id === projectId);
   const projectName = currentProject?.name;
+
+  const myMemberRole = currentProject?.members?.find((m) => m.profileId === currentUserId)?.role;
+  const visibilitySource = currentProject?.visibilitySource ?? 'MEMBER';
+  const isReadOnly = visibilitySource === 'DEPARTMENT';
+  const canEditTasks = !isReadOnly && visibilitySource === 'MEMBER' && myMemberRole !== 'VIEWER';
 
   const filteredProjects = activeProjects.filter((p) =>
     p.name.toLowerCase().includes(switcherSearch.toLowerCase())
@@ -146,13 +155,15 @@ export default function ProjectTasksPage() {
 
         <div className="flex items-center gap-2">
           <TimerStartButton fetchParams={{ status: 'doing', projectId: projectId!, limit: 50 }} />
-          <Button
-            onClick={() => boardRef.current?.openCreateTask()}
-            className="bg-[#FE812C] hover:bg-[#e5732a] text-white rounded-xl shadow-md shadow-[#FE812C]/20 gap-2"
-          >
-            <Plus size={18} />
-            <span className="hidden sm:inline">Create Task</span>
-          </Button>
+          {canEditTasks && (
+            <Button
+              onClick={() => boardRef.current?.openCreateTask()}
+              className="bg-[#FE812C] hover:bg-[#e5732a] text-white rounded-xl shadow-md shadow-[#FE812C]/20 gap-2"
+            >
+              <Plus size={18} />
+              <span className="hidden sm:inline">Create Task</span>
+            </Button>
+          )}
         </div>
       </div>
 
@@ -161,6 +172,7 @@ export default function ProjectTasksPage() {
         hideProjectLabel
         lockedProjectId={projectId}
         lockedProjectName={projectName}
+        canEditTasks={canEditTasks}
       />
     </div>
   );

@@ -562,6 +562,7 @@ export interface Project {
   deletedAt: string | null;
   createdAt: string;
   updatedAt: string;
+  visibilitySource?: 'MEMBER' | 'DEPARTMENT' | 'ORG_ADMIN';
   members?: ProjectMember[];
   departments?: ProjectDepartmentLink[];
   _count?: {

@@ -26,6 +26,7 @@ interface TaskCardProps {
   commentCount?: number;
   hideDeptLabel?: boolean;
   hideProjectLabel?: boolean;
+  canEditTasks?: boolean;
 }
 
 const statusColors: Record<string, string> = {
@@ -40,7 +41,7 @@ const statusLabels: Record<string, string> = {
   done: 'Done',
 };
 
-export default function TaskCard({ task, onEdit, onDelete, onComment, onCancelRecurring, commentCount: commentCountProp, hideDeptLabel, hideProjectLabel }: TaskCardProps) {
+export default function TaskCard({ task, onEdit, onDelete, onComment, onCancelRecurring, commentCount: commentCountProp, hideDeptLabel, hideProjectLabel, canEditTasks = true }: TaskCardProps) {
   const commentCount = commentCountProp ?? task._count?.comments ?? 0;
   const { activeSession, elapsedSeconds, stopTracking } = useTimeTrackingStore();
   const isTracking = activeSession?.taskId === task._id;
@@ -118,20 +119,24 @@ export default function TaskCard({ task, onEdit, onDelete, onComment, onCancelRe
             </button>
           )}
 
-          <button
-            onClick={(e) => { e.stopPropagation(); onEdit(task); }}
-            className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-            title="Edit"
-          >
-            <Pencil size={14} />
-          </button>
-          <button
-            onClick={(e) => { e.stopPropagation(); onDelete(task); }}
-            className="p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
-            title="Delete"
-          >
-            <Trash2 size={14} />
-          </button>
+          {canEditTasks && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onEdit(task); }}
+              className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+              title="Edit"
+            >
+              <Pencil size={14} />
+            </button>
+          )}
+          {canEditTasks && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onDelete(task); }}
+              className="p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+              title="Delete"
+            >
+              <Trash2 size={14} />
+            </button>
+          )}
         </div>
       </div>
 

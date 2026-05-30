@@ -66,12 +66,13 @@ interface TaskSubmitData {
 // ─── Sub-components ────────────────────────────────────────────
 
 function DraggableTaskCard({
-  task, isActiveDrag, onEdit, onDelete, onComment, onCancelRecurring, commentCount, hideDeptLabel, hideProjectLabel,
+  task, isActiveDrag, onEdit, onDelete, onComment, onCancelRecurring, commentCount, hideDeptLabel, hideProjectLabel, canEditTasks,
 }: {
   task: Task; isActiveDrag: boolean;
   onEdit: (t: Task) => void; onDelete: (t: Task) => void;
   onComment: (t: Task) => void; onCancelRecurring: (t: Task) => void;
   commentCount?: number; hideDeptLabel?: boolean; hideProjectLabel?: boolean;
+  canEditTasks?: boolean;
 }) {
   const { attributes, listeners, setNodeRef, transform } = useDraggable({
     id: task._id,
@@ -83,7 +84,8 @@ function DraggableTaskCard({
       className={isActiveDrag ? 'opacity-30' : undefined}>
       <TaskCard task={task} onEdit={onEdit} onDelete={onDelete} onComment={onComment}
         onCancelRecurring={onCancelRecurring} commentCount={commentCount}
-        hideDeptLabel={hideDeptLabel} hideProjectLabel={hideProjectLabel} />
+        hideDeptLabel={hideDeptLabel} hideProjectLabel={hideProjectLabel}
+        canEditTasks={canEditTasks} />
     </div>
   );
 }
@@ -158,6 +160,7 @@ interface KanbanBoardProps {
   lockedDepartmentName?: string;
   lockedProjectId?: string;
   lockedProjectName?: string;
+  canEditTasks?: boolean;
 }
 
 // ─── Constants ────────────────────────────────────────────────
@@ -170,6 +173,7 @@ type SortOption = 'created' | 'priority' | 'dueDate';
 const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
   hideDeptLabel, hideProjectLabel, filterFn,
   lockedDepartmentId, lockedDepartmentName, lockedProjectId, lockedProjectName,
+  canEditTasks = true,
 }, ref) => {
   const { tasks, loading, createTask, updateTask, deleteTask, moveTask, moveTaskToColumn, cancelRecurrence, silentFetch } = useTaskStore();
   const { socket } = useSocketStore();
@@ -489,7 +493,8 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
         onComment={(t) => setCommentTask(t)}
         onCancelRecurring={(t) => { setKeepChildren(false); setCancelRecurringTask(t); }}
         commentCount={commentCounts[task._id]}
-        hideDeptLabel={hideDeptLabel} hideProjectLabel={hideProjectLabel} />
+        hideDeptLabel={hideDeptLabel} hideProjectLabel={hideProjectLabel}
+        canEditTasks={canEditTasks} />
     ));
 
   if (loading) {
@@ -578,12 +583,14 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
                             </span>
 
                             {/* Add task */}
-                            <button
-                              onClick={() => handleCreate({ columnId: col.id })}
-                              className="p-1 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors shrink-0"
-                              title={`Add task to ${col.name}`}>
-                              <Plus size={15} />
-                            </button>
+                            {canEditTasks && (
+                              <button
+                                onClick={() => handleCreate({ columnId: col.id })}
+                                className="p-1 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                                title={`Add task to ${col.name}`}>
+                                <Plus size={15} />
+                              </button>
+                            )}
 
                             {/* Column menu */}
                             <div className="relative shrink-0" onMouseDown={(e) => e.stopPropagation()}>
@@ -657,7 +664,7 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
                 })}
 
                 {/* Add column button */}
-                <div className="shrink-0 w-64">
+                {canEditTasks && <div className="shrink-0 w-64">
                   {addingColumn ? (
                     <div className="bg-muted/30 rounded-2xl p-3 space-y-2 animate-in fade-in-0 slide-in-from-bottom-2 duration-150">
                       <input
@@ -690,7 +697,7 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
                       Add column
                     </button>
                   )}
-                </div>
+                </div>}
               </div>
             </SortableContext>
           )
@@ -709,11 +716,13 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
                         {colTasks.length}
                       </span>
                     </div>
-                    <button onClick={() => handleCreate({ status: col.id })}
-                      className="p-1 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-                      title={`Add task to ${col.title}`}>
-                      <Plus size={16} />
-                    </button>
+                    {canEditTasks && (
+                      <button onClick={() => handleCreate({ status: col.id })}
+                        className="p-1 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                        title={`Add task to ${col.title}`}>
+                        <Plus size={16} />
+                      </button>
+                    )}
                   </div>
                   <DroppableColumn id={col.id}>
                     {colTasks.length === 0 ? (
@@ -734,7 +743,8 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
               <TaskCard task={activeTask} onEdit={handleEdit} onDelete={handleDelete}
                 onComment={(t) => setCommentTask(t)}
                 commentCount={commentCounts[activeTask._id]}
-                hideDeptLabel={hideDeptLabel} hideProjectLabel={hideProjectLabel} />
+                hideDeptLabel={hideDeptLabel} hideProjectLabel={hideProjectLabel}
+                canEditTasks={canEditTasks} />
             </div>
           ) : activeColumn ? (
             <div className="opacity-90 shadow-2xl bg-card border border-border/60 rounded-2xl p-3 w-72">
