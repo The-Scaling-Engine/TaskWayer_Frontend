@@ -1,5 +1,5 @@
 import api from './api';
-import type { DepartmentMember, DepartmentMembersResponse, MyDepartmentMembership, WorkloadResponse, ActiveSessionResponse, TasksResponse, Task } from '@/types';
+import type { DepartmentMember, DepartmentMembersResponse, MyDepartmentMembership, WorkloadResponse, ActiveSessionResponse, TasksResponse } from '@/types';
 
 export const departmentService = {
   getMembers: async (
@@ -76,18 +76,5 @@ export const departmentService = {
   getLinkable: async (): Promise<{ id: string; name: string }[]> => {
     const response = await api.get('/departments/linkable');
     return response.data?.data ?? [];
-  },
-
-  assignTask: async (
-    deptId: string,
-    userId: string,
-    data: {
-      title: string; description?: string; priority?: string; deadline?: string;
-      scheduledAt?: string; tags?: string[];
-      isRecurring?: boolean; recurrenceType?: string | null; recurrenceInterval?: number | null; recurrenceEndDate?: string | null;
-    }
-  ): Promise<{ success: boolean; message: string; data: Task }> => {
-    const response = await api.post(`/departments/${deptId}/members/${userId}/assign-task`, data);
-    return response.data;
   },
 };

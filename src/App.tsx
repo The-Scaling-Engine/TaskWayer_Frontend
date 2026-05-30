@@ -16,7 +16,6 @@ import ResetPasswordPage from '@/pages/ResetPasswordPage';
 import InvitationPage from '@/pages/InvitationPage';
 import DashboardPage from '@/pages/DashboardPage';
 import TasksPage from '@/pages/TasksPage';
-import DeptTasksPage from '@/pages/DeptTasksPage';
 import SettingsPage from '@/pages/SettingsPage';
 import ProfilePage from '@/pages/ProfilePage';
 
@@ -70,7 +69,6 @@ function App() {
             <Route path="settings" element={<SettingsPage />} />
             <Route path="profile" element={<ProfilePage />} />
             <Route path="departments/:departmentId" element={<DepartmentManagerPage />} />
-            <Route path="departments/:departmentId/tasks" element={<DeptTasksPage />} />
             <Route path="projects" element={<UserRoute><ProjectsPage /></UserRoute>} />
             <Route path="projects/:projectId" element={<UserRoute><ProjectManagerPage /></UserRoute>} />
             <Route path="projects/:projectId/tasks" element={<UserRoute><ProjectTasksPage /></UserRoute>} />

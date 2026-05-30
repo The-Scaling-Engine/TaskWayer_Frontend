@@ -218,7 +218,6 @@ export interface CommentsResponse {
 // NOTIFICATIONS
 // ============================================
 export type NotificationType =
-  | 'TASK_ASSIGNED'
   | 'COMMENT_ADDED'
   | 'MENTIONED_IN_COMMENT'
   | 'TASK_UPDATED'

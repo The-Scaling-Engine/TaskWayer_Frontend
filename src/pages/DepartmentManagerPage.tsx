@@ -87,11 +87,6 @@ export default function DepartmentManagerPage() {
   const [assignedDeleteTask, setAssignedDeleteTask] = useState<Task | null>(null);
   const [assignedDeleteLoading, setAssignedDeleteLoading] = useState(false);
 
-  // ── Assign Task modal ─────────────────────────────────────────────────────
-  const [assignTaskMember, setAssignTaskMember] = useState<MemberWorkload | null>(null);
-  const [assignDialogOpen, setAssignDialogOpen] = useState(false);
-  const [assignLoading, setAssignLoading] = useState(false);
-
   // ── Member Management (Step 10.7) ─────────────────────────────────────────
   const [members, setMembers] = useState<DepartmentMember[]>([]);
   const [membersLoading, setMembersLoading] = useState(false);
@@ -425,39 +420,6 @@ export default function DepartmentManagerPage() {
     }
   };
 
-  // ── Assign Task ───────────────────────────────────────────────────────────
-  const handleAssignTask = async (data: {
-    title: string; description: string; status: 'todo' | 'doing' | 'done';
-    deadline?: string; scheduledAt?: string | null;
-    priority?: 'low' | 'medium' | 'high'; tags?: string[];
-    isRecurring?: boolean; recurrenceType?: 'DAILY' | 'WEEKLY' | 'MONTHLY' | null;
-    recurrenceInterval?: number | null; recurrenceEndDate?: string | null;
-  }) => {
-    if (!departmentId || !assignTaskMember) return;
-    setAssignLoading(true);
-    try {
-      await departmentService.assignTask(departmentId, assignTaskMember.profile.id, {
-        title: data.title,
-        description: data.description || undefined,
-        priority: data.priority,
-        deadline: data.deadline,
-        scheduledAt: data.scheduledAt ?? undefined,
-        tags: data.tags,
-        isRecurring: data.isRecurring,
-        recurrenceType: data.recurrenceType,
-        recurrenceInterval: data.recurrenceInterval,
-        recurrenceEndDate: data.recurrenceEndDate,
-      });
-      toast.success('Task assigned successfully');
-      setAssignDialogOpen(false);
-      setAssignTaskMember(null);
-    } catch (err) {
-      toast.error(getApiErrorMessage(err, 'Failed to assign task'));
-    } finally {
-      setAssignLoading(false);
-    }
-  };
-
   // ── Loading / access guard ─────────────────────────────────────────────────
   if (storeLoading || !currentMembership) {
     return (
@@ -481,12 +443,6 @@ export default function DepartmentManagerPage() {
     if (isOwner) return memberRole !== 'OWNER';
     if (role === 'ADMIN') return memberRole === 'MEMBER' || memberRole === 'VIEWER';
     return false;
-  };
-
-  const canAssignTo = (targetRole: string): boolean => {
-    if (!isOwnerOrAdmin) return false;
-    if (isOwner) return targetRole !== 'OWNER';
-    return targetRole === 'MEMBER' || targetRole === 'VIEWER';
   };
 
   // ── Render ─────────────────────────────────────────────────────────────────
@@ -900,16 +856,6 @@ export default function DepartmentManagerPage() {
                 </div>
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
-                {canAssignTo(detailMember.role) && detailMember.profile.id !== (user?._id ?? user?.id) && (
-                  <button
-                    onClick={() => { setAssignTaskMember(detailMember); setAssignDialogOpen(true); }}
-                    className="flex items-center gap-1.5 px-2.5 py-1.5 bg-[#FE812C]/10 text-[#FE812C] hover:bg-[#FE812C] hover:text-white rounded-xl text-xs font-semibold transition-colors"
-                    title="Assign a task to this member"
-                  >
-                    <ClipboardPlus size={13} />
-                    Assign Task
-                  </button>
-                )}
                 <button onClick={() => setDetailMember(null)} className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
                   <X size={16} />
                 </button>
@@ -1227,18 +1173,6 @@ export default function DepartmentManagerPage() {
           </div>
         </div>
       )}
-
-      {/* Assign Task dialog */}
-      <TaskDialog
-        open={assignDialogOpen && !!assignTaskMember}
-        onClose={() => { setAssignDialogOpen(false); setAssignTaskMember(null); }}
-        onSubmit={handleAssignTask}
-        task={null}
-        loading={assignLoading}
-        dialogTitle={assignTaskMember ? `Assign Task — ${assignTaskMember.profile.name || assignTaskMember.profile.email}` : 'Assign Task'}
-        lockedDepartmentId={departmentId}
-        lockedDepartmentName={currentMembership?.department.name}
-      />
 
       {/* Edit assigned task dialog */}
       <TaskDialog
