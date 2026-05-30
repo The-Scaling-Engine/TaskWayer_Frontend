@@ -19,7 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import type { Task, TaskNote } from '@/types';
+import type { Task, TaskNote, ProjectMember } from '@/types';
 import { useDepartmentStore } from '@/store/departmentStore';
 import { useProjectStore } from '@/store/projectStore';
 import { useAuthStore } from '@/store/authStore';
@@ -299,6 +299,7 @@ interface TaskDialogProps {
     recurrenceType?: 'DAILY' | 'WEEKLY' | 'MONTHLY' | null;
     recurrenceInterval?: number | null;
     recurrenceEndDate?: string | null;
+    assignedTo?: string | null;
   }) => void;
   task?: Task | null;
   loading?: boolean;
@@ -311,6 +312,9 @@ interface TaskDialogProps {
   lockedProjectName?: string;
   initialTab?: 'details' | 'notes';
   onCancelFromDate?: () => void;
+  projectMembers?: ProjectMember[];
+  canAssign?: boolean;
+  isReadOnly?: boolean;
 }
 
 // ─── TaskDialog ───────────────────────────────────────────────
@@ -320,16 +324,11 @@ export default function TaskDialog({
   defaultDeadline, defaultScheduledAt,
   dialogTitle, lockedDepartmentId, lockedDepartmentName, lockedProjectId, lockedProjectName,
   initialTab, onCancelFromDate,
+  projectMembers, canAssign = false, isReadOnly = false,
 }: TaskDialogProps) {
   const allMemberships = useDepartmentStore((s) => s.allMemberships);
   const projects = useProjectStore((s) => s.projects);
   const user = useAuthStore((s) => s.user);
-
-  const isReadOnly = !!(
-    task?.isAssigned &&
-    task?.assignedTo &&
-    (task.assignedTo === user?._id || task.assignedTo === user?.id)
-  );
 
   // ── Details tab state ──────────────────────────────────────
   const [title, setTitle] = useState(task?.title || '');
@@ -348,6 +347,7 @@ export default function TaskDialog({
   const [recurrenceEndDate, setRecurrenceEndDate] = useState(task?.recurrenceEndDate ? task.recurrenceEndDate.substring(0, 10) : '');
   const [columnId, setColumnId] = useState<string | null>(task?.columnId ?? null);
   const [projectColumns, setProjectColumns] = useState<BoardColumn[]>([]);
+  const [assignedTo, setAssignedTo] = useState<string | null>(task?.assignedTo ?? null);
   const [error, setError] = useState('');
 
   // ── Update Notes tab state ─────────────────────────────────
@@ -408,6 +408,7 @@ export default function TaskDialog({
       setRecurrenceInterval(toRecurrenceIntervalValue(task));
       setRecurrenceEndDate(task?.recurrenceEndDate ? task.recurrenceEndDate.substring(0, 10) : '');
       setColumnId(task?.columnId ?? null);
+      setAssignedTo(task?.assignedTo ?? null);
       setError('');
     }
   }, [task, open, defaultDeadline, defaultScheduledAt]);
@@ -487,6 +488,7 @@ export default function TaskDialog({
     setTagsInput(''); setDepartmentId('__none__'); setProjectId('__none__');
     setIsRecurring(false); setRecurrenceUnit(''); setRecurrenceInterval(1); setRecurrenceEndDate('');
     setColumnId(null); setProjectColumns([]);
+    setAssignedTo(null);
     setError('');
   };
 
@@ -516,6 +518,7 @@ export default function TaskDialog({
       recurrenceType: isRecurring ? (recurrenceUnit as 'DAILY' | 'WEEKLY' | 'MONTHLY') : null,
       recurrenceInterval: isRecurring && recurrenceInterval > 1 ? recurrenceInterval : null,
       recurrenceEndDate: isRecurring && recurrenceEndDate ? new Date(`${recurrenceEndDate}T23:59:59`).toISOString() : null,
+      ...(lockedProjectId && { assignedTo }),
     });
   };
 
@@ -806,6 +809,37 @@ export default function TaskDialog({
                         ))}
                       </SelectContent>
                     </Select>
+                  )}
+                </div>
+              )}
+
+              {lockedProjectId && projectMembers && projectMembers.length > 0 && (
+                <div className="space-y-2">
+                  <Label className="font-medium">Assignee</Label>
+                  {canAssign ? (
+                    <Select
+                      value={assignedTo ?? '__none__'}
+                      onValueChange={(v) => setAssignedTo(v === '__none__' ? null : v)}
+                      disabled={isReadOnly}
+                    >
+                      <SelectTrigger className="rounded-xl"><SelectValue placeholder="Unassigned" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">Unassigned</SelectItem>
+                        {projectMembers.map(m => (
+                          <SelectItem key={m.profileId} value={m.profileId}>
+                            {m.profile?.name ?? m.profile?.email ?? m.profileId}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <div className="flex items-center h-9 px-3 rounded-xl border border-border bg-muted/50 text-sm text-muted-foreground select-none">
+                      {assignedTo
+                        ? (projectMembers.find(m => m.profileId === assignedTo)?.profile?.name
+                            ?? projectMembers.find(m => m.profileId === assignedTo)?.profile?.email
+                            ?? 'Assigned')
+                        : 'Unassigned'}
+                    </div>
                   )}
                 </div>
               )}

@@ -1,4 +1,4 @@
-import type { Task } from '@/types';
+import type { Task, ProjectMember } from '@/types';
 import { Badge } from '@/components/ui/badge';
 import { Pencil, Trash2, Calendar, MessageSquare, Square, Building2, FolderOpen, Clock, CircleSlash, Repeat, UserCheck, User } from 'lucide-react';
 import { useTimeTrackingStore } from '@/store/timeTrackingStore';
@@ -27,6 +27,8 @@ interface TaskCardProps {
   hideDeptLabel?: boolean;
   hideProjectLabel?: boolean;
   canEditTasks?: boolean;
+  canDeleteTasks?: boolean;
+  projectMembers?: ProjectMember[];
 }
 
 const statusColors: Record<string, string> = {
@@ -41,7 +43,7 @@ const statusLabels: Record<string, string> = {
   done: 'Done',
 };
 
-export default function TaskCard({ task, onEdit, onDelete, onComment, onCancelRecurring, commentCount: commentCountProp, hideDeptLabel, hideProjectLabel, canEditTasks = true }: TaskCardProps) {
+export default function TaskCard({ task, onEdit, onDelete, onComment, onCancelRecurring, commentCount: commentCountProp, hideDeptLabel, hideProjectLabel, canEditTasks = true, canDeleteTasks, projectMembers }: TaskCardProps) {
   const commentCount = commentCountProp ?? task._count?.comments ?? 0;
   const { activeSession, elapsedSeconds, stopTracking } = useTimeTrackingStore();
   const isTracking = activeSession?.taskId === task._id;
@@ -56,6 +58,8 @@ export default function TaskCard({ task, onEdit, onDelete, onComment, onCancelRe
     : undefined;
   const currentUserId = currentUser?.id ?? currentUser?._id;
   const isAssignedToMe = task.isAssigned && task.assignedTo != null && task.assignedTo === currentUserId;
+  const assignee = projectMembers?.find(m => m.profileId === task.assignedTo);
+  const effectiveCanDelete = canDeleteTasks ?? canEditTasks;
 
   const handleStopTimer = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -128,7 +132,7 @@ export default function TaskCard({ task, onEdit, onDelete, onComment, onCancelRe
               <Pencil size={14} />
             </button>
           )}
-          {canEditTasks && (
+          {effectiveCanDelete && (
             <button
               onClick={(e) => { e.stopPropagation(); onDelete(task); }}
               className="p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
@@ -161,6 +165,20 @@ export default function TaskCard({ task, onEdit, onDelete, onComment, onCancelRe
           <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-[#FE812C]/10 text-[#FE812C] text-[10px] font-semibold max-w-full">
             <Building2 size={9} className="shrink-0" />
             <span className="truncate">{deptName}</span>
+          </span>
+        </div>
+      )}
+
+      {/* Assignee display (project mode) */}
+      {projectMembers && task.assignedTo && (
+        <div className="flex items-center gap-1.5 mb-2">
+          {assignee?.profile?.avatar ? (
+            <img src={assignee.profile.avatar} alt="" className="w-3.5 h-3.5 rounded-full object-cover shrink-0" />
+          ) : (
+            <User size={10} className="text-muted-foreground shrink-0" />
+          )}
+          <span className="text-[11px] text-muted-foreground truncate max-w-[140px]">
+            {assignee?.profile?.name ?? assignee?.profile?.email ?? 'Assigned'}
           </span>
         </div>
       )}

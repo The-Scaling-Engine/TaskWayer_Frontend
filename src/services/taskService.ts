@@ -32,6 +32,7 @@ export interface UpdateTaskData {
   recurrenceType?: 'DAILY' | 'WEEKLY' | 'BIWEEKLY' | 'MONTHLY' | 'QUARTERLY' | 'YEARLY' | null;
   recurrenceInterval?: number | null;
   recurrenceEndDate?: string | null;
+  assignedTo?: string | null;
 }
 
 export const taskService = {

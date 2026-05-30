@@ -19,12 +19,14 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { useTaskStore } from '@/store/taskStore';
 import { useSocketStore } from '@/store/socketStore';
+import { useAuthStore } from '@/store/authStore';
 import { boardColumnService } from '@/services/boardColumnService';
+import { projectService } from '@/services/projectService';
 import TaskCard from '@/components/TaskCard';
 import TaskDialog from '@/components/TaskDialog';
 import CommentDialog from '@/components/CommentDialog';
-import type { Task, BoardColumn } from '@/types';
-import { Plus, Loader2, ArrowUpDown, MoreHorizontal, Palette, Trash2, GripVertical } from 'lucide-react';
+import type { Task, BoardColumn, ProjectMember } from '@/types';
+import { Plus, Loader2, ArrowUpDown, MoreHorizontal, Palette, Trash2, GripVertical, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { getApiErrorMessage } from '@/services/api';
 import { cn } from '@/lib/utils';
@@ -60,19 +62,20 @@ interface TaskSubmitData {
   recurrenceType?: 'DAILY' | 'WEEKLY' | 'MONTHLY' | null;
   recurrenceInterval?: number | null;
   recurrenceEndDate?: string | null;
+  assignedTo?: string | null;
 }
 
 
 // ─── Sub-components ────────────────────────────────────────────
 
 function DraggableTaskCard({
-  task, isActiveDrag, onEdit, onDelete, onComment, onCancelRecurring, commentCount, hideDeptLabel, hideProjectLabel, canEditTasks,
+  task, isActiveDrag, onEdit, onDelete, onComment, onCancelRecurring, commentCount, hideDeptLabel, hideProjectLabel, canEditTasks, canDeleteTasks, projectMembers,
 }: {
   task: Task; isActiveDrag: boolean;
   onEdit: (t: Task) => void; onDelete: (t: Task) => void;
   onComment: (t: Task) => void; onCancelRecurring: (t: Task) => void;
   commentCount?: number; hideDeptLabel?: boolean; hideProjectLabel?: boolean;
-  canEditTasks?: boolean;
+  canEditTasks?: boolean; canDeleteTasks?: boolean; projectMembers?: ProjectMember[];
 }) {
   const { attributes, listeners, setNodeRef, transform } = useDraggable({
     id: task._id,
@@ -85,7 +88,7 @@ function DraggableTaskCard({
       <TaskCard task={task} onEdit={onEdit} onDelete={onDelete} onComment={onComment}
         onCancelRecurring={onCancelRecurring} commentCount={commentCount}
         hideDeptLabel={hideDeptLabel} hideProjectLabel={hideProjectLabel}
-        canEditTasks={canEditTasks} />
+        canEditTasks={canEditTasks} canDeleteTasks={canDeleteTasks} projectMembers={projectMembers} />
     </div>
   );
 }
@@ -161,6 +164,8 @@ interface KanbanBoardProps {
   lockedProjectId?: string;
   lockedProjectName?: string;
   canEditTasks?: boolean;
+  canDeleteTasks?: boolean;
+  canAssign?: boolean;
 }
 
 // ─── Constants ────────────────────────────────────────────────
@@ -173,10 +178,12 @@ type SortOption = 'created' | 'priority' | 'dueDate';
 const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
   hideDeptLabel, hideProjectLabel, filterFn,
   lockedDepartmentId, lockedDepartmentName, lockedProjectId, lockedProjectName,
-  canEditTasks = true,
+  canEditTasks = true, canDeleteTasks, canAssign = false,
 }, ref) => {
   const { tasks, loading, createTask, updateTask, deleteTask, moveTask, moveTaskToColumn, cancelRecurrence, silentFetch } = useTaskStore();
   const { socket } = useSocketStore();
+  const currentUser = useAuthStore((s) => s.user);
+  const currentUserId = currentUser?.id ?? currentUser?._id;
 
   // ── Sort ────────────────────────────────────────────────────
   const sortStorageKey = `kanban-sort-${lockedProjectId ?? lockedDepartmentId ?? 'personal'}`;
@@ -187,6 +194,11 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
     setSortBy(value);
     localStorage.setItem(sortStorageKey, value);
   };
+
+  // ── Project members + filter state ─────────────────────────
+  const [projectMembers, setProjectMembers] = useState<ProjectMember[]>([]);
+  const [filterSearch, setFilterSearch] = useState('');
+  const [filterAssignee, setFilterAssignee] = useState<string | null>(null);
 
   // ── Dialog state ────────────────────────────────────────────
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -228,6 +240,21 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
     socket.on('task:statusUpdated', handler);
     return () => { socket.off('task:statusUpdated', handler); };
   }, [socket, silentFetch]);
+
+  // ── Fetch project members ────────────────────────────────────
+  useEffect(() => {
+    if (!lockedProjectId) {
+      setProjectMembers([]);
+      setFilterSearch('');
+      setFilterAssignee(null);
+      return;
+    }
+    projectService.getMembers(lockedProjectId)
+      .then(res => setProjectMembers(res.data))
+      .catch(() => {});
+    setFilterSearch('');
+    setFilterAssignee(null);
+  }, [lockedProjectId]);
 
   // ── Fetch columns ────────────────────────────────────────────
   useEffect(() => {
@@ -284,12 +311,27 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
       return aTime - bTime;
     });
 
+  const applyFilters = (task: Task): boolean => {
+    if (filterSearch && !task.title.toLowerCase().includes(filterSearch.toLowerCase())) return false;
+    if (filterAssignee) {
+      if (filterAssignee === 'me') {
+        if (task.assignedTo !== currentUserId) return false;
+      } else if (filterAssignee === 'unassigned') {
+        if (task.assignedTo) return false;
+      } else {
+        if (task.assignedTo !== filterAssignee) return false;
+      }
+    }
+    return true;
+  };
+
   const getTasksByStatus = (status: string) =>
-    sortTasks(tasks.filter((t) => t.status === status && (!filterFn || filterFn(t))));
+    sortTasks(tasks.filter((t) => t.status === status && (!filterFn || filterFn(t)) && applyFilters(t)));
 
   const getTasksByColumn = (col: BoardColumn) =>
     sortTasks(tasks.filter((t) => {
       if (filterFn && !filterFn(t)) return false;
+      if (!applyFilters(t)) return false;
       return col.isDefault ? (!t.columnId || t.columnId === col.id) : t.columnId === col.id;
     }));
 
@@ -494,7 +536,8 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
         onCancelRecurring={(t) => { setKeepChildren(false); setCancelRecurringTask(t); }}
         commentCount={commentCounts[task._id]}
         hideDeptLabel={hideDeptLabel} hideProjectLabel={hideProjectLabel}
-        canEditTasks={canEditTasks} />
+        canEditTasks={canEditTasks} canDeleteTasks={canDeleteTasks}
+        projectMembers={lockedProjectId ? projectMembers : undefined} />
     ));
 
   if (loading) {
@@ -508,16 +551,55 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
   return (
     <>
       <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-        {/* Sort control */}
-        <div className="flex items-center justify-end mb-4 gap-2">
-          <ArrowUpDown size={13} className="text-muted-foreground" />
-          <span className="text-xs text-muted-foreground">Sort by</span>
-          <select value={sortBy} onChange={(e) => handleSortChange(e.target.value as SortOption)}
-            className="text-xs bg-muted border border-border rounded-lg px-2.5 py-1 text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer">
-            <option value="created">Created</option>
-            <option value="priority">Priority</option>
-            <option value="dueDate">Due Date</option>
-          </select>
+        {/* Toolbar: filter bar (project mode) + sort control */}
+        <div className="flex items-center justify-between mb-4 gap-2 flex-wrap">
+          {lockedProjectId ? (
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="relative min-w-[160px] max-w-[240px]">
+                <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                <input
+                  type="text"
+                  placeholder="Search tasks..."
+                  value={filterSearch}
+                  onChange={(e) => setFilterSearch(e.target.value)}
+                  className="w-full pl-7 pr-3 py-1.5 bg-muted/50 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-primary/30 placeholder:text-muted-foreground/50 border border-border"
+                />
+              </div>
+              <select
+                value={filterAssignee ?? ''}
+                onChange={(e) => setFilterAssignee(e.target.value || null)}
+                className="text-xs bg-muted border border-border rounded-lg px-2.5 py-1.5 text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
+              >
+                <option value="">All assignees</option>
+                <option value="me">Assigned to me</option>
+                <option value="unassigned">Unassigned</option>
+                {projectMembers.map(m => (
+                  <option key={m.profileId} value={m.profileId}>
+                    {m.profile?.name ?? m.profile?.email ?? m.profileId}
+                  </option>
+                ))}
+              </select>
+              {(filterSearch || filterAssignee) && (
+                <button
+                  onClick={() => { setFilterSearch(''); setFilterAssignee(null); }}
+                  className="text-xs text-muted-foreground hover:text-foreground px-2.5 py-1.5 rounded-lg hover:bg-muted transition-colors border border-border"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+          ) : <div />}
+
+          <div className="flex items-center gap-2">
+            <ArrowUpDown size={13} className="text-muted-foreground" />
+            <span className="text-xs text-muted-foreground">Sort by</span>
+            <select value={sortBy} onChange={(e) => handleSortChange(e.target.value as SortOption)}
+              className="text-xs bg-muted border border-border rounded-lg px-2.5 py-1 text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer">
+              <option value="created">Created</option>
+              <option value="priority">Priority</option>
+              <option value="dueDate">Due Date</option>
+            </select>
+          </div>
         </div>
 
         {/* ── Project mode: dynamic columns ── */}
@@ -769,6 +851,9 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
         lockedProjectId={lockedProjectId}
         lockedProjectName={lockedProjectName}
         initialTab={openNotesOnNext ? 'notes' : undefined}
+        isReadOnly={!canEditTasks}
+        projectMembers={lockedProjectId ? projectMembers : undefined}
+        canAssign={canAssign}
       />
 
       {/* Comment Dialog */}

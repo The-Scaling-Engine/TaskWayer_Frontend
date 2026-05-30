@@ -220,6 +220,7 @@ export interface CommentsResponse {
 export type NotificationType =
   | 'COMMENT_ADDED'
   | 'MENTIONED_IN_COMMENT'
+  | 'TASK_ASSIGNED'
   | 'TASK_UPDATED'
   | 'DEADLINE_SOON'
   | 'DEADLINE_3_DAYS'

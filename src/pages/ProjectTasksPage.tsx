@@ -38,6 +38,8 @@ export default function ProjectTasksPage() {
   const visibilitySource = currentProject?.visibilitySource ?? 'MEMBER';
   const isReadOnly = visibilitySource === 'DEPARTMENT';
   const canEditTasks = !isReadOnly && visibilitySource === 'MEMBER' && myMemberRole !== 'VIEWER';
+  const canDeleteTasks = !isReadOnly && visibilitySource === 'MEMBER' && (myMemberRole === 'MANAGER' || myMemberRole === 'OWNER');
+  const canAssign = canDeleteTasks;
 
   const filteredProjects = activeProjects.filter((p) =>
     p.name.toLowerCase().includes(switcherSearch.toLowerCase())
@@ -173,6 +175,8 @@ export default function ProjectTasksPage() {
         lockedProjectId={projectId}
         lockedProjectName={projectName}
         canEditTasks={canEditTasks}
+        canDeleteTasks={canDeleteTasks}
+        canAssign={canAssign}
       />
     </div>
   );
