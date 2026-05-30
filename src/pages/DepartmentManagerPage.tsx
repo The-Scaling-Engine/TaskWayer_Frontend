@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useDepartmentStore } from '@/store/departmentStore';
 import { useAuthStore } from '@/store/authStore';
 import { departmentService } from '@/services/departmentService';
@@ -46,7 +46,6 @@ import { getApiErrorMessage } from '@/services/api';
 export default function DepartmentManagerPage() {
   const { departmentId } = useParams<{ departmentId: string }>();
   const navigate = useNavigate();
-  const location = useLocation();
   const user = useAuthStore((s) => s.user);
   const { myDepartments, loading: storeLoading, hasFetched, fetchMyDepartments } = useDepartmentStore();
 
@@ -175,18 +174,6 @@ export default function DepartmentManagerPage() {
       resetParams({ departmentId });
     }
   }, [pageTab, departmentId, currentMembership, resetParams]);
-
-  // Open task from notification link (owner/admin path)
-  useEffect(() => {
-    const { openTaskId, highlightCommentId } = (location.state ?? {}) as { openTaskId?: string; highlightCommentId?: string };
-    if (!openTaskId) return;
-    setPageTab('mytasks');
-    const timer = setTimeout(() => {
-      boardRef.current?.openTaskById(openTaskId, highlightCommentId);
-      navigate(location.pathname, { replace: true, state: {} });
-    }, 500);
-    return () => clearTimeout(timer);
-  }, [location.state, navigate]);
 
   // ── Activity tab: fetch member's doing tasks + auto-refresh ──────────────
   const fetchActivityDoingTasks = useCallback(async (profileId: string) => {

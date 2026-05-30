@@ -87,12 +87,18 @@ export default function Topbar({ sidebarCollapsed }: TopbarProps) {
         navigate('/dashboard/tasks', { state: { openTaskId: taskId } });
       }
     } else if (n.entityType === 'comment' && n.payload?.taskId) {
-      if (typeof n.payload.departmentId === 'string') {
-        const { path, state } = getDeptTaskRoute(n.payload.departmentId, n.payload.taskId as string, n.payload.commentId as string | undefined);
+      const taskId    = n.payload.taskId    as string;
+      const commentId = n.payload.commentId as string | undefined;
+      if (typeof n.payload.projectId === 'string') {
+        navigate(`/dashboard/projects/${n.payload.projectId}/tasks`, {
+          state: { openTaskId: taskId, highlightCommentId: commentId },
+        });
+      } else if (typeof n.payload.departmentId === 'string') {
+        const { path, state } = getDeptTaskRoute(n.payload.departmentId, taskId, commentId);
         navigate(path, { state });
       } else {
         navigate('/dashboard/tasks', {
-          state: { openTaskId: n.payload.taskId as string, highlightCommentId: n.payload.commentId as string | undefined },
+          state: { openTaskId: taskId, highlightCommentId: commentId },
         });
       }
     }
