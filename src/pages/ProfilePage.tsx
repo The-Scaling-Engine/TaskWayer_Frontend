@@ -14,9 +14,10 @@ import { getApiErrorMessage } from '@/services/api';
 import { toast } from 'sonner';
 import {
   User as UserIcon, Mail, Image as ImageIcon, Loader2, Camera,
-  AtSign, Briefcase, Upload, Link,
+  AtSign, Briefcase, Upload, Link, Building2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useDepartmentStore } from '@/store/departmentStore';
 
 const CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUDNAME as string | undefined;
 const UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET as string | undefined;
@@ -37,6 +38,8 @@ async function uploadToCloudinary(file: File): Promise<string> {
 
 export default function ProfilePage() {
   const { user, updateUser } = useAuthStore();
+  const myDepartments = useDepartmentStore((s) => s.myDepartments);
+  const activeDept = myDepartments.find((m) => m.role === 'MEMBER');
 
   const [name, setName] = useState(user?.name || '');
   const email = user?.email || '';
@@ -157,6 +160,12 @@ export default function ProfilePage() {
           <p className="text-[11px] text-muted-foreground text-center mt-0.5 break-all">{email}</p>
           {jobTitle && (
             <p className="text-[11px] text-muted-foreground/70 text-center mt-0.5">{jobTitle}</p>
+          )}
+          {activeDept && (
+            <div className="mt-3 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted/60 border border-border/50">
+              <Building2 size={12} className="text-muted-foreground shrink-0" />
+              <span className="text-[11px] text-muted-foreground truncate">{activeDept.department.name}</span>
+            </div>
           )}
 
           <button

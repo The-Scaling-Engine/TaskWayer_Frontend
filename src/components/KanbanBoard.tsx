@@ -26,7 +26,7 @@ import TaskCard from '@/components/TaskCard';
 import TaskDialog from '@/components/TaskDialog';
 import CommentDialog from '@/components/CommentDialog';
 import type { Task, BoardColumn, ProjectMember } from '@/types';
-import { Plus, Loader2, ArrowUpDown, MoreHorizontal, Palette, Trash2, GripVertical, Search } from 'lucide-react';
+import { Plus, Loader2, ArrowUpDown, MoreHorizontal, Palette, Trash2, GripVertical, Search, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
 import { getApiErrorMessage } from '@/services/api';
 import { cn } from '@/lib/utils';
@@ -55,7 +55,6 @@ interface TaskSubmitData {
   scheduledAt?: string | null;
   priority?: 'low' | 'medium' | 'high';
   tags?: string[];
-  departmentId?: string;
   projectId?: string;
   columnId?: string | null;
   isRecurring?: boolean;
@@ -69,13 +68,13 @@ interface TaskSubmitData {
 // ─── Sub-components ────────────────────────────────────────────
 
 function DraggableTaskCard({
-  task, isActiveDrag, onEdit, onDelete, onComment, onCancelRecurring, commentCount, hideDeptLabel, hideProjectLabel, canEditTasks, canDeleteTasks, projectMembers,
+  task, isActiveDrag, onEdit, onDelete, onComment, onCancelRecurring, commentCount, hideProjectLabel, canEditTasks, canDeleteTasks, projectMembers, boardColumns,
 }: {
   task: Task; isActiveDrag: boolean;
   onEdit: (t: Task) => void; onDelete: (t: Task) => void;
   onComment: (t: Task) => void; onCancelRecurring: (t: Task) => void;
-  commentCount?: number; hideDeptLabel?: boolean; hideProjectLabel?: boolean;
-  canEditTasks?: boolean; canDeleteTasks?: boolean; projectMembers?: ProjectMember[];
+  commentCount?: number; hideProjectLabel?: boolean;
+  canEditTasks?: boolean; canDeleteTasks?: boolean; projectMembers?: ProjectMember[]; boardColumns?: BoardColumn[];
 }) {
   const { attributes, listeners, setNodeRef, transform } = useDraggable({
     id: task._id,
@@ -87,8 +86,9 @@ function DraggableTaskCard({
       className={isActiveDrag ? 'opacity-30' : undefined}>
       <TaskCard task={task} onEdit={onEdit} onDelete={onDelete} onComment={onComment}
         onCancelRecurring={onCancelRecurring} commentCount={commentCount}
-        hideDeptLabel={hideDeptLabel} hideProjectLabel={hideProjectLabel}
-        canEditTasks={canEditTasks} canDeleteTasks={canDeleteTasks} projectMembers={projectMembers} />
+        hideProjectLabel={hideProjectLabel}
+        canEditTasks={canEditTasks} canDeleteTasks={canDeleteTasks} projectMembers={projectMembers}
+        boardColumns={boardColumns} />
     </div>
   );
 }
@@ -156,11 +156,8 @@ export interface KanbanBoardRef {
 }
 
 interface KanbanBoardProps {
-  hideDeptLabel?: boolean;
   hideProjectLabel?: boolean;
   filterFn?: (task: Task) => boolean;
-  lockedDepartmentId?: string;
-  lockedDepartmentName?: string;
   lockedProjectId?: string;
   lockedProjectName?: string;
   canEditTasks?: boolean;
@@ -176,8 +173,8 @@ type SortOption = 'created' | 'priority' | 'dueDate';
 // ─── KanbanBoard ───────────────────────────────────────────────
 
 const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
-  hideDeptLabel, hideProjectLabel, filterFn,
-  lockedDepartmentId, lockedDepartmentName, lockedProjectId, lockedProjectName,
+  hideProjectLabel, filterFn,
+  lockedProjectId, lockedProjectName,
   canEditTasks = true, canDeleteTasks, canAssign = false,
 }, ref) => {
   const { tasks, loading, createTask, updateTask, deleteTask, moveTask, moveTaskToColumn, cancelRecurrence, silentFetch } = useTaskStore();
@@ -186,7 +183,7 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
   const currentUserId = currentUser?.id ?? currentUser?._id;
 
   // ── Sort ────────────────────────────────────────────────────
-  const sortStorageKey = `kanban-sort-${lockedProjectId ?? lockedDepartmentId ?? 'personal'}`;
+  const sortStorageKey = `kanban-sort-${lockedProjectId ?? 'personal'}`;
   const [sortBy, setSortBy] = useState<SortOption>(() =>
     (localStorage.getItem(sortStorageKey) as SortOption) ?? 'created'
   );
@@ -199,12 +196,16 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
   const [projectMembers, setProjectMembers] = useState<ProjectMember[]>([]);
   const [filterSearch, setFilterSearch] = useState('');
   const [filterAssignee, setFilterAssignee] = useState<string | null>(null);
+  const [filterDropdownOpen, setFilterDropdownOpen] = useState(false);
+  const filterDropdownRef = useRef<HTMLDivElement>(null);
 
   // ── Dialog state ────────────────────────────────────────────
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [dialogLoading, setDialogLoading] = useState(false);
+  const [taskError, setTaskError] = useState('');
   const [deleteConfirm, setDeleteConfirm] = useState<Task | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
   const [cancelRecurringTask, setCancelRecurringTask] = useState<Task | null>(null);
   const [keepChildren, setKeepChildren] = useState(false);
   const [cancelRecurringLoading, setCancelRecurringLoading] = useState(false);
@@ -273,6 +274,18 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
     document.addEventListener('mousedown', handleClose);
     return () => document.removeEventListener('mousedown', handleClose);
   }, [openMenuId]);
+
+  // ── Close assignee filter dropdown on outside click ──────────
+  useEffect(() => {
+    if (!filterDropdownOpen) return;
+    const handleClose = (e: MouseEvent) => {
+      if (filterDropdownRef.current && !filterDropdownRef.current.contains(e.target as Node)) {
+        setFilterDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClose);
+    return () => document.removeEventListener('mousedown', handleClose);
+  }, [filterDropdownOpen]);
 
   // ── Imperative handle ────────────────────────────────────────
   useImperativeHandle(ref, () => ({
@@ -412,14 +425,17 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
   const handleDelete = (task: Task) => setDeleteConfirm(task);
 
   const confirmDelete = async () => {
-    if (!deleteConfirm) return;
+    if (!deleteConfirm || deleteLoading) return;
+    setDeleteLoading(true);
     try {
       await deleteTask(deleteConfirm._id);
       toast.success('Task deleted successfully');
+      setDeleteConfirm(null);
     } catch (err) {
       toast.error(getApiErrorMessage(err, 'Failed to delete task'));
+    } finally {
+      setDeleteLoading(false);
     }
-    setDeleteConfirm(null);
   };
 
   const confirmCancelRecurring = async () => {
@@ -436,6 +452,7 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
 
   const handleSubmit = async (data: TaskSubmitData) => {
     setDialogLoading(true);
+    setTaskError('');
     try {
       if (editingTask && editingTask._id) {
         await updateTask(editingTask._id, data);
@@ -447,7 +464,8 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
       setDialogOpen(false);
       setEditingTask(null);
     } catch (err) {
-      toast.error(getApiErrorMessage(err, editingTask?._id ? 'Failed to update task' : 'Failed to create task'));
+      const msg = getApiErrorMessage(err, editingTask?._id ? 'Failed to update task' : 'Failed to create task');
+      setTaskError(msg);
     } finally { setDialogLoading(false); }
   };
 
@@ -535,9 +553,10 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
         onComment={(t) => setCommentTask(t)}
         onCancelRecurring={(t) => { setKeepChildren(false); setCancelRecurringTask(t); }}
         commentCount={commentCounts[task._id]}
-        hideDeptLabel={hideDeptLabel} hideProjectLabel={hideProjectLabel}
+        hideProjectLabel={hideProjectLabel}
         canEditTasks={canEditTasks} canDeleteTasks={canDeleteTasks}
-        projectMembers={lockedProjectId ? projectMembers : undefined} />
+        projectMembers={lockedProjectId ? projectMembers : undefined}
+        boardColumns={lockedProjectId ? boardColumns : undefined} />
     ));
 
   if (loading) {
@@ -565,20 +584,86 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
                   className="w-full pl-7 pr-3 py-1.5 bg-muted/50 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-primary/30 placeholder:text-muted-foreground/50 border border-border"
                 />
               </div>
-              <select
-                value={filterAssignee ?? ''}
-                onChange={(e) => setFilterAssignee(e.target.value || null)}
-                className="text-xs bg-muted border border-border rounded-lg px-2.5 py-1.5 text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
-              >
-                <option value="">All assignees</option>
-                <option value="me">Assigned to me</option>
-                <option value="unassigned">Unassigned</option>
-                {projectMembers.map(m => (
-                  <option key={m.profileId} value={m.profileId}>
-                    {m.profile?.name ?? m.profile?.email ?? m.profileId}
-                  </option>
-                ))}
-              </select>
+              <div className="relative" ref={filterDropdownRef}>
+                <button
+                  type="button"
+                  onClick={() => setFilterDropdownOpen((o) => !o)}
+                  className={cn(
+                    'flex items-center gap-1.5 text-xs border border-border rounded-lg px-2.5 py-1.5 bg-muted text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer transition-colors hover:bg-muted/80',
+                    filterAssignee && 'border-primary/50 text-primary bg-primary/5',
+                  )}
+                >
+                  {filterAssignee === null
+                    ? 'All assignees'
+                    : filterAssignee === 'me'
+                      ? 'Assigned to me'
+                      : filterAssignee === 'unassigned'
+                        ? 'Unassigned'
+                        : (() => {
+                            const m = projectMembers.find(m => m.profileId === filterAssignee);
+                            return m?.profile?.name ?? m?.profile?.email ?? 'Assignee';
+                          })()}
+                  <ChevronDown size={12} className={cn('text-muted-foreground transition-transform', filterDropdownOpen && 'rotate-180')} />
+                </button>
+                {filterDropdownOpen && (
+                  <div className="absolute top-full mt-1 left-0 z-30 bg-card border border-border rounded-xl shadow-lg min-w-[200px] overflow-hidden">
+                    {[
+                      { value: null, label: 'All assignees' },
+                      { value: 'me', label: 'Assigned to me' },
+                      { value: 'unassigned', label: 'Unassigned' },
+                    ].map(({ value, label }) => (
+                      <button
+                        key={label}
+                        type="button"
+                        onClick={() => { setFilterAssignee(value); setFilterDropdownOpen(false); }}
+                        className={cn(
+                          'w-full flex items-center gap-2.5 px-3 py-2 text-xs text-left hover:bg-muted transition-colors',
+                          filterAssignee === value && 'bg-primary/5 text-primary font-medium',
+                        )}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                    {projectMembers.length > 0 && (
+                      <>
+                        <div className="h-px bg-border mx-2 my-1" />
+                        <div className="max-h-[180px] overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                          {projectMembers.map(m => {
+                            const name = m.profile?.name ?? m.profile?.email ?? m.profileId;
+                            const email = m.profile?.email ?? '';
+                            const initials = (m.profile?.name ?? email).charAt(0).toUpperCase();
+                            return (
+                              <button
+                                key={m.profileId}
+                                type="button"
+                                onClick={() => { setFilterAssignee(m.profileId); setFilterDropdownOpen(false); }}
+                                className={cn(
+                                  'w-full flex items-center gap-2.5 px-3 py-2 text-xs text-left hover:bg-muted transition-colors',
+                                  filterAssignee === m.profileId && 'bg-primary/5 text-primary font-medium',
+                                )}
+                              >
+                                {m.profile?.avatar ? (
+                                  <img src={m.profile.avatar} alt={name} className="w-5 h-5 rounded-full object-cover shrink-0" />
+                                ) : (
+                                  <div className="w-5 h-5 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[10px] font-semibold shrink-0">
+                                    {initials}
+                                  </div>
+                                )}
+                                <div className="flex flex-col min-w-0">
+                                  <span className="truncate leading-tight">{name}</span>
+                                  {email && name !== email && (
+                                    <span className="text-[10px] text-muted-foreground truncate">{email}</span>
+                                  )}
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
               {(filterSearch || filterAssignee) && (
                 <button
                   onClick={() => { setFilterSearch(''); setFilterAssignee(null); }}
@@ -825,8 +910,11 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
               <TaskCard task={activeTask} onEdit={handleEdit} onDelete={handleDelete}
                 onComment={(t) => setCommentTask(t)}
                 commentCount={commentCounts[activeTask._id]}
-                hideDeptLabel={hideDeptLabel} hideProjectLabel={hideProjectLabel}
-                canEditTasks={canEditTasks} />
+                hideProjectLabel={hideProjectLabel}
+                canEditTasks={canEditTasks}
+                canDeleteTasks={canDeleteTasks}
+                projectMembers={lockedProjectId ? projectMembers : undefined}
+                boardColumns={lockedProjectId ? boardColumns : undefined} />
             </div>
           ) : activeColumn ? (
             <div className="opacity-90 shadow-2xl bg-card border border-border/60 rounded-2xl p-3 w-72">
@@ -842,18 +930,17 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
       {/* Create/Edit Dialog */}
       <TaskDialog
         open={dialogOpen}
-        onClose={() => { setDialogOpen(false); setEditingTask(null); setOpenNotesOnNext(false); }}
+        onClose={() => { setDialogOpen(false); setEditingTask(null); setOpenNotesOnNext(false); setTaskError(''); }}
         onSubmit={handleSubmit}
         task={editingTask}
         loading={dialogLoading}
-        lockedDepartmentId={editingTask?._id ? undefined : lockedDepartmentId}
-        lockedDepartmentName={editingTask?._id ? undefined : lockedDepartmentName}
         lockedProjectId={lockedProjectId}
         lockedProjectName={lockedProjectName}
         initialTab={openNotesOnNext ? 'notes' : undefined}
         isReadOnly={!canEditTasks}
         projectMembers={lockedProjectId ? projectMembers : undefined}
         canAssign={canAssign}
+        externalError={taskError}
       />
 
       {/* Comment Dialog */}
@@ -910,19 +997,24 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
       {/* Delete Task Confirmation */}
       {deleteConfirm && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50">
-          <div className="bg-card border border-border rounded-2xl p-6 max-w-sm w-full mx-4 shadow-xl space-y-4">
+          <div className="bg-card border border-border rounded-2xl p-6 max-w-sm w-full mx-4 shadow-xl space-y-4 animate-in fade-in-0 zoom-in-95 duration-150">
             <h3 className="text-lg font-bold text-foreground">Delete Task</h3>
             <p className="text-sm text-muted-foreground">
-              Are you sure you want to delete "{deleteConfirm.title}"? This action cannot be undone.
+              Are you sure you want to delete &quot;{deleteConfirm.title}&quot;? This action cannot be undone.
             </p>
             <div className="flex gap-3 justify-end">
-              <button onClick={() => setDeleteConfirm(null)}
-                className="px-4 py-2 rounded-xl text-sm font-medium text-muted-foreground hover:bg-muted transition-colors">
+              <button
+                onClick={() => { if (!deleteLoading) setDeleteConfirm(null); }}
+                disabled={deleteLoading}
+                className="px-4 py-2 rounded-xl text-sm font-medium text-muted-foreground hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                 Cancel
               </button>
-              <button onClick={() => void confirmDelete()}
-                className="px-4 py-2 rounded-xl text-sm font-medium bg-destructive text-white hover:bg-destructive/90 transition-colors">
-                Delete
+              <button
+                onClick={() => void confirmDelete()}
+                disabled={deleteLoading}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium bg-destructive text-white hover:bg-destructive/90 transition-colors disabled:opacity-70 disabled:cursor-not-allowed">
+                {deleteLoading && <Loader2 size={14} className="animate-spin" />}
+                {deleteLoading ? 'Deleting...' : 'Delete'}
               </button>
             </div>
           </div>

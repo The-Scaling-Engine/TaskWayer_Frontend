@@ -34,8 +34,7 @@ const FILTER_LABELS: Record<FilterValue, string> = {
 };
 
 function getTaskCategory(task: Task, userId: string): TaskCategory {
-  if (task.isAssigned && task.assignedTo && task.assignedTo === userId) return 'assigned';
-  if (task.departmentId) return 'dept';
+  if (task.assignedTo && task.assignedTo === userId) return 'assigned';
   return 'personal';
 }
 

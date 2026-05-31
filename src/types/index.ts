@@ -28,7 +28,6 @@ export interface Task {
   deadline?: string;
   scheduledAt?: string | null;
   completedAt?: string;
-  departmentId?: string;
   projectId?: string | null;
   columnId?: string | null;
   userId: string;
@@ -39,7 +38,6 @@ export interface Task {
   recurrenceInterval?: number | null;
   recurrenceEndDate?: string | null;
   recurrenceParentId?: string | null;
-  isAssigned?: boolean;
   assignedTo?: string;
   assignedBy?: string;
   __v?: number;
@@ -421,7 +419,7 @@ export interface ActiveSessionResponse {
     session: {
       id: string;
       startedAt: string;
-      task: { id: string; title: string; priority: string; status: string; deadline: string | null; departmentId?: string | null };
+      task: { id: string; title: string; priority: string; status: string; deadline: string | null };
     } | null;
   };
 }

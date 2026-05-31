@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useDepartmentStore } from '@/store/departmentStore';
 import { useAuthStore } from '@/store/authStore';
@@ -10,14 +10,10 @@ import { toast } from 'sonner';
 import {
   Building2, ChevronDown, RefreshCw, Loader2, Users, Clock, AlertTriangle, Zap,
   ChevronLeft, ChevronRight, X, UserPlus, UserMinus, Mail, Search, Timer, MessageSquare,
-  ClipboardPlus, Plus, Pencil, Trash2,
+  ClipboardPlus, Pencil, Trash2,
 } from 'lucide-react';
 import CommentDialog from '@/components/CommentDialog';
-import KanbanBoard from '@/components/KanbanBoard';
-import type { KanbanBoardRef } from '@/components/KanbanBoard';
 import TaskDialog from '@/components/TaskDialog';
-import { Button } from '@/components/ui/button';
-import { useTaskStore } from '@/store/taskStore';
 import { cn } from '@/lib/utils';
 import type {
   MyDepartmentMembership, MemberWorkload, DepartmentMember, DepartmentMemberRole,
@@ -49,11 +45,8 @@ export default function DepartmentManagerPage() {
   const user = useAuthStore((s) => s.user);
   const { myDepartments, loading: storeLoading, hasFetched, fetchMyDepartments } = useDepartmentStore();
 
-  const boardRef = useRef<KanbanBoardRef>(null);
-  const { resetParams } = useTaskStore();
-
   // ── Page tabs ──────────────────────────────────────────────────────────────
-  const [pageTab, setPageTab] = useState<'workload' | 'mytasks' | 'members'>('workload');
+  const [pageTab, setPageTab] = useState<'workload' | 'members'>('workload');
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [switcherSearch, setSwitcherSearch] = useState('');
   const [refreshing, setRefreshing] = useState(false);
@@ -169,12 +162,6 @@ export default function DepartmentManagerPage() {
     }
   }, [pageTab, departmentId, currentMembership, fetchMembers]);
 
-  useEffect(() => {
-    if (pageTab === 'mytasks' && departmentId && currentMembership) {
-      resetParams({ departmentId });
-    }
-  }, [pageTab, departmentId, currentMembership, resetParams]);
-
   // ── Activity tab: fetch member's doing tasks + auto-refresh ──────────────
   const fetchActivityDoingTasks = useCallback(async (profileId: string) => {
     if (!departmentId) return;
@@ -226,7 +213,7 @@ export default function DepartmentManagerPage() {
     try {
       const res = await departmentService.getMemberTasks(departmentId, profileId, { limit: 50 });
       if (res.success) {
-        setAssignedTasks(res.data.filter((t) => t.isAssigned === true));
+        setAssignedTasks(res.data.filter((t) => t.assignedTo != null));
       }
     } catch (err) {
       toast.error(getApiErrorMessage(err, 'Failed to load assigned tasks'));
@@ -537,7 +524,7 @@ export default function DepartmentManagerPage() {
 
         {/* Page tabs */}
         <div className="flex items-center gap-1 border-b border-border">
-          {(['workload', 'mytasks', 'members'] as const).map((t) => (
+          {(['workload', 'members'] as const).map((t) => (
             <button
               key={t}
               onClick={() => setPageTab(t)}
@@ -546,7 +533,7 @@ export default function DepartmentManagerPage() {
                 pageTab === t ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
               )}
             >
-              {t === 'workload' ? 'Workload' : t === 'mytasks' ? 'My Tasks' : 'Members'}
+              {t === 'workload' ? 'Workload' : 'Members'}
             </button>
           ))}
         </div>
@@ -636,35 +623,6 @@ export default function DepartmentManagerPage() {
                 )}
               </>
             )}
-          </div>
-        )}
-
-        {/* ── My Tasks tab ── */}
-        {pageTab === 'mytasks' && (
-          <div className="space-y-3">
-            <div className="flex justify-end">
-              <Button
-                onClick={() => boardRef.current?.openCreateTask()}
-                className="bg-[#FE812C] hover:bg-[#e5732a] text-white rounded-xl shadow-md shadow-[#FE812C]/20 gap-2"
-                size="sm"
-              >
-                <Plus size={16} />
-                Create Task
-              </Button>
-            </div>
-            <KanbanBoard
-              ref={boardRef}
-              hideDeptLabel
-              filterFn={(task) => {
-                const mongoId = user?._id;
-                const profileUid = user?.id;
-                const assignUid = profileUid ?? mongoId;
-                // Exclude tasks assigned to someone else (even if I created them)
-                if (task.isAssigned && task.assignedTo && task.assignedTo !== assignUid) return false;
-                // Show my own tasks
-                return (!!mongoId && task.userId === mongoId) || (!!profileUid && task.userId === profileUid);
-              }}
-            />
           </div>
         )}
 

@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { ArrowLeft, FolderOpen, ChevronDown, Plus, Search } from 'lucide-react';
+import { ArrowLeft, FolderOpen, ChevronDown, Plus, Search, Loader2 } from 'lucide-react';
 import KanbanBoard from '@/components/KanbanBoard';
 import type { KanbanBoardRef } from '@/components/KanbanBoard';
 import { Button } from '@/components/ui/button';
@@ -46,10 +46,6 @@ export default function ProjectTasksPage() {
   );
 
   React.useEffect(() => {
-    if (!hasFetched) fetchProjects();
-  }, [hasFetched, fetchProjects]);
-
-  React.useEffect(() => {
     if (projectId) {
       resetParams({ projectId });
     }
@@ -71,6 +67,26 @@ export default function ProjectTasksPage() {
     }, 400);
     return () => clearTimeout(timer);
   }, [location.state, navigate]);
+
+  if (!hasFetched) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="animate-spin text-primary" size={32} />
+      </div>
+    );
+  }
+
+  if (!currentProject) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 gap-3">
+        <FolderOpen size={40} className="text-muted-foreground" />
+        <p className="text-sm text-muted-foreground">Project not found or you don&apos;t have access.</p>
+        <Button variant="outline" onClick={() => navigate('/dashboard/projects')}>
+          Go to Projects
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

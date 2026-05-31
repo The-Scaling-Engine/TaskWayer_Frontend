@@ -56,6 +56,7 @@ export default function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose
 
   const topDepts = useMemo(() => {
     return [...myDepartments]
+      .filter((m) => m.role === 'OWNER' || m.role === 'ADMIN')
       .sort((a, b) => {
         const ai = recentDeptIds.indexOf(a.department.id);
         const bi = recentDeptIds.indexOf(b.department.id);
@@ -141,10 +142,7 @@ export default function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose
                 </span>
               </div>
               {topDepts.map((m) => {
-                const isManagerRole = m.role === 'OWNER' || m.role === 'ADMIN';
-                const deptPath = isManagerRole
-                  ? `/dashboard/departments/${m.department.id}`
-                  : `/dashboard/departments/${m.department.id}/tasks`;
+                const deptPath = `/dashboard/departments/${m.department.id}`;
                 const active = isActive(deptPath);
                 return (
                   <Link
@@ -164,16 +162,14 @@ export default function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose
                     {!collapsed && (
                       <>
                         <span className="flex-1 truncate">{m.department.name}</span>
-                        {isManagerRole && (
-                          <span className={cn(
-                            'text-[10px] font-bold px-1.5 py-0.5 rounded-full shrink-0',
-                            m.role === 'OWNER'
-                              ? 'bg-[#FE812C]/10 text-[#FE812C]'
-                              : 'bg-purple-500/10 text-purple-500'
-                          )}>
-                            {m.role}
-                          </span>
-                        )}
+                        <span className={cn(
+                          'text-[10px] font-bold px-1.5 py-0.5 rounded-full shrink-0',
+                          m.role === 'OWNER'
+                            ? 'bg-[#FE812C]/10 text-[#FE812C]'
+                            : 'bg-purple-500/10 text-purple-500'
+                        )}>
+                          {m.role}
+                        </span>
                       </>
                     )}
                   </Link>

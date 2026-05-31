@@ -1,8 +1,7 @@
-import type { Task, ProjectMember } from '@/types';
+import type { Task, ProjectMember, BoardColumn } from '@/types';
 import { Badge } from '@/components/ui/badge';
-import { Pencil, Trash2, Calendar, MessageSquare, Square, Building2, FolderOpen, Clock, CircleSlash, Repeat, UserCheck, User } from 'lucide-react';
+import { Pencil, Trash2, Calendar, MessageSquare, Square, FolderOpen, Clock, CircleSlash, Repeat, UserCheck, User } from 'lucide-react';
 import { useTimeTrackingStore } from '@/store/timeTrackingStore';
-import { useDepartmentStore } from '@/store/departmentStore';
 import { useProjectStore } from '@/store/projectStore';
 import { useAuthStore } from '@/store/authStore';
 import { toast } from 'sonner';
@@ -24,11 +23,11 @@ interface TaskCardProps {
   onComment: (task: Task) => void;
   onCancelRecurring?: (task: Task) => void;
   commentCount?: number;
-  hideDeptLabel?: boolean;
   hideProjectLabel?: boolean;
   canEditTasks?: boolean;
   canDeleteTasks?: boolean;
   projectMembers?: ProjectMember[];
+  boardColumns?: BoardColumn[];
 }
 
 const statusColors: Record<string, string> = {
@@ -43,21 +42,17 @@ const statusLabels: Record<string, string> = {
   done: 'Done',
 };
 
-export default function TaskCard({ task, onEdit, onDelete, onComment, onCancelRecurring, commentCount: commentCountProp, hideDeptLabel, hideProjectLabel, canEditTasks = true, canDeleteTasks, projectMembers }: TaskCardProps) {
+export default function TaskCard({ task, onEdit, onDelete, onComment, onCancelRecurring, commentCount: commentCountProp, hideProjectLabel, canEditTasks = true, canDeleteTasks, projectMembers, boardColumns }: TaskCardProps) {
   const commentCount = commentCountProp ?? task._count?.comments ?? 0;
   const { activeSession, elapsedSeconds, stopTracking } = useTimeTrackingStore();
   const isTracking = activeSession?.taskId === task._id;
-  const allMemberships = useDepartmentStore((s) => s.allMemberships);
   const projects = useProjectStore((s) => s.projects);
   const currentUser = useAuthStore((s) => s.user);
-  const deptName = task.departmentId
-    ? allMemberships.find((m) => m.department.id === task.departmentId)?.department.name
-    : undefined;
   const projectName = task.projectId
     ? projects.find((p) => p.id === task.projectId)?.name
     : undefined;
   const currentUserId = currentUser?.id ?? currentUser?._id;
-  const isAssignedToMe = task.isAssigned && task.assignedTo != null && task.assignedTo === currentUserId;
+  const isAssignedToMe = task.assignedTo != null && task.assignedTo === currentUserId;
   const assignee = projectMembers?.find(m => m.profileId === task.assignedTo);
   const effectiveCanDelete = canDeleteTasks ?? canEditTasks;
 
@@ -82,9 +77,26 @@ export default function TaskCard({ task, onEdit, onDelete, onComment, onCancelRe
       {/* Header: Status Badge + Actions */}
       <div className="flex items-start justify-between mb-3">
         <div className="flex items-center gap-1.5 flex-wrap">
-          <Badge variant="secondary" className={`${statusColors[task.status]} text-xs font-medium rounded-md`}>
-            {statusLabels[task.status]}
-          </Badge>
+          {hideProjectLabel && boardColumns ? (
+            (() => {
+              const col = boardColumns.find(c => c.id === task.columnId)
+                ?? boardColumns.find(c => c.isDefault)
+                ?? boardColumns[0];
+              return col ? (
+                <Badge
+                  variant="secondary"
+                  className="text-xs font-medium rounded-md"
+                  style={{ backgroundColor: col.color + '22', color: col.color }}
+                >
+                  {col.name}
+                </Badge>
+              ) : null;
+            })()
+          ) : (
+            <Badge variant="secondary" className={`${statusColors[task.status]} text-xs font-medium rounded-md`}>
+              {statusLabels[task.status]}
+            </Badge>
+          )}
           {isParentRecurring && (
             <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-amber-500/10 text-amber-500 text-[10px] font-semibold border border-amber-500/20">
               <Repeat size={9} className="shrink-0" />
@@ -155,16 +167,6 @@ export default function TaskCard({ task, onEdit, onDelete, onComment, onCancelRe
           <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-violet-500/10 text-violet-600 dark:text-violet-400 text-[10px] font-semibold max-w-full">
             <FolderOpen size={9} className="shrink-0" />
             <span className="truncate">{projectName}</span>
-          </span>
-        </div>
-      )}
-
-      {/* Department badge */}
-      {deptName && !hideDeptLabel && (
-        <div className="flex items-center mb-2">
-          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-[#FE812C]/10 text-[#FE812C] text-[10px] font-semibold max-w-full">
-            <Building2 size={9} className="shrink-0" />
-            <span className="truncate">{deptName}</span>
           </span>
         </div>
       )}

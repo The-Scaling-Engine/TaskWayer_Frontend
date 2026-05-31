@@ -63,6 +63,8 @@ export default function ProjectManagerPage() {
   const [linkingDept, setLinkingDept] = useState(false);
   const [unlinkingDeptId, setUnlinkingDeptId] = useState<string | null>(null);
   const [deptsLoading, setDeptsLoading] = useState(false);
+  const [importSuggestion, setImportSuggestion] = useState<{ departmentId: string; departmentName: string } | null>(null);
+  const [importLoading, setImportLoading] = useState(false);
 
   // ── Slack config state ────────────────────────────────────────────────────
   const [slackConfig, setSlackConfig] = useState<SlackConfig | null>(null);
@@ -292,16 +294,32 @@ export default function ProjectManagerPage() {
   const handleLinkDept = async () => {
     if (!projectId || !selectedDeptId) return;
     setLinkingDept(true);
+    const deptName = linkableDepts.find(d => d.id === selectedDeptId)?.name ?? selectedDeptId;
     try {
       await projectService.linkDepartment(projectId, selectedDeptId);
       const res = await projectService.getDepartments(projectId);
       setLinkedDepts(res.data ?? []);
       setSelectedDeptId('');
       toast.success('Department linked');
+      setImportSuggestion({ departmentId: selectedDeptId, departmentName: deptName });
     } catch (err) {
       toast.error(getApiErrorMessage(err, 'Failed to link department'));
     } finally {
       setLinkingDept(false);
+    }
+  };
+
+  const handleImportMembers = async () => {
+    if (!projectId || !importSuggestion) return;
+    setImportLoading(true);
+    try {
+      const res = await projectService.importDepartmentMembers(projectId, importSuggestion.departmentId);
+      toast.success(res.message);
+      setImportSuggestion(null);
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Failed to import members'));
+    } finally {
+      setImportLoading(false);
     }
   };
 
@@ -1114,6 +1132,42 @@ export default function ProjectManagerPage() {
               <button onClick={handleLeave} disabled={leaveLoading} className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium text-white bg-destructive hover:bg-destructive/90 disabled:opacity-60 transition-colors">
                 {leaveLoading && <Loader2 size={14} className="animate-spin" />}
                 {leaveLoading ? 'Leaving...' : 'Leave Project'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Import department members suggestion */}
+      {importSuggestion && (
+        <div className="fixed inset-0 z-[65] flex items-center justify-center bg-black/50 p-4 animate-in fade-in duration-200">
+          <div className="bg-card border border-border rounded-2xl p-6 max-w-sm w-full shadow-xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-start gap-3">
+              <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                <UserPlus size={16} className="text-primary" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-foreground">Import Department Members?</h3>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Add all active members of <span className="font-semibold text-foreground">{importSuggestion.departmentName}</span> to this project as <span className="font-semibold text-foreground">MEMBER</span>. Members already in the project will be skipped.
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setImportSuggestion(null)}
+                disabled={importLoading}
+                className="px-4 py-2 rounded-xl text-sm font-medium text-muted-foreground hover:bg-muted transition-colors disabled:opacity-50"
+              >
+                Skip
+              </button>
+              <button
+                onClick={handleImportMembers}
+                disabled={importLoading}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium text-white bg-primary hover:bg-primary/90 disabled:opacity-60 transition-colors"
+              >
+                {importLoading && <Loader2 size={14} className="animate-spin" />}
+                {importLoading ? 'Importing...' : 'Import Members'}
               </button>
             </div>
           </div>

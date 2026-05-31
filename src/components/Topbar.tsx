@@ -65,7 +65,7 @@ export default function Topbar({ sidebarCollapsed }: TopbarProps) {
     const state = { openTaskId: taskId, ...(highlightCommentId ? { highlightCommentId } : {}) };
     return isManager
       ? { path: `/dashboard/departments/${deptId}`, state }
-      : { path: `/dashboard/departments/${deptId}/tasks`, state };
+      : { path: '/dashboard/tasks', state };
   };
 
   const handleNotificationClick = (n: Notification) => {

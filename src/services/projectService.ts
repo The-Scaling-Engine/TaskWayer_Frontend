@@ -122,4 +122,12 @@ export const projectService = {
     const response = await api.delete(`/projects/${projectId}/departments/${departmentId}`);
     return response.data;
   },
+
+  importDepartmentMembers: async (
+    projectId: string,
+    departmentId: string
+  ): Promise<{ success: boolean; message: string; data: { added: number } }> => {
+    const response = await api.post(`/projects/${projectId}/members/import-department`, { departmentId });
+    return response.data;
+  },
 };

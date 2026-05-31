@@ -20,7 +20,6 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import type { Task, TaskNote, ProjectMember } from '@/types';
-import { useDepartmentStore } from '@/store/departmentStore';
 import { useProjectStore } from '@/store/projectStore';
 import { useAuthStore } from '@/store/authStore';
 import { UserCheck, Bold, Italic, List, Pencil, Trash2, Check, GripVertical } from 'lucide-react';
@@ -292,7 +291,6 @@ interface TaskDialogProps {
     scheduledAt?: string | null;
     priority?: 'low' | 'medium' | 'high';
     tags?: string[];
-    departmentId?: string;
     projectId?: string;
     columnId?: string | null;
     isRecurring?: boolean;
@@ -306,8 +304,6 @@ interface TaskDialogProps {
   defaultDeadline?: string;
   defaultScheduledAt?: string;
   dialogTitle?: string;
-  lockedDepartmentId?: string;
-  lockedDepartmentName?: string;
   lockedProjectId?: string;
   lockedProjectName?: string;
   initialTab?: 'details' | 'notes';
@@ -315,6 +311,7 @@ interface TaskDialogProps {
   projectMembers?: ProjectMember[];
   canAssign?: boolean;
   isReadOnly?: boolean;
+  externalError?: string;
 }
 
 // ─── TaskDialog ───────────────────────────────────────────────
@@ -322,13 +319,24 @@ interface TaskDialogProps {
 export default function TaskDialog({
   open, onClose, onSubmit, task, loading,
   defaultDeadline, defaultScheduledAt,
-  dialogTitle, lockedDepartmentId, lockedDepartmentName, lockedProjectId, lockedProjectName,
+  dialogTitle, lockedProjectId, lockedProjectName,
   initialTab, onCancelFromDate,
   projectMembers, canAssign = false, isReadOnly = false,
+  externalError,
 }: TaskDialogProps) {
-  const allMemberships = useDepartmentStore((s) => s.allMemberships);
   const projects = useProjectStore((s) => s.projects);
   const user = useAuthStore((s) => s.user);
+  const myProfileId = user?.id ?? (user as { _id?: string })?._id;
+  const myRole = projectMembers?.find(m => m.profileId === myProfileId)?.role;
+  const canSelfAssignOnly = !canAssign && myRole === 'MEMBER';
+
+  // MEMBER creating a new task in project mode: default assignee to self
+  useEffect(() => {
+    if (canSelfAssignOnly && !task?._id && myProfileId && assignedTo === null) {
+      setAssignedTo(myProfileId);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canSelfAssignOnly, myProfileId, task?._id]);
 
   // ── Details tab state ──────────────────────────────────────
   const [title, setTitle] = useState(task?.title || '');
@@ -338,7 +346,6 @@ export default function TaskDialog({
   const [scheduledAt, setScheduledAt] = useState(task?.scheduledAt ? toDatetimeLocal(task.scheduledAt) : '');
   const [priority, setPriority] = useState<'low' | 'medium' | 'high'>(task?.priority || 'medium');
   const [tagsInput, setTagsInput] = useState(task?.tags?.join(', ') || '');
-  const [departmentId, setDepartmentId] = useState(lockedDepartmentId || task?.departmentId || '__none__');
   const [projectId, setProjectId] = useState(lockedProjectId || task?.projectId || '__none__');
   const [isRecurring, setIsRecurring] = useState(task?.isRecurring ?? false);
   const [recurrenceUnit, setRecurrenceUnit] = useState<'DAILY' | 'WEEKLY' | 'MONTHLY' | ''>(() => toRecurrenceUnit(task));
@@ -401,7 +408,6 @@ export default function TaskDialog({
       );
       setPriority(task?.priority || 'medium');
       setTagsInput(task?.tags?.join(', ') || '');
-      setDepartmentId(lockedDepartmentId || task?.departmentId || '__none__');
       setProjectId(lockedProjectId || task?.projectId || '__none__');
       setIsRecurring(task?.isRecurring ?? false);
       setRecurrenceUnit(toRecurrenceUnit(task));
@@ -485,7 +491,7 @@ export default function TaskDialog({
   const resetForm = () => {
     setTitle(''); setDescription(''); setStatus('todo');
     setDeadline(''); setScheduledAt(''); setPriority('medium');
-    setTagsInput(''); setDepartmentId('__none__'); setProjectId('__none__');
+    setTagsInput(''); setProjectId('__none__');
     setIsRecurring(false); setRecurrenceUnit(''); setRecurrenceInterval(1); setRecurrenceEndDate('');
     setColumnId(null); setProjectColumns([]);
     setAssignedTo(null);
@@ -506,12 +512,12 @@ export default function TaskDialog({
       if (s < new Date()) { setError('Deadline cannot be in the past'); return; }
     }
     onSubmit({
-      title: title.trim(), description, status,
+      title: title.trim(), description,
+      ...(lockedProjectId ? {} : { status }),
       deadline: deadline ? new Date(deadline).toISOString() : undefined,
       scheduledAt: scheduledAt ? new Date(scheduledAt).toISOString() : null,
       priority,
       tags: tagsInput.split(',').map(t => t.trim()).filter(Boolean),
-      departmentId: departmentId === '__none__' ? undefined : departmentId || undefined,
       projectId: projectId === '__none__' ? undefined : projectId || undefined,
       ...(lockedProjectId && { columnId: columnId ?? null }),
       isRecurring,
@@ -686,9 +692,9 @@ export default function TaskDialog({
             )}
           >
             <form onSubmit={handleSubmit} className="space-y-5 mt-3">
-              {error && (
+              {(error || externalError) && (
                 <div className="bg-destructive/10 border border-destructive/30 text-destructive rounded-xl px-3 py-2 text-sm">
-                  {error}
+                  {error || externalError}
                 </div>
               )}
 
@@ -716,22 +722,26 @@ export default function TaskDialog({
                     className="min-h-[150px]"
                   />
                 </div>
-                <div className="space-y-2.5 w-[120px] shrink-0">
+                <div className="space-y-2.5 w-[160px] shrink-0">
                   <div className="space-y-1.5">
-                    {lockedProjectId && projectColumns.length > 0 ? (
+                    {lockedProjectId ? (
                       <>
-                        <Label className="text-xs">Column</Label>
-                        <Select
-                          value={columnId ?? ''}
-                          onValueChange={setColumnId}
-                          disabled={isReadOnly}>
-                          <SelectTrigger className="rounded-xl text-xs h-8 px-2"><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            {projectColumns.map(col => (
-                              <SelectItem key={col.id} value={col.id}>{col.name}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <Label className="text-xs">Status</Label>
+                        {projectColumns.length > 0 ? (
+                          <Select
+                            value={columnId ?? ''}
+                            onValueChange={setColumnId}
+                            disabled={isReadOnly}>
+                            <SelectTrigger className="rounded-xl text-xs h-8 px-2"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              {projectColumns.map(col => (
+                                <SelectItem key={col.id} value={col.id}>{col.name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <div className="h-8 rounded-xl bg-muted/50 border border-border animate-pulse" />
+                        )}
                       </>
                     ) : (
                       <>
@@ -758,91 +768,83 @@ export default function TaskDialog({
                       </SelectContent>
                     </Select>
                   </div>
-                </div>
-              </div>
-
-              <div className={`grid gap-3 ${lockedDepartmentId || allMemberships.length > 0 ? 'grid-cols-[7fr_3fr]' : 'grid-cols-1'}`}>
-                <div className="space-y-2">
-                  <Label htmlFor="task-tags" className="font-medium">Tags <span className="text-muted-foreground font-normal">(comma-separated)</span></Label>
-                  <Input id="task-tags" placeholder="bug, feature, etc." value={tagsInput} onChange={(e) => setTagsInput(e.target.value)} className="rounded-xl" disabled={isReadOnly} />
-                </div>
-                {lockedDepartmentId ? (
-                  <div className="space-y-2">
-                    <Label className="font-medium">Department</Label>
-                    <div className="flex items-center h-9 px-3 rounded-xl border border-border bg-muted/50 text-sm text-muted-foreground cursor-not-allowed select-none truncate">
-                      {lockedDepartmentName || lockedDepartmentId}
-                    </div>
-                  </div>
-                ) : allMemberships.length > 0 ? (
-                  <div className="space-y-2">
-                    <Label className="font-medium">Department</Label>
-                    <Select value={departmentId} onValueChange={setDepartmentId} disabled={isReadOnly}>
-                      <SelectTrigger className="rounded-xl"><SelectValue placeholder="None" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__none__">None (Personal)</SelectItem>
-                        {allMemberships.map((m) => (
-                          <SelectItem key={m.id} value={m.department.id}>
-                            {m.department.name}
-                            <span className="ml-2 text-[10px] text-muted-foreground">[{m.role}]</span>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                ) : null}
-              </div>
-
-              {(lockedProjectId || projects.filter(p => !p.archivedAt && !p.deletedAt).length > 0) && (
-                <div className="space-y-2">
-                  <Label className="font-medium">Project <span className="text-muted-foreground font-normal">(optional)</span></Label>
-                  {lockedProjectId ? (
-                    <div className="flex items-center h-9 px-3 rounded-xl border border-border bg-muted/50 text-sm text-muted-foreground cursor-not-allowed select-none truncate">
-                      {lockedProjectName || lockedProjectId}
-                    </div>
-                  ) : (
-                    <Select value={projectId} onValueChange={setProjectId} disabled={isReadOnly}>
-                      <SelectTrigger className="rounded-xl"><SelectValue placeholder="None" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__none__">None</SelectItem>
-                        {projects.filter(p => !p.archivedAt && !p.deletedAt).map((p) => (
-                          <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  )}
-                </div>
-              )}
-
-              {lockedProjectId && projectMembers && projectMembers.length > 0 && (
-                <div className="space-y-2">
-                  <Label className="font-medium">Assignee</Label>
-                  {canAssign ? (
-                    <Select
-                      value={assignedTo ?? '__none__'}
-                      onValueChange={(v) => setAssignedTo(v === '__none__' ? null : v)}
-                      disabled={isReadOnly}
-                    >
-                      <SelectTrigger className="rounded-xl"><SelectValue placeholder="Unassigned" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__none__">Unassigned</SelectItem>
-                        {projectMembers.map(m => (
-                          <SelectItem key={m.profileId} value={m.profileId}>
-                            {m.profile?.name ?? m.profile?.email ?? m.profileId}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    <div className="flex items-center h-9 px-3 rounded-xl border border-border bg-muted/50 text-sm text-muted-foreground select-none">
-                      {assignedTo
-                        ? (projectMembers.find(m => m.profileId === assignedTo)?.profile?.name
-                            ?? projectMembers.find(m => m.profileId === assignedTo)?.profile?.email
-                            ?? 'Assigned')
-                        : 'Unassigned'}
+                  {lockedProjectId && projectMembers && projectMembers.length > 0 && (
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Assignee</Label>
+                      {canAssign ? (
+                        <Select
+                          value={assignedTo ?? '__none__'}
+                          onValueChange={(v) => setAssignedTo(v === '__none__' ? null : v)}
+                          disabled={isReadOnly}
+                        >
+                          <SelectTrigger className="rounded-xl text-xs h-8 px-2"><SelectValue placeholder="Unassigned" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none__">Unassigned</SelectItem>
+                            {projectMembers.map(m => (
+                              <SelectItem key={m.profileId} value={m.profileId}>
+                                {m.profile?.name ?? m.profile?.email ?? m.profileId}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : canSelfAssignOnly ? (
+                        <div className="flex items-center h-8 px-2 rounded-xl border border-border bg-muted/30 text-xs text-foreground select-none truncate">
+                          {(() => {
+                            const m = projectMembers.find(x => x.profileId === myProfileId);
+                            const name = m?.profile?.name ?? m?.profile?.email;
+                            return name ? `${name} (me)` : 'Me';
+                          })()}
+                        </div>
+                      ) : (
+                        <div className="flex items-center h-8 px-2 rounded-xl border border-border bg-muted/50 text-xs text-muted-foreground select-none truncate">
+                          {assignedTo
+                            ? (projectMembers.find(m => m.profileId === assignedTo)?.profile?.name
+                                ?? projectMembers.find(m => m.profileId === assignedTo)?.profile?.email
+                                ?? 'Assigned')
+                            : 'Unassigned'}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
-              )}
+              </div>
+
+              {(() => {
+                const showProject = lockedProjectId || projects.filter(p => !p.archivedAt && !p.deletedAt).length > 0;
+                return showProject ? (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-2">
+                      <Label htmlFor="task-tags" className="font-medium">Tags <span className="text-muted-foreground font-normal">(comma-separated)</span></Label>
+                      <Input id="task-tags" placeholder="bug, feature, etc." value={tagsInput} onChange={(e) => setTagsInput(e.target.value)} className="rounded-xl" disabled={isReadOnly} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="font-medium">
+                        {lockedProjectId ? 'Project' : <>Project <span className="text-muted-foreground font-normal">(optional)</span></>}
+                      </Label>
+                      {lockedProjectId ? (
+                        <div className="flex items-center h-9 px-3 rounded-xl border border-border bg-muted/50 text-sm text-muted-foreground cursor-not-allowed select-none truncate">
+                          {lockedProjectName || lockedProjectId}
+                        </div>
+                      ) : (
+                        <Select value={projectId} onValueChange={setProjectId} disabled={isReadOnly}>
+                          <SelectTrigger className="rounded-xl"><SelectValue placeholder="None" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none__">None</SelectItem>
+                            {projects.filter(p => !p.archivedAt && !p.deletedAt).map((p) => (
+                              <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <Label htmlFor="task-tags" className="font-medium">Tags <span className="text-muted-foreground font-normal">(comma-separated)</span></Label>
+                    <Input id="task-tags" placeholder="bug, feature, etc." value={tagsInput} onChange={(e) => setTagsInput(e.target.value)} className="rounded-xl" disabled={isReadOnly} />
+                  </div>
+                );
+              })()}
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-2">

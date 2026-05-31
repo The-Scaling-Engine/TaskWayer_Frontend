@@ -8,6 +8,7 @@ import { useTimeTrackingStore } from '@/store/timeTrackingStore';
 import { useDepartmentStore } from '@/store/departmentStore';
 import { useSocketStore } from '@/store/socketStore';
 import { useNotificationStore } from '@/store/notificationStore';
+import { useProjectStore } from '@/store/projectStore';
 import { useTaskStore } from '@/store/taskStore';
 import { toast } from 'sonner';
 import type { Notification } from '@/types';
@@ -23,6 +24,9 @@ export default function DashboardLayout() {
   const fetchAllMemberships = useDepartmentStore((s) => s.fetchAllMemberships);
   const { connect, disconnect, socket } = useSocketStore();
   const pushNotification = useNotificationStore((s) => s.pushNotification);
+  const fetchUnreadCount = useNotificationStore((s) => s.fetchUnreadCount);
+  const fetchProjects = useProjectStore((s) => s.fetchProjects);
+  const hasFetchedProjects = useProjectStore((s) => s.hasFetched);
   const silentFetch = useTaskStore((s) => s.silentFetch);
 
   useEffect(() => {
@@ -34,8 +38,14 @@ export default function DashboardLayout() {
     if (user && user.role !== 'ADMIN') {
       fetchMyDepartments();
       fetchAllMemberships();
+      if (!hasFetchedProjects) fetchProjects();
     }
-  }, [user?.role, fetchMyDepartments, fetchAllMemberships]);
+  }, [user?.role, fetchMyDepartments, fetchAllMemberships, fetchProjects, hasFetchedProjects]);
+
+  // Load initial unread notification count from DB on mount
+  useEffect(() => {
+    fetchUnreadCount();
+  }, [fetchUnreadCount]);
 
   // Connect socket when authenticated
   useEffect(() => {
