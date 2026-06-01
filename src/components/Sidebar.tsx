@@ -17,7 +17,6 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useDepartmentStore } from '@/store/departmentStore';
-import { useProjectStore } from '@/store/projectStore';
 
 interface SidebarProps {
   collapsed: boolean;
@@ -47,12 +46,6 @@ export default function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose
   const location = useLocation();
   const myDepartments = useDepartmentStore((s) => s.myDepartments);
   const recentDeptIds = useDepartmentStore((s) => s.recentDeptIds);
-  const projects = useProjectStore((s) => s.projects);
-
-  const topProjects = useMemo(
-    () => projects.filter((p) => !p.archivedAt && !p.deletedAt).slice(0, 3),
-    [projects]
-  );
 
   const topDepts = useMemo(() => {
     return [...myDepartments]
@@ -170,50 +163,6 @@ export default function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose
                         )}>
                           {m.role}
                         </span>
-                      </>
-                    )}
-                  </Link>
-                );
-              })}
-            </>
-          )}
-
-          {user?.role !== 'ADMIN' && topProjects.length > 0 && (
-            <>
-              <div className={cn('mt-4 mb-2', collapsed ? 'text-center' : 'px-3')}>
-                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                  {collapsed ? 'Proj' : 'My Projects'}
-                </span>
-              </div>
-              {topProjects.map((project) => {
-                const isOwner = project.ownerId === (user?.id ?? user?._id);
-                const projectPath = isOwner
-                  ? `/dashboard/projects/${project.id}`
-                  : `/dashboard/projects/${project.id}/tasks`;
-                const active = isActive(projectPath);
-                return (
-                  <Link
-                    key={project.id}
-                    to={projectPath}
-                    onClick={onMobileClose}
-                    title={collapsed ? project.name : undefined}
-                    className={cn(
-                      'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200',
-                      active
-                        ? 'bg-primary/10 text-primary'
-                        : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-                      collapsed && 'justify-center px-2'
-                    )}
-                  >
-                    <FolderOpen size={20} className="shrink-0" />
-                    {!collapsed && (
-                      <>
-                        <span className="flex-1 truncate">{project.name}</span>
-                        {isOwner && (
-                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-[#FE812C]/10 text-[#FE812C] shrink-0">
-                            OWNER
-                          </span>
-                        )}
                       </>
                     )}
                   </Link>

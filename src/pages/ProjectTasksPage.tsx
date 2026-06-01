@@ -17,7 +17,6 @@ export default function ProjectTasksPage() {
   const boardRef = React.useRef<KanbanBoardRef>(null);
   const { resetParams } = useTaskStore();
   const projects = useProjectStore((s) => s.projects);
-  const fetchProjects = useProjectStore((s) => s.fetchProjects);
   const hasFetched = useProjectStore((s) => s.hasFetched);
 
   const [switcherOpen, setSwitcherOpen] = React.useState(false);

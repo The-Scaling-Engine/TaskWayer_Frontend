@@ -513,7 +513,7 @@ export default function TaskDialog({
     }
     onSubmit({
       title: title.trim(), description,
-      ...(lockedProjectId ? {} : { status }),
+      status: (status ?? 'todo') as 'todo' | 'doing' | 'done',
       deadline: deadline ? new Date(deadline).toISOString() : undefined,
       scheduledAt: scheduledAt ? new Date(scheduledAt).toISOString() : null,
       priority,
