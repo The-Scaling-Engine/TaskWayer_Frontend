@@ -40,6 +40,9 @@ export interface Task {
   recurrenceParentId?: string | null;
   assignedTo?: string;
   assignedBy?: string;
+  milestoneId?: string | null;
+  milestoneOrder?: number | null;
+  inProgressAt?: string | null;
   __v?: number;
   _count?: { comments: number };
   createdBy?: { name: string | null; email: string | null; avatar: string | null } | null;
@@ -229,7 +232,8 @@ export type NotificationType =
   | 'DEADLINE_1_HOUR'
   | 'DEPT_MEMBER_JOINED'
   | 'NOTE_ADDED'
-  | 'PROJECT_MEMBER_JOINED';
+  | 'PROJECT_MEMBER_JOINED'
+  | 'MILESTONE_COMPLETED';
 
 export interface Notification {
   id: string;
@@ -585,6 +589,31 @@ export interface ProjectMembersResponse {
   success: boolean;
   count: number;
   data: ProjectMember[];
+}
+
+// ============================================
+// MILESTONES
+// ============================================
+export type MilestoneStatus = 'ACTIVE' | 'COMPLETED' | 'CANCELLED';
+
+export interface Milestone {
+  id: string;
+  projectId: string;
+  title: string;
+  description?: string | null;
+  startDate?: string | null;
+  deadline?: string | null;
+  status: MilestoneStatus;
+  order: number;
+  completedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MilestonesResponse {
+  success: boolean;
+  count: number;
+  data: Milestone[];
 }
 
 // ============================================

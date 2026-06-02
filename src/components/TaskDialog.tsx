@@ -1,7 +1,8 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 import { useState, useEffect, useRef, useMemo, type FormEvent } from 'react';
 import { boardColumnService } from '@/services/boardColumnService';
-import type { BoardColumn } from '@/types';
+import { milestoneService } from '@/services/milestoneService';
+import type { BoardColumn, Milestone } from '@/types';
 import {
   Dialog,
   DialogContent,
@@ -298,6 +299,8 @@ interface TaskDialogProps {
     recurrenceInterval?: number | null;
     recurrenceEndDate?: string | null;
     assignedTo?: string | null;
+    milestoneId?: string | null;
+    milestoneOrder?: number | null;
   }) => void;
   task?: Task | null;
   loading?: boolean;
@@ -355,6 +358,8 @@ export default function TaskDialog({
   const [columnId, setColumnId] = useState<string | null>(task?.columnId ?? null);
   const [projectColumns, setProjectColumns] = useState<BoardColumn[]>([]);
   const [assignedTo, setAssignedTo] = useState<string | null>(task?.assignedTo ?? null);
+  const [milestoneId, setMilestoneId] = useState<string | null>(task?.milestoneId ?? null);
+  const [projectMilestones, setProjectMilestones] = useState<Milestone[]>([]);
   const [error, setError] = useState('');
 
   // ── Update Notes tab state ─────────────────────────────────
@@ -415,9 +420,19 @@ export default function TaskDialog({
       setRecurrenceEndDate(task?.recurrenceEndDate ? task.recurrenceEndDate.substring(0, 10) : '');
       setColumnId(task?.columnId ?? null);
       setAssignedTo(task?.assignedTo ?? null);
+      setMilestoneId(task?.milestoneId ?? null);
       setError('');
     }
   }, [task, open, defaultDeadline, defaultScheduledAt]);
+
+  // Fetch milestones for project context (edit mode only, canAssign = OWNER/MANAGER)
+  useEffect(() => {
+    if (!open || !lockedProjectId || !canAssign || !task?._id) { setProjectMilestones([]); return; }
+    milestoneService.getMilestones(lockedProjectId)
+      .then(res => setProjectMilestones(res.data.filter(m => m.status === 'ACTIVE')))
+      .catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, lockedProjectId, canAssign, task?._id]);
 
   // Fetch columns for project context
   useEffect(() => {
@@ -495,6 +510,7 @@ export default function TaskDialog({
     setIsRecurring(false); setRecurrenceUnit(''); setRecurrenceInterval(1); setRecurrenceEndDate('');
     setColumnId(null); setProjectColumns([]);
     setAssignedTo(null);
+    setMilestoneId(null); setProjectMilestones([]);
     setError('');
   };
 
@@ -525,6 +541,7 @@ export default function TaskDialog({
       recurrenceInterval: isRecurring && recurrenceInterval > 1 ? recurrenceInterval : null,
       recurrenceEndDate: isRecurring && recurrenceEndDate ? new Date(`${recurrenceEndDate}T23:59:59`).toISOString() : null,
       ...(lockedProjectId && { assignedTo }),
+      ...(lockedProjectId && canAssign && task?._id && { milestoneId }),
     });
   };
 
@@ -804,6 +821,24 @@ export default function TaskDialog({
                             : 'Unassigned'}
                         </div>
                       )}
+                    </div>
+                  )}
+                  {canAssign && task?._id && lockedProjectId && projectMilestones.length > 0 && (
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Milestone</Label>
+                      <Select
+                        value={milestoneId ?? '__none__'}
+                        onValueChange={v => setMilestoneId(v === '__none__' ? null : v)}
+                        disabled={isReadOnly}
+                      >
+                        <SelectTrigger className="rounded-xl text-xs h-8 px-2"><SelectValue placeholder="None" /></SelectTrigger>
+                        <SelectContent position="popper" className="z-[200]">
+                          <SelectItem value="__none__">None</SelectItem>
+                          {projectMilestones.map(m => (
+                            <SelectItem key={m.id} value={m.id}>{m.title}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                   )}
                 </div>

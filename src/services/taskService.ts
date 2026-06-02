@@ -41,6 +41,8 @@ export interface UpdateTaskData {
   recurrenceInterval?: number | null;
   recurrenceEndDate?: string | null;
   assignedTo?: string | null;
+  milestoneId?: string | null;
+  milestoneOrder?: number | null;
 }
 
 export const taskService = {

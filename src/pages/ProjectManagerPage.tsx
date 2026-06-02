@@ -14,6 +14,7 @@ import { departmentService } from '@/services/departmentService';
 import { slackConfigService } from '@/services/slackConfigService';
 import type { SlackConfig } from '@/services/slackConfigService';
 import type { ProjectDepartmentLink } from '@/types';
+import MilestoneList from '@/components/MilestoneList';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -41,7 +42,7 @@ export default function ProjectManagerPage() {
   const currentUser = useAuthStore((s) => s.user);
   const allMemberships = useDepartmentStore((s) => s.allMemberships);
 
-  const [tab, setTab] = useState<'members' | 'settings'>('members');
+  const [tab, setTab] = useState<'members' | 'milestones' | 'settings'>('members');
 
   // ── Settings form state ────────────────────────────────────────────────────
   const [editName, setEditName] = useState('');
@@ -465,7 +466,7 @@ export default function ProjectManagerPage() {
 
         {/* Tabs */}
         <div className="flex items-center gap-1 border-b border-border">
-          {(['members', 'settings'] as const).map((t) => (
+          {(['members', 'milestones', 'settings'] as const).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -476,7 +477,7 @@ export default function ProjectManagerPage() {
                   : 'border-transparent text-muted-foreground hover:text-foreground'
               )}
             >
-              {t === 'members' ? `Members (${members.length})` : 'Settings'}
+              {t === 'members' ? `Members (${members.length})` : t === 'milestones' ? 'Milestones' : 'Settings'}
             </button>
           ))}
         </div>
@@ -587,6 +588,11 @@ export default function ProjectManagerPage() {
               )}
             </div>
           </div>
+        )}
+
+        {/* ── Milestones tab ── */}
+        {tab === 'milestones' && projectId && (
+          <MilestoneList projectId={projectId} canManage={isOwnerOrManager} />
         )}
 
         {/* ── Settings tab ── */}

@@ -62,6 +62,8 @@ interface TaskSubmitData {
   recurrenceInterval?: number | null;
   recurrenceEndDate?: string | null;
   assignedTo?: string | null;
+  milestoneId?: string | null;
+  milestoneOrder?: number | null;
 }
 
 
