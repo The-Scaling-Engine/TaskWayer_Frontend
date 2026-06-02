@@ -17,6 +17,16 @@ export interface CreateTaskData {
   recurrenceEndDate?: string | null;
 }
 
+export interface BulkCreateTaskInput {
+  projectId?: string;
+  columnId?: string | null;
+  priority?: 'low' | 'medium' | 'high';
+  tasks: Array<{
+    title: string;
+    priority?: 'low' | 'medium' | 'high';
+  }>;
+}
+
 export interface UpdateTaskData {
   title?: string;
   description?: string;
@@ -83,6 +93,11 @@ export const taskService = {
 
   cancelFromDate: async (parentId: string, fromDate: string): Promise<{ success: boolean; message: string; data: { cancelled: number } }> => {
     const response = await api.post(`/tasks/${parentId}/cancel-from`, { fromDate });
+    return response.data;
+  },
+
+  bulkCreateTasks: async (data: BulkCreateTaskInput): Promise<{ success: boolean; message: string; data: { count: number; tasks: Task[] } }> => {
+    const response = await api.post('/tasks/bulk', data);
     return response.data;
   },
 };

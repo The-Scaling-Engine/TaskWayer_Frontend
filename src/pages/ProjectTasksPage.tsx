@@ -1,8 +1,9 @@
 import React, { useMemo } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { ArrowLeft, FolderOpen, ChevronDown, Plus, Search, Loader2 } from 'lucide-react';
+import { ArrowLeft, FolderOpen, ChevronDown, Plus, Search, Loader2, Layers } from 'lucide-react';
 import KanbanBoard from '@/components/KanbanBoard';
 import type { KanbanBoardRef } from '@/components/KanbanBoard';
+import BulkCreateDialog from '@/components/BulkCreateDialog';
 import { Button } from '@/components/ui/button';
 import TimerStartButton from '@/components/TimerStartButton';
 import { useTaskStore } from '@/store/taskStore';
@@ -15,7 +16,8 @@ export default function ProjectTasksPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const boardRef = React.useRef<KanbanBoardRef>(null);
-  const { resetParams } = useTaskStore();
+  const [bulkDialogOpen, setBulkDialogOpen] = React.useState(false);
+  const { resetParams, silentFetch } = useTaskStore();
   const projects = useProjectStore((s) => s.projects);
   const hasFetched = useProjectStore((s) => s.hasFetched);
 
@@ -172,6 +174,16 @@ export default function ProjectTasksPage() {
 
         <div className="flex items-center gap-2">
           <TimerStartButton fetchParams={{ status: 'doing', projectId: projectId!, limit: 50 }} />
+          {canDeleteTasks && (
+            <Button
+              variant="outline"
+              onClick={() => setBulkDialogOpen(true)}
+              className="rounded-xl gap-2"
+            >
+              <Layers size={16} />
+              <span className="hidden sm:inline">Bulk Create</span>
+            </Button>
+          )}
           {canEditTasks && (
             <Button
               onClick={() => boardRef.current?.openCreateTask()}
@@ -193,6 +205,15 @@ export default function ProjectTasksPage() {
         canDeleteTasks={canDeleteTasks}
         canAssign={canAssign}
       />
+
+      {projectId && (
+        <BulkCreateDialog
+          open={bulkDialogOpen}
+          onClose={() => setBulkDialogOpen(false)}
+          projectId={projectId}
+          onCreated={() => silentFetch()}
+        />
+      )}
     </div>
   );
 }
