@@ -30,6 +30,13 @@ type ActiveDragItem =
   | { type: 'task'; item: PlanningTask; milestoneId: string }
   | { type: 'subtask'; item: PlanningSubtask; parentTaskId: string; milestoneId: string };
 
+// Recalculates milestone progress from current task list (mirrors BE formula)
+function computeProgress(tasks: PlanningTask[]) {
+  const done = tasks.filter(t => t.status === 'done').length;
+  const total = tasks.length;
+  return { done, total, percent: total > 0 ? Math.round((done / total) * 100) : 0 };
+}
+
 export default function PlanningTreeView({ projectId, canManage, projectMembers }: Props) {
   const {
     tree, loading, error, expandedMilestones, fetchTree, refresh,
@@ -47,6 +54,7 @@ export default function PlanningTreeView({ projectId, canManage, projectMembers 
   const [showNewMilestoneForm, setShowNewMilestoneForm] = useState(false);
   const [newMilestoneTitle, setNewMilestoneTitle] = useState('');
   const [creatingMilestone, setCreatingMilestone] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   useEffect(() => {
     fetchTree(projectId);
@@ -91,6 +99,19 @@ export default function PlanningTreeView({ projectId, canManage, projectMembers 
       }
     }
   }, [tree]);
+
+  const handleManualRefresh = useCallback(async () => {
+    if (isRefreshing) return;
+    setIsRefreshing(true);
+    try {
+      const data = await planningService.getTree(projectId);
+      usePlanningStore.setState({ tree: data });
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Failed to refresh'));
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [isRefreshing, projectId]);
 
   const handleDragOver = useCallback((_event: DragOverEvent) => {
     // Visual-only — no state mutation on over
@@ -177,8 +198,9 @@ export default function PlanningTreeView({ projectId, canManage, projectMembers 
         if (!task) return;
 
         const newTask = { ...task, milestoneId: targetMilestoneId };
+        const dstTasks = [...tree.milestones[dstIdx]!.tasks, newTask];
         const newMilestones = tree.milestones.map((m, i) =>
-          i === dstIdx ? { ...m, tasks: [...m.tasks, newTask] } : m
+          i === dstIdx ? { ...m, tasks: dstTasks, progress: computeProgress(dstTasks) } : m
         );
 
         // Optimistic: move task out of unassigned, into milestone
@@ -213,8 +235,14 @@ export default function PlanningTreeView({ projectId, canManage, projectMembers 
 
       const newTask = { ...task, milestoneId: targetMilestoneId };
       const newMilestones = tree.milestones.map((m, i) => {
-        if (i === srcIdx) return { ...m, tasks: m.tasks.filter(t => t.id !== active.id) };
-        if (i === dstIdx) return { ...m, tasks: [...m.tasks, newTask] };
+        if (i === srcIdx) {
+          const srcTasks = m.tasks.filter(t => t.id !== active.id);
+          return { ...m, tasks: srcTasks, progress: computeProgress(srcTasks) };
+        }
+        if (i === dstIdx) {
+          const dstTasks = [...m.tasks, newTask];
+          return { ...m, tasks: dstTasks, progress: computeProgress(dstTasks) };
+        }
         return m;
       });
       patchMilestones(newMilestones);
@@ -346,7 +374,16 @@ export default function PlanningTreeView({ projectId, canManage, projectMembers 
     }
   }, [newMilestoneTitle, creatingMilestone, milestoneStore, projectId, refresh]);
 
-  const milestoneIds = tree?.milestones.map(m => m.id) ?? [];
+  // Overdue milestones bubble to top; within same rank, original server order preserved
+  const sortedMilestones = [...(tree?.milestones ?? [])].sort((a, b) => {
+    const rank = (m: typeof a) =>
+      m.isOverdue && m.status !== 'COMPLETED' ? 0 :
+      m.status === 'ACTIVE' ? 1 :
+      m.status === 'COMPLETED' ? 2 : 3;
+    return rank(a) - rank(b);
+  });
+
+  const milestoneIds = sortedMilestones.map(m => m.id);
 
   if (loading || !tree) {
     return (
@@ -380,11 +417,12 @@ export default function PlanningTreeView({ projectId, canManage, projectMembers 
             {expandedMilestones.size > 0 ? 'Collapse all' : 'Expand all'}
           </button>
           <button
-            onClick={refresh}
-            className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+            onClick={() => void handleManualRefresh()}
+            disabled={isRefreshing}
+            className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
             title="Refresh"
           >
-            <RefreshCw size={12} />
+            <RefreshCw size={12} className={isRefreshing ? 'animate-spin' : ''} />
           </button>
         </div>
 
@@ -438,7 +476,7 @@ export default function PlanningTreeView({ projectId, canManage, projectMembers 
       >
         <SortableContext items={milestoneIds} strategy={verticalListSortingStrategy}>
           <div className="space-y-2">
-            {tree.milestones.map(milestone => (
+            {sortedMilestones.map(milestone => (
               <MilestoneNode
                 key={milestone.id}
                 milestone={milestone}
@@ -477,7 +515,7 @@ export default function PlanningTreeView({ projectId, canManage, projectMembers 
           </div>
         )}
 
-        {tree.milestones.length === 0 && tree.unassigned.data.length === 0 && (
+        {sortedMilestones.length === 0 && tree.unassigned.data.length === 0 && (
           <div className="text-center py-12 text-muted-foreground/50 text-sm">
             No milestones yet. Create one to start planning.
           </div>
@@ -520,14 +558,15 @@ export default function PlanningTreeView({ projectId, canManage, projectMembers 
               } else {
                 await useTaskStore.getState().updateTask(editingTask._id, data);
               }
-              await refresh();
               setEditingTask(null);
               setCreateForMilestone(null);
+              void refresh();
             } finally {
               setSubmitting(false);
             }
           }}
           lockedProjectId={projectId}
+          showDirectStatus={true}
           projectMembers={projectMembers}
           canAssign={canManage}
           loading={submitting}

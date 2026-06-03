@@ -22,7 +22,7 @@ export default function DashboardLayout() {
   const user = useAuthStore((s) => s.user);
   const fetchMyDepartments = useDepartmentStore((s) => s.fetchMyDepartments);
   const fetchAllMemberships = useDepartmentStore((s) => s.fetchAllMemberships);
-  const { connect, disconnect, socket } = useSocketStore();
+  const { connect, disconnect, updateToken, socket } = useSocketStore();
   const pushNotification = useNotificationStore((s) => s.pushNotification);
   const fetchUnreadCount = useNotificationStore((s) => s.fetchUnreadCount);
   const fetchProjects = useProjectStore((s) => s.fetchProjects);
@@ -47,12 +47,13 @@ export default function DashboardLayout() {
     fetchUnreadCount();
   }, [fetchUnreadCount]);
 
-  // Connect socket when authenticated
+  // Connect socket when authenticated; updateToken keeps auth fresh after token rotation
   useEffect(() => {
     if (!token) return;
+    updateToken(token);
     connect(token);
     return () => { disconnect(); };
-  }, [token, connect, disconnect]);
+  }, [token, connect, disconnect, updateToken]);
 
   // Global socket event listeners
   useEffect(() => {

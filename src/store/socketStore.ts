@@ -8,6 +8,7 @@ interface SocketStore {
   connected: boolean;
   connect: (token: string) => void;
   disconnect: () => void;
+  updateToken: (token: string) => void;
   joinTask: (taskId: string) => void;
   joinDepartment: (deptId: string) => void;
   joinProject: (projectId: string) => void;
@@ -46,6 +47,14 @@ export const useSocketStore = create<SocketStore>((set, get) => ({
       socket.disconnect();
     }
     set({ socket: null, connected: false });
+  },
+
+  // Update auth token so reconnections use the latest token
+  updateToken: (token: string) => {
+    const socket = get().socket;
+    if (socket) {
+      (socket as Socket & { auth: { token: string } }).auth = { token };
+    }
   },
 
   joinTask: (taskId: string) => {

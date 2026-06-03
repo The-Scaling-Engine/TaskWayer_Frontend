@@ -310,6 +310,7 @@ interface TaskDialogProps {
   dialogTitle?: string;
   lockedProjectId?: string;
   lockedProjectName?: string;
+  showDirectStatus?: boolean;
   initialTab?: 'details' | 'notes';
   onCancelFromDate?: () => void;
   projectMembers?: ProjectMember[];
@@ -324,7 +325,7 @@ interface TaskDialogProps {
 export default function TaskDialog({
   open, onClose, onSubmit, task, loading,
   defaultDeadline, defaultScheduledAt,
-  dialogTitle, lockedProjectId, lockedProjectName,
+  dialogTitle, lockedProjectId, lockedProjectName, showDirectStatus = false,
   initialTab, onCancelFromDate,
   projectMembers, canAssign = false, isReadOnly = false,
   externalError, onSubtasksChanged,
@@ -729,7 +730,7 @@ export default function TaskDialog({
         if (!isOpen) { onClose(); resetForm(); }
       }}
     >
-      <DialogContent className="sm:max-w-[640px] rounded-2xl max-h-[90vh] overflow-y-auto !p-6">
+      <DialogContent className="sm:max-w-[640px] rounded-2xl max-h-[90vh] overflow-y-auto scrollbar-hide !p-6">
         <DialogHeader className="pr-8">
           <div className="flex items-center gap-3 flex-wrap">
             <DialogTitle className="text-xl font-bold flex-1">
@@ -884,7 +885,7 @@ export default function TaskDialog({
                 </div>
                 <div className="space-y-2.5 w-[160px] shrink-0">
                   <div className="space-y-1.5">
-                    {lockedProjectId ? (
+                    {lockedProjectId && !showDirectStatus ? (
                       <>
                         <Label className="text-xs">Status</Label>
                         {projectColumns.length > 0 ? (
@@ -1151,7 +1152,7 @@ export default function TaskDialog({
 
                 {/* Subtask list */}
                 {subtasks.length > 0 && (
-                  <div className="space-y-0.5 max-h-[320px] overflow-y-auto pr-1 -mx-1 px-1">
+                  <div className="space-y-0.5 max-h-[320px] overflow-y-auto scrollbar-hide pr-1 -mx-1 px-1">
                     {subtasks.map(s => {
                       const isConfirming = confirmDeleteSubtaskId === s._id;
                       const isDeleting   = deletingSubtaskIds.has(s._id);
@@ -1239,7 +1240,7 @@ export default function TaskDialog({
             className={cn('mt-3 space-y-3 animate-in fade-in-0 duration-200', slideIn)}
           >
             {/* Notes feed */}
-            <div className="space-y-0.5 max-h-[320px] overflow-y-auto pr-1 -mx-1 px-1">
+            <div className="space-y-0.5 max-h-[320px] overflow-y-auto scrollbar-hide pr-1 -mx-1 px-1">
               {notesLoading && (
                 <p className="text-sm text-muted-foreground text-center py-8">Loading notes...</p>
               )}

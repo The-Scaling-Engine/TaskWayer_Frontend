@@ -149,3 +149,10 @@
     @apply bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl;
   }
 }
+
+@utility scrollbar-hide {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}

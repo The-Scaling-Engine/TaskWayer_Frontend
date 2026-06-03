@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronDown, ChevronRight, GripVertical, Calendar, CheckCircle2, AlertCircle, Clock, Plus, X, Loader2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, GripVertical, Calendar, CheckCircle2, AlertCircle, Clock, Circle, Plus, X, Loader2 } from 'lucide-react';
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { useDroppable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
@@ -19,11 +19,13 @@ interface Props {
   projectId: string;
 }
 
+// plan2.md §5.2: 4 distinct display states
 const statusConfig = {
-  ACTIVE: { label: 'Active', className: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20' },
-  COMPLETED: { label: 'Completed', className: 'bg-primary/10 text-primary border-primary/20' },
-  CANCELLED: { label: 'Cancelled', className: 'bg-muted text-muted-foreground border-border' },
-  OVERDUE: { label: 'Overdue', className: 'bg-red-500/10 text-red-500 border-red-500/20' },
+  NOT_STARTED:  { label: 'Not started', className: 'bg-muted text-muted-foreground border-border' },
+  IN_PROGRESS:  { label: 'In Progress', className: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20' },
+  OVERDUE:      { label: 'Overdue',     className: 'bg-red-500/10 text-red-500 border-red-500/20' },
+  COMPLETED:    { label: 'Completed',   className: 'bg-primary/10 text-primary border-primary/20' },
+  CANCELLED:    { label: 'Cancelled',   className: 'bg-muted text-muted-foreground border-border' },
 };
 
 export default function MilestoneNode({
@@ -47,8 +49,18 @@ export default function MilestoneNode({
     opacity: isSortableDragging ? 0.4 : 1,
   };
 
-  const statusKey = milestone.isOverdue && milestone.status === 'ACTIVE' ? 'OVERDUE' : milestone.status;
-  const statusCfg = statusConfig[statusKey as keyof typeof statusConfig] ?? statusConfig.ACTIVE;
+  // Derive display state from data (plan2.md §5.2)
+  const allTasksDone =
+    (milestone.progress.total > 0 && milestone.progress.done === milestone.progress.total) ||
+    (milestone.tasks.length > 0 && milestone.tasks.every(t => t.status === 'done'));
+  const statusKey =
+    milestone.status === 'COMPLETED'  ? 'COMPLETED' :
+    milestone.status === 'CANCELLED'  ? 'CANCELLED' :
+    allTasksDone                      ? 'COMPLETED' :
+    milestone.isOverdue               ? 'OVERDUE' :
+    milestone.progress.total > 0      ? 'IN_PROGRESS' :
+                                        'NOT_STARTED';
+  const statusCfg = statusConfig[statusKey];
   const taskIds = milestone.tasks.map(t => t.id);
 
   const handleToggleSubtask = async (task: PlanningTask, subtask: PlanningSubtask) => {
@@ -125,11 +137,11 @@ export default function MilestoneNode({
 
         {/* Milestone status icon */}
         <span className="shrink-0">
-          {milestone.status === 'COMPLETED'
-            ? <CheckCircle2 size={15} className="text-primary" />
-            : milestone.isOverdue
-              ? <AlertCircle size={15} className="text-red-500" />
-              : <Clock size={15} className="text-muted-foreground" />}
+          {statusKey === 'COMPLETED'   ? <CheckCircle2 size={15} className="text-primary" /> :
+           statusKey === 'OVERDUE'     ? <AlertCircle  size={15} className="text-red-500" /> :
+           statusKey === 'IN_PROGRESS' ? <Clock        size={15} className="text-amber-500" /> :
+           statusKey === 'CANCELLED'   ? <Circle       size={15} className="text-muted-foreground/40" /> :
+                                         <Circle       size={15} className="text-muted-foreground/40" />}
         </span>
 
         {/* Title */}
