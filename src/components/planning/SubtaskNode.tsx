@@ -1,17 +1,37 @@
-import { CheckSquare, Square, Clock } from 'lucide-react';
+import { CheckSquare, Square, Clock, GripVertical } from 'lucide-react';
+import { useDraggable } from '@dnd-kit/core';
 import type { PlanningSubtask } from '@/types';
 
 interface Props {
   subtask: PlanningSubtask;
+  parentTaskId: string;
   onToggle: (subtask: PlanningSubtask) => void;
   canEdit: boolean;
 }
 
-export default function SubtaskNode({ subtask, onToggle, canEdit }: Props) {
+export default function SubtaskNode({ subtask, parentTaskId, onToggle, canEdit }: Props) {
   const isDone = subtask.status === 'done';
 
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: subtask.id,
+    data: { type: 'subtask', parentTaskId },
+    disabled: !canEdit,
+  });
+
   return (
-    <div className="flex items-center gap-2 py-1 px-2 rounded-lg hover:bg-muted/40 group transition-colors">
+    <div
+      ref={setNodeRef}
+      className={`flex items-center gap-2 py-1 px-2 rounded-lg hover:bg-muted/40 group/subtask transition-colors ${isDragging ? 'opacity-40' : ''}`}
+    >
+      {canEdit && (
+        <button
+          {...attributes} {...listeners}
+          className="shrink-0 cursor-grab active:cursor-grabbing text-muted-foreground/30 hover:text-muted-foreground opacity-0 group-hover/subtask:opacity-100 transition-opacity touch-none"
+        >
+          <GripVertical size={11} />
+        </button>
+      )}
+
       <button
         onClick={() => canEdit && onToggle(subtask)}
         disabled={!canEdit}

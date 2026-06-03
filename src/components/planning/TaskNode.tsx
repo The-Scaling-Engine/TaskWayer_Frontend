@@ -1,5 +1,6 @@
 import { ChevronRight, ChevronDown, GripVertical, Calendar, User, Plus } from 'lucide-react';
 import { useSortable } from '@dnd-kit/sortable';
+import { useDroppable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 import { usePlanningStore } from '@/store/planningStore';
 import SubtaskNode from './SubtaskNode';
@@ -45,6 +46,11 @@ export default function TaskNode({
   const {
     attributes, listeners, setNodeRef, transform, transition, isDragging: isSortableDragging,
   } = useSortable({ id: task.id, data: { type: 'task', milestoneId } });
+
+  const { setNodeRef: setSubtaskDropRef, isOver: isSubtaskOver } = useDroppable({
+    id: `subtask-drop-${task.id}`,
+    data: { type: 'subtask-drop', taskId: task.id },
+  });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -142,11 +148,15 @@ export default function TaskNode({
 
       {/* Subtasks (expanded) */}
       {isExpanded && hasSubtasks && (
-        <div className="ml-8 border-l border-border/40 pl-2 mt-0.5 space-y-0.5">
+        <div
+          ref={setSubtaskDropRef}
+          className={`ml-8 border-l pl-2 mt-0.5 space-y-0.5 min-h-[4px] transition-colors ${isSubtaskOver ? 'border-primary/40 bg-primary/5 rounded' : 'border-border/40'}`}
+        >
           {subtaskList.map(s => (
             <SubtaskNode
               key={s.id}
               subtask={s}
+              parentTaskId={task.id}
               onToggle={(sub) => onToggleSubtask(task, sub)}
               canEdit={canEdit}
             />

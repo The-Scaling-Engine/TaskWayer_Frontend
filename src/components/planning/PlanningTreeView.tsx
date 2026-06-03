@@ -9,13 +9,15 @@ import { usePlanningStore } from '@/store/planningStore';
 import { useMilestoneStore } from '@/store/milestoneStore';
 import MilestoneNode from './MilestoneNode';
 import TaskNode from './TaskNode';
-import type { PlanningTask, PlanningMilestone, ProjectMember, Task } from '@/types';
+import type { PlanningTask, PlanningMilestone, PlanningSubtask, ProjectMember, Task } from '@/types';
 import { planningService } from '@/services/planningService';
 import { milestoneService } from '@/services/milestoneService';
+import { subtaskService } from '@/services/subtaskService';
 import { toast } from 'sonner';
 import { getApiErrorMessage } from '@/services/api';
 import TaskDialog from '@/components/TaskDialog';
 import { useTaskStore } from '@/store/taskStore';
+import { useSocketStore } from '@/store/socketStore';
 
 interface Props {
   projectId: string;
@@ -25,7 +27,8 @@ interface Props {
 
 type ActiveDragItem =
   | { type: 'milestone'; item: PlanningMilestone }
-  | { type: 'task'; item: PlanningTask; milestoneId: string };
+  | { type: 'task'; item: PlanningTask; milestoneId: string }
+  | { type: 'subtask'; item: PlanningSubtask; parentTaskId: string; milestoneId: string };
 
 export default function PlanningTreeView({ projectId, canManage, projectMembers }: Props) {
   const {
@@ -35,6 +38,7 @@ export default function PlanningTreeView({ projectId, canManage, projectMembers 
 
   const milestoneStore = useMilestoneStore();
   const { updateTask } = useTaskStore();
+  const { socket, joinProject } = useSocketStore();
 
   const [activeDrag, setActiveDrag] = useState<ActiveDragItem | null>(null);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
@@ -49,6 +53,15 @@ export default function PlanningTreeView({ projectId, canManage, projectMembers 
     return () => usePlanningStore.getState().reset();
   }, [projectId]);
 
+  // Real-time planning sync (D-09)
+  useEffect(() => {
+    if (!socket) return;
+    joinProject(projectId);
+    const handler = () => { void usePlanningStore.getState().refresh(); };
+    socket.on('planning:updated', handler);
+    return () => { socket.off('planning:updated', handler); };
+  }, [socket, projectId, joinProject]);
+
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } })
   );
@@ -56,7 +69,7 @@ export default function PlanningTreeView({ projectId, canManage, projectMembers 
   const handleDragStart = useCallback((event: DragStartEvent) => {
     if (!tree) return;
     const { active } = event;
-    const data = active.data.current as { type: string; milestoneId?: string } | undefined;
+    const data = active.data.current as { type: string; milestoneId?: string; parentTaskId?: string } | undefined;
 
     if (data?.type === 'milestone') {
       const m = tree.milestones.find(m => m.id === active.id);
@@ -67,6 +80,15 @@ export default function PlanningTreeView({ projectId, canManage, projectMembers 
       const t = m?.tasks.find(t => t.id === active.id)
         ?? tree.unassigned.data.find(t => t.id === active.id);
       if (t) setActiveDrag({ type: 'task', item: t, milestoneId });
+    } else if (data?.type === 'subtask') {
+      const parentTaskId = data.parentTaskId ?? '';
+      for (const m of tree.milestones) {
+        const t = m.tasks.find(t => t.id === parentTaskId);
+        if (t) {
+          const s = t.subtasks.find(s => s.id === active.id);
+          if (s) { setActiveDrag({ type: 'subtask', item: s, parentTaskId, milestoneId: m.id }); break; }
+        }
+      }
     }
   }, [tree]);
 
@@ -79,8 +101,8 @@ export default function PlanningTreeView({ projectId, canManage, projectMembers 
     setActiveDrag(null);
     if (!over || !tree) return;
 
-    const activeData = active.data.current as { type: string; milestoneId?: string } | undefined;
-    const overData = over.data.current as { type: string; milestoneId?: string } | undefined;
+    const activeData = active.data.current as { type: string; milestoneId?: string; parentTaskId?: string } | undefined;
+    const overData = over.data.current as { type: string; milestoneId?: string; taskId?: string } | undefined;
 
     // ── CASE 1: Milestone reorder ──
     if (activeData?.type === 'milestone' && overData?.type === 'milestone' && active.id !== over.id) {
@@ -202,6 +224,88 @@ export default function PlanningTreeView({ projectId, canManage, projectMembers 
         await refresh();
       } catch (err) {
         toast.error(getApiErrorMessage(err, 'Failed to move task'));
+        await refresh();
+      }
+    }
+
+    // ── CASE 4: Subtask moved to another task ──
+    if (activeData?.type === 'subtask') {
+      const subtaskId = active.id as string;
+      const srcParentId = activeData.parentTaskId ?? '';
+
+      const targetTaskId: string | null =
+        overData?.type === 'subtask-drop' ? (overData.taskId ?? null) :
+        overData?.type === 'task' ? (over.id as string) : null;
+
+      if (!targetTaskId || targetTaskId === srcParentId) return;
+
+      // Find subtask and source/dest milestones
+      let foundSubtask: PlanningSubtask | null = null;
+      let srcMilestoneId: string | null = null;
+      for (const m of tree.milestones) {
+        const t = m.tasks.find(t => t.id === srcParentId);
+        if (t) {
+          const s = t.subtasks.find(s => s.id === subtaskId);
+          if (s) { foundSubtask = s; srcMilestoneId = m.id; break; }
+        }
+      }
+      if (!foundSubtask || !srcMilestoneId) return;
+
+      let dstMilestoneId: string | null = null;
+      for (const m of tree.milestones) {
+        if (m.tasks.find(t => t.id === targetTaskId)) { dstMilestoneId = m.id; break; }
+      }
+      if (!dstMilestoneId) return;
+
+      // Optimistic update
+      const capturedSubtask = foundSubtask;
+      const newMilestones = tree.milestones.map(m => {
+        // Same milestone: both tasks are in it
+        if (m.id === srcMilestoneId && m.id === dstMilestoneId) {
+          return {
+            ...m,
+            tasks: m.tasks.map(t => {
+              if (t.id === srcParentId) {
+                const newSubs = t.subtasks.filter(s => s.id !== subtaskId);
+                return { ...t, subtasks: newSubs, subtaskProgress: { done: newSubs.filter(s => s.status === 'done').length, total: newSubs.length } };
+              }
+              if (t.id === targetTaskId) {
+                const newSubs = [...t.subtasks, capturedSubtask];
+                return { ...t, subtasks: newSubs, subtaskProgress: { done: newSubs.filter(s => s.status === 'done').length, total: newSubs.length } };
+              }
+              return t;
+            }),
+          };
+        }
+        if (m.id === srcMilestoneId) {
+          return {
+            ...m,
+            tasks: m.tasks.map(t => {
+              if (t.id !== srcParentId) return t;
+              const newSubs = t.subtasks.filter(s => s.id !== subtaskId);
+              return { ...t, subtasks: newSubs, subtaskProgress: { done: newSubs.filter(s => s.status === 'done').length, total: newSubs.length } };
+            }),
+          };
+        }
+        if (m.id === dstMilestoneId) {
+          return {
+            ...m,
+            tasks: m.tasks.map(t => {
+              if (t.id !== targetTaskId) return t;
+              const newSubs = [...t.subtasks, capturedSubtask];
+              return { ...t, subtasks: newSubs, subtaskProgress: { done: newSubs.filter(s => s.status === 'done').length, total: newSubs.length } };
+            }),
+          };
+        }
+        return m;
+      });
+      patchMilestones(newMilestones);
+
+      try {
+        await subtaskService.move(srcParentId, subtaskId, targetTaskId);
+        void refresh();
+      } catch (err) {
+        toast.error(getApiErrorMessage(err, 'Failed to move subtask'));
         await refresh();
       }
     }
@@ -388,6 +492,11 @@ export default function PlanningTreeView({ projectId, canManage, projectMembers 
           )}
           {activeDrag?.type === 'milestone' && (
             <div className="bg-card border border-primary/30 rounded-xl p-3 shadow-lg text-sm font-semibold opacity-90">
+              {activeDrag.item.title}
+            </div>
+          )}
+          {activeDrag?.type === 'subtask' && (
+            <div className="bg-card border border-primary/30 rounded-lg px-2 py-1 shadow-lg text-xs font-medium opacity-90">
               {activeDrag.item.title}
             </div>
           )}

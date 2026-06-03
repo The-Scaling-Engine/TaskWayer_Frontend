@@ -10,6 +10,7 @@ interface SocketStore {
   disconnect: () => void;
   joinTask: (taskId: string) => void;
   joinDepartment: (deptId: string) => void;
+  joinProject: (projectId: string) => void;
 }
 
 export const useSocketStore = create<SocketStore>((set, get) => ({
@@ -53,5 +54,9 @@ export const useSocketStore = create<SocketStore>((set, get) => ({
 
   joinDepartment: (deptId: string) => {
     get().socket?.emit('join:department', deptId);
+  },
+
+  joinProject: (projectId: string) => {
+    get().socket?.emit('join:project', projectId);
   },
 }));
