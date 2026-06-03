@@ -179,7 +179,7 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
   lockedProjectId, lockedProjectName,
   canEditTasks = true, canDeleteTasks, canAssign = false,
 }, ref) => {
-  const { tasks, loading, createTask, updateTask, deleteTask, moveTask, moveTaskToColumn, cancelRecurrence, silentFetch } = useTaskStore();
+  const { tasks, loading, createTask, updateTask, deleteTask, moveTask, moveTaskToColumn, cancelRecurrence, silentFetch, patchTask } = useTaskStore();
   const { socket } = useSocketStore();
   const currentUser = useAuthStore((s) => s.user);
   const currentUserId = currentUser?.id ?? currentUser?._id;
@@ -943,6 +943,7 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
         projectMembers={lockedProjectId ? projectMembers : undefined}
         canAssign={canAssign}
         externalError={taskError}
+        onSubtasksChanged={(taskId, progress) => patchTask(taskId, { subtaskProgress: progress })}
       />
 
       {/* Comment Dialog */}

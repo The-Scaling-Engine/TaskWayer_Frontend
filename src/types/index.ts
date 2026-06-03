@@ -43,6 +43,8 @@ export interface Task {
   milestoneId?: string | null;
   milestoneOrder?: number | null;
   inProgressAt?: string | null;
+  parentTaskId?: string | null;
+  subtaskProgress?: { completed: number; total: number };
   __v?: number;
   _count?: { comments: number };
   createdBy?: { name: string | null; email: string | null; avatar: string | null } | null;

@@ -31,6 +31,7 @@ interface TaskState {
   cancelRecurrence: (id: string, keepChildren: boolean) => Promise<string>;
   deleteTask: (id: string) => Promise<void>;
   silentFetch: () => Promise<void>;
+  patchTask: (id: string, partial: Partial<Task>) => void;
 }
 
 export const useTaskStore = create<TaskState>((set, get) => ({
@@ -114,5 +115,9 @@ export const useTaskStore = create<TaskState>((set, get) => ({
     } catch {
       // silent – don't disrupt UI
     }
+  },
+
+  patchTask: (id, partial) => {
+    set({ tasks: get().tasks.map(t => t._id === id ? { ...t, ...partial } : t) });
   },
 }));

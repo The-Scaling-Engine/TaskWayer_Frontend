@@ -23,7 +23,8 @@ import {
 import type { Task, TaskNote, ProjectMember } from '@/types';
 import { useProjectStore } from '@/store/projectStore';
 import { useAuthStore } from '@/store/authStore';
-import { UserCheck, Bold, Italic, List, Pencil, Trash2, Check, GripVertical } from 'lucide-react';
+import { UserCheck, Bold, Italic, List, Pencil, Trash2, Check, GripVertical, Plus, Loader2 } from 'lucide-react';
+import { subtaskService } from '@/services/subtaskService';
 import DescriptionEditor from '@/components/DescriptionEditor';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
@@ -315,6 +316,7 @@ interface TaskDialogProps {
   canAssign?: boolean;
   isReadOnly?: boolean;
   externalError?: string;
+  onSubtasksChanged?: (taskId: string, progress: { completed: number; total: number } | undefined) => void;
 }
 
 // ─── TaskDialog ───────────────────────────────────────────────
@@ -325,7 +327,7 @@ export default function TaskDialog({
   dialogTitle, lockedProjectId, lockedProjectName,
   initialTab, onCancelFromDate,
   projectMembers, canAssign = false, isReadOnly = false,
-  externalError,
+  externalError, onSubtasksChanged,
 }: TaskDialogProps) {
   const projects = useProjectStore((s) => s.projects);
   const user = useAuthStore((s) => s.user);
@@ -362,9 +364,17 @@ export default function TaskDialog({
   const [projectMilestones, setProjectMilestones] = useState<Milestone[]>([]);
   const [error, setError] = useState('');
 
+  // ── Subtask state ──────────────────────────────────────────
+  const [subtasks, setSubtasks] = useState<Task[]>([]);
+  const [subtasksLoading, setSubtasksLoading] = useState(false);
+  const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
+  const [submittingSubtask, setSubmittingSubtask] = useState(false);
+  const [confirmDeleteSubtaskId, setConfirmDeleteSubtaskId] = useState<string | null>(null);
+  const [deletingSubtaskIds, setDeletingSubtaskIds] = useState<Set<string>>(new Set());
+
   // ── Update Notes tab state ─────────────────────────────────
-  const [activeTab, setActiveTab] = useState<'details' | 'notes'>('details');
-  const prevTabRef = useRef<'details' | 'notes'>('details');
+  const [activeTab, setActiveTab] = useState<'details' | 'subtasks' | 'notes'>('details');
+  const prevTabRef = useRef<'details' | 'subtasks' | 'notes'>('details');
   const [notes, setNotes] = useState<TaskNote[]>([]);
   const [notesLoading, setNotesLoading] = useState(false);
   const [noteContent, setNoteContent] = useState('');
@@ -434,6 +444,17 @@ export default function TaskDialog({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, lockedProjectId, canAssign, task?._id]);
 
+  // Fetch subtasks when editing an existing task
+  useEffect(() => {
+    if (!open || !task?._id) { setSubtasks([]); return; }
+    setSubtasksLoading(true);
+    subtaskService.list(task._id)
+      .then(res => setSubtasks(res.data))
+      .catch(() => {})
+      .finally(() => setSubtasksLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, task?._id]);
+
   // Fetch columns for project context
   useEffect(() => {
     if (!open || !lockedProjectId) { setProjectColumns([]); return; }
@@ -497,7 +518,7 @@ export default function TaskDialog({
   }, [editingNoteId]);
 
   // ── Tab switch ────────────────────────────────────────────
-  const handleTabChange = (tab: 'details' | 'notes') => {
+  const handleTabChange = (tab: 'details' | 'subtasks' | 'notes') => {
     prevTabRef.current = activeTab;
     setActiveTab(tab);
   };
@@ -511,6 +532,8 @@ export default function TaskDialog({
     setColumnId(null); setProjectColumns([]);
     setAssignedTo(null);
     setMilestoneId(null); setProjectMilestones([]);
+    setSubtasks([]); setNewSubtaskTitle('');
+    setConfirmDeleteSubtaskId(null); setDeletingSubtaskIds(new Set());
     setError('');
   };
 
@@ -635,8 +658,69 @@ export default function TaskDialog({
     });
   };
 
-  // ── Tab slide direction ───────────────────────────────────
-  const slideIn = activeTab === 'notes' ? 'slide-in-from-right-2' : 'slide-in-from-left-2';
+  // ── Subtask helpers ───────────────────────────────────────
+  const notifyProgress = (list: Task[]) => {
+    if (!task?._id) return;
+    onSubtasksChanged?.(task._id, list.length === 0 ? undefined : {
+      total: list.length,
+      completed: list.filter(s => s.status === 'done').length,
+    });
+  };
+
+  // ── Subtask handlers ──────────────────────────────────────
+  const handleToggleSubtask = async (s: Task) => {
+    if (!task?._id) return;
+    const newStatus: 'todo' | 'doing' | 'done' = s.status === 'done' ? 'todo' : 'done';
+    const optimistic = subtasks.map(x => x._id === s._id ? { ...x, status: newStatus } : x);
+    setSubtasks(optimistic);
+    notifyProgress(optimistic);
+    try {
+      const res = await subtaskService.update(task._id, s._id, { status: newStatus });
+      const final = optimistic.map(x => x._id === s._id ? res.data : x);
+      setSubtasks(final);
+      notifyProgress(final);
+    } catch {
+      setSubtasks(subtasks);
+      notifyProgress(subtasks);
+    }
+  };
+
+  const handleAddSubtask = async () => {
+    if (!task?._id || !newSubtaskTitle.trim() || submittingSubtask) return;
+    setSubmittingSubtask(true);
+    try {
+      const res = await subtaskService.create(task._id, { title: newSubtaskTitle.trim() });
+      const newList = [...subtasks, res.data];
+      setSubtasks(newList);
+      notifyProgress(newList);
+      setNewSubtaskTitle('');
+    } catch { /* silent */ } finally { setSubmittingSubtask(false); }
+  };
+
+  const handleDeleteSubtask = (subtaskId: string) => {
+    if (!task?._id) return;
+    setConfirmDeleteSubtaskId(null);
+    setDeletingSubtaskIds(prev => new Set([...prev, subtaskId]));
+    const snapshot = subtasks;
+    setTimeout(async () => {
+      try {
+        await subtaskService.delete(task._id!, subtaskId);
+        const newList = snapshot.filter(s => s._id !== subtaskId);
+        setSubtasks(prev => prev.filter(s => s._id !== subtaskId));
+        notifyProgress(newList);
+      } catch {
+        setDeletingSubtaskIds(prev => { const s = new Set(prev); s.delete(subtaskId); return s; });
+      } finally {
+        setDeletingSubtaskIds(prev => { const s = new Set(prev); s.delete(subtaskId); return s; });
+      }
+    }, 220);
+  };
+
+  // ── Tab slide direction (details=0, subtasks=1, notes=2) ─
+  const TAB_ORDER: Record<'details' | 'subtasks' | 'notes', number> = { details: 0, subtasks: 1, notes: 2 };
+  const slideIn = TAB_ORDER[activeTab] > TAB_ORDER[prevTabRef.current]
+    ? 'slide-in-from-right-2'
+    : 'slide-in-from-left-2';
 
   return (
     <Dialog
@@ -673,6 +757,28 @@ export default function TaskDialog({
               )}
             >
               Details
+            </button>
+            <button
+              type="button"
+              onClick={() => handleTabChange('subtasks')}
+              className={cn(
+                'px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors flex items-center gap-1.5',
+                activeTab === 'subtasks'
+                  ? 'border-[#FE812C] text-[#FE812C]'
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
+              )}
+            >
+              Subtasks
+              {subtasks.length > 0 && (
+                <span className={cn(
+                  'text-[10px] font-semibold px-1.5 py-0.5 rounded-full leading-none',
+                  activeTab === 'subtasks'
+                    ? 'bg-[#FE812C]/15 text-[#FE812C]'
+                    : 'bg-muted text-muted-foreground'
+                )}>
+                  {subtasks.filter(s => s.status === 'done').length}/{subtasks.length}
+                </span>
+              )}
             </button>
             <button
               type="button"
@@ -992,6 +1098,110 @@ export default function TaskDialog({
                 )}
               </DialogFooter>
             </form>
+          </div>
+        )}
+
+        {/* ── Subtasks tab ─────────────────────────────────── */}
+        {task?._id && activeTab === 'subtasks' && (
+          <div
+            key="subtasks-content"
+            className={cn('mt-3 space-y-3 animate-in fade-in-0 duration-200', slideIn)}
+          >
+            {/* Loading */}
+            {subtasksLoading ? (
+              <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
+                <Loader2 size={14} className="animate-spin" /> Loading...
+              </div>
+            ) : (
+              <>
+                {/* Empty state */}
+                {subtasks.length === 0 && (
+                  <div className="text-center py-10 space-y-1">
+                    <p className="text-sm text-muted-foreground">No subtasks yet.</p>
+                    {!isReadOnly && <p className="text-xs text-muted-foreground/60">Add one below to break this task into steps.</p>}
+                  </div>
+                )}
+
+                {/* Subtask list */}
+                {subtasks.length > 0 && (
+                  <div className="space-y-0.5 max-h-[320px] overflow-y-auto pr-1 -mx-1 px-1">
+                    {subtasks.map(s => {
+                      const isConfirming = confirmDeleteSubtaskId === s._id;
+                      const isDeleting   = deletingSubtaskIds.has(s._id);
+                      return (
+                        <div
+                          key={s._id}
+                          className={cn(
+                            'flex items-center gap-2 group py-1.5 px-2 rounded-xl transition-all duration-200 hover:bg-muted/40',
+                            isDeleting && 'opacity-0 -translate-y-1 scale-[0.98] pointer-events-none',
+                          )}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => void handleToggleSubtask(s)}
+                            className={cn(
+                              'shrink-0 w-4 h-4 rounded border-2 flex items-center justify-center transition-colors',
+                              s.status === 'done' ? 'bg-primary border-primary' : 'border-border hover:border-primary',
+                            )}
+                          >
+                            {s.status === 'done' && <Check size={9} className="text-primary-foreground" strokeWidth={3} />}
+                          </button>
+                          <span className={cn('flex-1 text-sm truncate', s.status === 'done' && 'line-through text-muted-foreground')}>
+                            {s.title}
+                          </span>
+                          {!isReadOnly && (
+                            isConfirming ? (
+                              <div className="flex items-center gap-1.5 animate-in fade-in-0 slide-in-from-bottom-1 duration-150 shrink-0">
+                                <span className="text-xs text-muted-foreground">Delete?</span>
+                                <button type="button" onClick={() => setConfirmDeleteSubtaskId(null)}
+                                  className="text-xs text-muted-foreground hover:text-foreground transition-colors px-1.5 py-0.5 rounded-md hover:bg-muted">
+                                  Keep
+                                </button>
+                                <button type="button" onClick={() => handleDeleteSubtask(s._id)}
+                                  className="text-xs font-medium text-destructive hover:text-destructive/80 transition-colors px-1.5 py-0.5 rounded-md hover:bg-destructive/10">
+                                  Delete
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => setConfirmDeleteSubtaskId(s._id)}
+                                className="opacity-0 group-hover:opacity-100 p-1 rounded text-muted-foreground hover:text-destructive transition-all shrink-0"
+                              >
+                                <Trash2 size={11} />
+                              </button>
+                            )
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Add new */}
+                {!isReadOnly && (
+                  <div className="flex gap-2 pt-1">
+                    <Input
+                      placeholder="Add a subtask..."
+                      value={newSubtaskTitle}
+                      onChange={e => setNewSubtaskTitle(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void handleAddSubtask(); } }}
+                      className="rounded-xl h-9 text-sm"
+                      autoFocus
+                    />
+                    <Button
+                      type="button"
+                      onClick={() => void handleAddSubtask()}
+                      disabled={!newSubtaskTitle.trim() || submittingSubtask}
+                      className="shrink-0 rounded-xl h-9 px-3 bg-[#FE812C] hover:bg-[#e5732a] text-white text-xs gap-1"
+                    >
+                      {submittingSubtask ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
+                      Add
+                    </Button>
+                  </div>
+                )}
+              </>
+            )}
           </div>
         )}
 

@@ -68,35 +68,23 @@ export default function TaskCard({ task, onEdit, onDelete, onComment, onCancelRe
 
   const isParentRecurring = task.isRecurring && !task.recurrenceParentId;
 
+  const shortId = '#' + task._id.replace(/-/g, '').slice(0, 8).toUpperCase();
+
   return (
-    <div className={`bg-card border rounded-xl p-4 shadow-sm hover:shadow-md transition-all duration-200 group cursor-pointer ${
-      isParentRecurring
-        ? 'border-l-2 border-l-amber-400 border-border hover:border-l-amber-500'
-        : 'border-border hover:border-primary/20'
-    }`}>
-      {/* Header: Status Badge + Actions */}
+    <div
+      className={`bg-card border rounded-xl p-4 shadow-sm hover:shadow-md transition-all duration-200 group cursor-pointer ${
+        isParentRecurring
+          ? 'border-l-2 border-l-amber-400 border-border hover:border-l-amber-500'
+          : 'border-border hover:border-primary/20'
+      }`}
+      onClick={() => onEdit(task)}
+    >
+      {/* Header: Task ID + Actions */}
       <div className="flex items-start justify-between mb-3">
         <div className="flex items-center gap-1.5 flex-wrap">
-          {hideProjectLabel && boardColumns ? (
-            (() => {
-              const col = boardColumns.find(c => c.id === task.columnId)
-                ?? boardColumns.find(c => c.isDefault)
-                ?? boardColumns[0];
-              return col ? (
-                <Badge
-                  variant="secondary"
-                  className="text-xs font-medium rounded-md"
-                  style={{ backgroundColor: col.color + '22', color: col.color }}
-                >
-                  {col.name}
-                </Badge>
-              ) : null;
-            })()
-          ) : (
-            <Badge variant="secondary" className={`${statusColors[task.status]} text-xs font-medium rounded-md`}>
-              {statusLabels[task.status]}
-            </Badge>
-          )}
+          <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-muted/60 text-muted-foreground text-[10px] font-mono border border-border/40 shrink-0 select-none">
+            {shortId}
+          </span>
           {isParentRecurring && (
             <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-amber-500/10 text-amber-500 text-[10px] font-semibold border border-amber-500/20">
               <Repeat size={9} className="shrink-0" />
@@ -209,6 +197,24 @@ export default function TaskCard({ task, onEdit, onDelete, onComment, onCancelRe
               {tag}
             </Badge>
           ))}
+        </div>
+      )}
+
+      {/* Subtask progress bar */}
+      {task.subtaskProgress && task.subtaskProgress.total > 0 && (
+        <div className="mb-3 space-y-1">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] text-muted-foreground font-medium">Subtasks</span>
+            <span className="text-[10px] text-muted-foreground">
+              {task.subtaskProgress.completed}/{task.subtaskProgress.total}
+            </span>
+          </div>
+          <div className="h-1 bg-muted rounded-full overflow-hidden">
+            <div
+              className="h-full bg-primary rounded-full transition-all duration-300"
+              style={{ width: `${Math.round((task.subtaskProgress.completed / task.subtaskProgress.total) * 100)}%` }}
+            />
+          </div>
         </div>
       )}
 
