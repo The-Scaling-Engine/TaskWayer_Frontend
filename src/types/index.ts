@@ -667,6 +667,29 @@ export interface PlanningTree {
 }
 
 // ============================================
+// TIMELINE TYPES
+// ============================================
+export interface TimelineMilestone {
+  id: string;
+  title: string;
+  startDate: string | null;
+  deadline: string | null;
+  status: MilestoneStatus;
+  completedAt: string | null;
+  progress: number;
+  isOverdue: boolean;
+  taskCount: number;
+  earliestTaskDeadline: string | null;
+  latestTaskDeadline: string | null;
+}
+
+export interface TimelineData {
+  milestones: TimelineMilestone[];
+  projectStart: string;
+  projectEnd: string;
+}
+
+// ============================================
 // CHART TYPES (kept for backward compat)
 // ============================================
 export interface RevenueDataPoint {
