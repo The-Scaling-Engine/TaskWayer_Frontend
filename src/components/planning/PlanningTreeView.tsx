@@ -38,7 +38,7 @@ export default function PlanningTreeView({ projectId, canManage, projectMembers 
 
   const milestoneStore = useMilestoneStore();
   const { updateTask } = useTaskStore();
-  const { socket, joinProject } = useSocketStore();
+  const { socket, connected, joinProject } = useSocketStore();
 
   const [activeDrag, setActiveDrag] = useState<ActiveDragItem | null>(null);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
@@ -53,14 +53,14 @@ export default function PlanningTreeView({ projectId, canManage, projectMembers 
     return () => usePlanningStore.getState().reset();
   }, [projectId]);
 
-  // Real-time planning sync (D-09)
+  // Real-time planning sync (D-09) — re-join on reconnect via `connected` dep
   useEffect(() => {
-    if (!socket) return;
-    joinProject(projectId);
+    if (!socket || !connected) return;
+    socket.emit('join:project', projectId);
     const handler = () => { void usePlanningStore.getState().refresh(); };
     socket.on('planning:updated', handler);
     return () => { socket.off('planning:updated', handler); };
-  }, [socket, projectId, joinProject]);
+  }, [socket, connected, projectId]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } })
