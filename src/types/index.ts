@@ -619,6 +619,54 @@ export interface MilestonesResponse {
 }
 
 // ============================================
+// PLANNING TREE TYPES
+// ============================================
+
+export interface PlanningSubtask {
+  id: string;
+  title: string;
+  status: 'todo' | 'doing' | 'done';
+  priority: 'low' | 'medium' | 'high' | null;
+  deadline: string | null;
+  assignedTo: string | null;
+  parentTaskId: string | null;
+  createdAt: string;
+}
+
+export interface PlanningTask {
+  id: string;
+  _id?: string;
+  title: string;
+  status: 'todo' | 'doing' | 'done';
+  priority: 'low' | 'medium' | 'high';
+  deadline?: string | null;
+  assignedTo?: string | null;
+  milestoneId?: string | null;
+  milestoneOrder?: number | null;
+  projectId?: string | null;
+  subtasks: PlanningSubtask[];
+  subtaskProgress?: { done: number; total: number };
+  profile?: { mongoId: string | null; name: string | null; email: string; avatar: string | null } | null;
+  createdAt: string;
+}
+
+export interface PlanningMilestone extends Milestone {
+  progress: { done: number; total: number; percent: number };
+  isOverdue: boolean;
+  tasks: PlanningTask[];
+}
+
+export interface PlanningTree {
+  milestones: PlanningMilestone[];
+  unassigned: {
+    data: PlanningTask[];
+    total: number;
+    page: number;
+    limit: number;
+  };
+}
+
+// ============================================
 // CHART TYPES (kept for backward compat)
 // ============================================
 export interface RevenueDataPoint {

@@ -435,14 +435,14 @@ export default function TaskDialog({
     }
   }, [task, open, defaultDeadline, defaultScheduledAt]);
 
-  // Fetch milestones for project context (edit mode only, canAssign = OWNER/MANAGER)
+  // Fetch milestones for project context (canAssign = OWNER/MANAGER, both create and edit)
   useEffect(() => {
-    if (!open || !lockedProjectId || !canAssign || !task?._id) { setProjectMilestones([]); return; }
+    if (!open || !lockedProjectId || !canAssign) { setProjectMilestones([]); return; }
     milestoneService.getMilestones(lockedProjectId)
       .then(res => setProjectMilestones(res.data.filter(m => m.status === 'ACTIVE')))
       .catch(() => {});
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, lockedProjectId, canAssign, task?._id]);
+  }, [open, lockedProjectId, canAssign]);
 
   // Fetch subtasks when editing an existing task
   useEffect(() => {
@@ -564,7 +564,7 @@ export default function TaskDialog({
       recurrenceInterval: isRecurring && recurrenceInterval > 1 ? recurrenceInterval : null,
       recurrenceEndDate: isRecurring && recurrenceEndDate ? new Date(`${recurrenceEndDate}T23:59:59`).toISOString() : null,
       ...(lockedProjectId && { assignedTo }),
-      ...(lockedProjectId && canAssign && task?._id && { milestoneId }),
+      ...(lockedProjectId && canAssign && { milestoneId }),
     });
   };
 
@@ -821,18 +821,55 @@ export default function TaskDialog({
                 </div>
               )}
 
-              <div className="space-y-2">
-                <Label htmlFor="task-title" className="font-medium">Title</Label>
-                <Input
-                  id="task-title"
-                  placeholder="Enter task title..."
-                  value={title}
-                  onChange={(e) => { setTitle(e.target.value); setError(''); }}
-                  className="rounded-xl"
-                  autoFocus={!isReadOnly}
-                  disabled={isReadOnly}
-                />
-              </div>
+              {canAssign && lockedProjectId ? (
+                <div className="grid grid-cols-[4fr_1fr] gap-3 items-start">
+                  <div className="space-y-2">
+                    <Label htmlFor="task-title" className="font-medium">Title</Label>
+                    <Input
+                      id="task-title"
+                      placeholder="Enter task title..."
+                      value={title}
+                      onChange={(e) => { setTitle(e.target.value); setError(''); }}
+                      className="rounded-xl"
+                      autoFocus={!isReadOnly}
+                      disabled={isReadOnly}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="font-medium">Milestone</Label>
+                    {projectMilestones.length > 0 ? (
+                      <Select
+                        value={milestoneId ?? '__none__'}
+                        onValueChange={v => setMilestoneId(v === '__none__' ? null : v)}
+                        disabled={isReadOnly}
+                      >
+                        <SelectTrigger className="rounded-xl text-xs h-8 px-2"><SelectValue placeholder="None" /></SelectTrigger>
+                        <SelectContent position="popper" className="z-[200]">
+                          <SelectItem value="__none__">None</SelectItem>
+                          {projectMilestones.map(m => (
+                            <SelectItem key={m.id} value={m.id}>{m.title}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <div className="h-8 rounded-xl bg-muted/50 border border-border flex items-center px-2 text-xs text-muted-foreground">None</div>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <Label htmlFor="task-title" className="font-medium">Title</Label>
+                  <Input
+                    id="task-title"
+                    placeholder="Enter task title..."
+                    value={title}
+                    onChange={(e) => { setTitle(e.target.value); setError(''); }}
+                    className="rounded-xl"
+                    autoFocus={!isReadOnly}
+                    disabled={isReadOnly}
+                  />
+                </div>
+              )}
 
               <div className="grid grid-cols-[1fr_auto] gap-4 items-start">
                 <div className="space-y-2">
@@ -853,7 +890,15 @@ export default function TaskDialog({
                         {projectColumns.length > 0 ? (
                           <Select
                             value={columnId ?? ''}
-                            onValueChange={setColumnId}
+                            onValueChange={(newColId) => {
+                              setColumnId(newColId);
+                              const sorted = [...projectColumns].sort((a, b) => a.order - b.order);
+                              const idx = sorted.findIndex(c => c.id === newColId);
+                              if (idx !== -1) {
+                                const s = idx === sorted.length - 1 ? 'done' : idx === 0 ? 'todo' : 'doing';
+                                setStatus(s as 'todo' | 'doing' | 'done');
+                              }
+                            }}
                             disabled={isReadOnly}>
                             <SelectTrigger className="rounded-xl text-xs h-8 px-2"><SelectValue /></SelectTrigger>
                             <SelectContent>
@@ -929,24 +974,6 @@ export default function TaskDialog({
                       )}
                     </div>
                   )}
-                  {canAssign && task?._id && lockedProjectId && projectMilestones.length > 0 && (
-                    <div className="space-y-1.5">
-                      <Label className="text-xs">Milestone</Label>
-                      <Select
-                        value={milestoneId ?? '__none__'}
-                        onValueChange={v => setMilestoneId(v === '__none__' ? null : v)}
-                        disabled={isReadOnly}
-                      >
-                        <SelectTrigger className="rounded-xl text-xs h-8 px-2"><SelectValue placeholder="None" /></SelectTrigger>
-                        <SelectContent position="popper" className="z-[200]">
-                          <SelectItem value="__none__">None</SelectItem>
-                          {projectMilestones.map(m => (
-                            <SelectItem key={m.id} value={m.id}>{m.title}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  )}
                 </div>
               </div>
 
@@ -964,7 +991,7 @@ export default function TaskDialog({
                       </Label>
                       {lockedProjectId ? (
                         <div className="flex items-center h-9 px-3 rounded-xl border border-border bg-muted/50 text-sm text-muted-foreground cursor-not-allowed select-none truncate">
-                          {lockedProjectName || lockedProjectId}
+                          {lockedProjectName || projects.find(p => p.id === lockedProjectId)?.name || lockedProjectId}
                         </div>
                       ) : (
                         <Select value={projectId} onValueChange={setProjectId} disabled={isReadOnly}>

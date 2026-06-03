@@ -399,7 +399,14 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
       if (!overId.startsWith('task-drop-')) return;
       const newColumnId = overId.replace('task-drop-', '');
       if (task.columnId === newColumnId) return;
-      try { await moveTaskToColumn(taskId, newColumnId); }
+
+      const sorted = [...boardColumns].sort((a, b) => a.order - b.order);
+      const targetIdx = sorted.findIndex(c => c.id === newColumnId);
+      const inferredStatus: 'todo' | 'doing' | 'done' =
+        targetIdx === sorted.length - 1 ? 'done' :
+        targetIdx === 0 ? 'todo' : 'doing';
+
+      try { await moveTaskToColumn(taskId, newColumnId, inferredStatus); }
       catch (err) { toast.error(getApiErrorMessage(err, 'Failed to move task')); }
     } else {
       const newStatus = over.id as 'todo' | 'doing' | 'done';
