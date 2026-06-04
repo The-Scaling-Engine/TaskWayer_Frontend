@@ -25,6 +25,40 @@ import { toast } from 'sonner';
 import { getApiErrorMessage } from '@/services/api';
 import type { ProjectMemberRole } from '@/types';
 
+const COMMON_TIMEZONES = [
+  { label: 'UTC', value: 'UTC' },
+  { label: 'Pacific/Honolulu (UTC−10)', value: 'Pacific/Honolulu' },
+  { label: 'America/Los_Angeles (UTC−8/−7)', value: 'America/Los_Angeles' },
+  { label: 'America/Denver (UTC−7/−6)', value: 'America/Denver' },
+  { label: 'America/Chicago (UTC−6/−5)', value: 'America/Chicago' },
+  { label: 'America/New_York (UTC−5/−4)', value: 'America/New_York' },
+  { label: 'America/Sao_Paulo (UTC−3)', value: 'America/Sao_Paulo' },
+  { label: 'Europe/London (UTC+0/+1)', value: 'Europe/London' },
+  { label: 'Europe/Paris (UTC+1/+2)', value: 'Europe/Paris' },
+  { label: 'Europe/Berlin (UTC+1/+2)', value: 'Europe/Berlin' },
+  { label: 'Europe/Moscow (UTC+3)', value: 'Europe/Moscow' },
+  { label: 'Asia/Dubai (UTC+4)', value: 'Asia/Dubai' },
+  { label: 'Asia/Kolkata (UTC+5:30)', value: 'Asia/Kolkata' },
+  { label: 'Asia/Bangkok (UTC+7)', value: 'Asia/Bangkok' },
+  { label: 'Asia/Ho_Chi_Minh (UTC+7)', value: 'Asia/Ho_Chi_Minh' },
+  { label: 'Asia/Singapore (UTC+8)', value: 'Asia/Singapore' },
+  { label: 'Asia/Shanghai (UTC+8)', value: 'Asia/Shanghai' },
+  { label: 'Asia/Tokyo (UTC+9)', value: 'Asia/Tokyo' },
+  { label: 'Australia/Sydney (UTC+10/+11)', value: 'Australia/Sydney' },
+  { label: 'Pacific/Auckland (UTC+12/+13)', value: 'Pacific/Auckland' },
+];
+
+function isValidHttpsUrl(url: string): boolean {
+  try {
+    const u = new URL(url);
+    return u.protocol === 'https:' && u.hostname.includes('.');
+  }
+  catch { return false; }
+}
+
+const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
+function isValidTime(t: string): boolean { return TIME_RE.test(t); }
+
 const ROLE_COLORS: Record<string, string> = {
   OWNER: 'bg-[#FE812C]/10 text-[#FE812C] border-[#FE812C]/20',
   MANAGER: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20',
@@ -73,12 +107,17 @@ export default function ProjectManagerPage() {
   const [slackConfig, setSlackConfig] = useState<SlackConfig | null>(null);
   const [slackLoading, setSlackLoading] = useState(false);
   const [slackSaving, setSlackSaving] = useState(false);
-  const [slackTesting, setSlackTesting] = useState(false);
+  const [slackTestingDaily, setSlackTestingDaily] = useState(false);
+  const [slackTestingWeekly, setSlackTestingWeekly] = useState(false);
   const [slackWebhookUrl, setSlackWebhookUrl] = useState('');
   const [slackManagerUrl, setSlackManagerUrl] = useState('');
   const [slackMemberUrl, setSlackMemberUrl] = useState('');
   const [slackDailyEnabled, setSlackDailyEnabled] = useState(true);
   const [slackWeeklyEnabled, setSlackWeeklyEnabled] = useState(true);
+  const [slackTimezone, setSlackTimezone] = useState(() => Intl.DateTimeFormat().resolvedOptions().timeZone);
+  const [slackDailyTime, setSlackDailyTime] = useState('18:00');
+  const [slackWeeklyDay, setSlackWeeklyDay] = useState(5);
+  const [slackWeeklyTime, setSlackWeeklyTime] = useState('17:00');
 
   // ── Add member state ───────────────────────────────────────────────────────
   const [addMemberOpen, setAddMemberOpen] = useState(false);
@@ -130,6 +169,10 @@ export default function ProjectManagerPage() {
           setSlackMemberUrl(cfg.memberWebhookUrl ?? '');
           setSlackDailyEnabled(cfg.dailyEnabled);
           setSlackWeeklyEnabled(cfg.weeklyEnabled);
+          setSlackTimezone(cfg.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone);
+          setSlackDailyTime(cfg.dailyTime ?? '18:00');
+          setSlackWeeklyDay(cfg.weeklyDay ?? 5);
+          setSlackWeeklyTime(cfg.weeklyTime ?? '17:00');
         }
       })
       .catch(() => {})
@@ -159,6 +202,10 @@ export default function ProjectManagerPage() {
         weeklyEnabled: slackWeeklyEnabled,
         managerWebhookUrl: slackManagerUrl.trim() || null,
         memberWebhookUrl: slackMemberUrl.trim() || null,
+        timezone: slackTimezone,
+        dailyTime: slackDailyTime,
+        weeklyDay: slackWeeklyDay,
+        weeklyTime: slackWeeklyTime,
       });
       setSlackConfig(saved);
       toast.success('Slack integration saved');
@@ -169,16 +216,29 @@ export default function ProjectManagerPage() {
     }
   };
 
-  const handleTestSlack = async () => {
+  const handleTestDaily = async () => {
     if (!projectId) return;
-    setSlackTesting(true);
+    setSlackTestingDaily(true);
     try {
-      await slackConfigService.test(projectId);
-      toast.success('Test message sent to Slack');
+      await slackConfigService.test(projectId, 'daily');
+      toast.success('Daily test digest sent to Slack');
     } catch (err) {
-      toast.error(getApiErrorMessage(err, 'Failed to send test message'));
+      toast.error(getApiErrorMessage(err, 'Failed to send daily test'));
     } finally {
-      setSlackTesting(false);
+      setSlackTestingDaily(false);
+    }
+  };
+
+  const handleTestWeekly = async () => {
+    if (!projectId) return;
+    setSlackTestingWeekly(true);
+    try {
+      await slackConfigService.test(projectId, 'weekly');
+      toast.success('Weekly test digest sent to Slack');
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Failed to send weekly test'));
+    } finally {
+      setSlackTestingWeekly(false);
     }
   };
 
@@ -192,6 +252,10 @@ export default function ProjectManagerPage() {
       setSlackMemberUrl('');
       setSlackDailyEnabled(true);
       setSlackWeeklyEnabled(true);
+      setSlackTimezone(Intl.DateTimeFormat().resolvedOptions().timeZone);
+      setSlackDailyTime('18:00');
+      setSlackWeeklyDay(5);
+      setSlackWeeklyTime('17:00');
       toast.success('Slack integration removed');
     } catch (err) {
       toast.error(getApiErrorMessage(err, 'Failed to remove Slack config'));
@@ -844,38 +908,120 @@ export default function ProjectManagerPage() {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="slack-webhook">Webhook URL <span className="text-destructive">*</span></Label>
-                    <Input
-                      id="slack-webhook"
-                      value={slackWebhookUrl}
-                      onChange={(e) => setSlackWebhookUrl(e.target.value)}
-                      placeholder="https://hooks.slack.com/services/..."
-                      className="rounded-xl font-mono text-xs"
-                    />
-                    <p className="text-[11px] text-muted-foreground">Main channel for digest messages</p>
-                  </div>
+                  {(() => {
+                    const webhookErr = slackWebhookUrl.trim() !== '' && !isValidHttpsUrl(slackWebhookUrl.trim());
+                    const managerErr = slackManagerUrl.trim() !== '' && !isValidHttpsUrl(slackManagerUrl.trim());
+                    const memberErr  = slackMemberUrl.trim()  !== '' && !isValidHttpsUrl(slackMemberUrl.trim());
+                    return (
+                      <>
+                        <div className="space-y-1.5">
+                          <Label htmlFor="slack-webhook">Webhook URL <span className="text-destructive">*</span></Label>
+                          <Input
+                            id="slack-webhook"
+                            value={slackWebhookUrl}
+                            onChange={(e) => setSlackWebhookUrl(e.target.value)}
+                            placeholder="https://hooks.slack.com/services/..."
+                            className="rounded-xl font-mono text-xs"
+                            aria-invalid={webhookErr || undefined}
+                          />
+                          {webhookErr
+                            ? <p className="text-[11px] text-destructive">Must be a valid https:// URL</p>
+                            : <p className="text-[11px] text-muted-foreground">Main channel for digest messages</p>
+                          }
+                        </div>
 
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div className="space-y-1.5">
+                            <Label htmlFor="slack-manager-url">Manager Webhook <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                            <Input
+                              id="slack-manager-url"
+                              value={slackManagerUrl}
+                              onChange={(e) => setSlackManagerUrl(e.target.value)}
+                              placeholder="https://hooks.slack.com/..."
+                              className="rounded-xl font-mono text-xs"
+                              aria-invalid={managerErr || undefined}
+                            />
+                            {managerErr && <p className="text-[11px] text-destructive">Must be a valid https:// URL</p>}
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label htmlFor="slack-member-url">Member Webhook <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                            <Input
+                              id="slack-member-url"
+                              value={slackMemberUrl}
+                              onChange={(e) => setSlackMemberUrl(e.target.value)}
+                              placeholder="https://hooks.slack.com/..."
+                              className="rounded-xl font-mono text-xs"
+                              aria-invalid={memberErr || undefined}
+                            />
+                            {memberErr && <p className="text-[11px] text-destructive">Must be a valid https:// URL</p>}
+                          </div>
+                        </div>
+                      </>
+                    );
+                  })()}
+
+                  {/* Schedule settings */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-1.5">
-                      <Label htmlFor="slack-manager-url">Manager Webhook <span className="text-muted-foreground font-normal">(optional)</span></Label>
-                      <Input
-                        id="slack-manager-url"
-                        value={slackManagerUrl}
-                        onChange={(e) => setSlackManagerUrl(e.target.value)}
-                        placeholder="https://hooks.slack.com/..."
-                        className="rounded-xl font-mono text-xs"
-                      />
+                      <Label htmlFor="slack-timezone">Timezone</Label>
+                      <select
+                        id="slack-timezone"
+                        value={slackTimezone}
+                        onChange={(e) => setSlackTimezone(e.target.value)}
+                        className="w-full rounded-xl border border-input bg-transparent dark:bg-input/30 px-3 py-2 text-sm text-foreground transition-colors cursor-pointer outline-none focus:outline-none focus:ring-2 focus:ring-ring/50 focus:border-ring [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border hover:[&::-webkit-scrollbar-thumb]:bg-muted-foreground/40"
+                      >
+                        {!COMMON_TIMEZONES.some(t => t.value === slackTimezone) && (
+                          <option value={slackTimezone} className="bg-popover text-foreground">{slackTimezone}</option>
+                        )}
+                        {COMMON_TIMEZONES.map(t => (
+                          <option key={t.value} value={t.value} className="bg-popover text-foreground">{t.label}</option>
+                        ))}
+                      </select>
                     </div>
                     <div className="space-y-1.5">
-                      <Label htmlFor="slack-member-url">Member Webhook <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                      <Label htmlFor="slack-daily-time">Daily digest time</Label>
                       <Input
-                        id="slack-member-url"
-                        value={slackMemberUrl}
-                        onChange={(e) => setSlackMemberUrl(e.target.value)}
-                        placeholder="https://hooks.slack.com/..."
-                        className="rounded-xl font-mono text-xs"
+                        id="slack-daily-time"
+                        value={slackDailyTime}
+                        onChange={(e) => setSlackDailyTime(e.target.value)}
+                        placeholder="18:00"
+                        className="rounded-xl"
+                        aria-invalid={!isValidTime(slackDailyTime) || undefined}
                       />
+                      {!isValidTime(slackDailyTime) && (
+                        <p className="text-[11px] text-destructive">Format HH:MM, e.g. 18:00</p>
+                      )}
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="slack-weekly-day">Weekly digest day</Label>
+                      <select
+                        id="slack-weekly-day"
+                        value={slackWeeklyDay}
+                        onChange={(e) => setSlackWeeklyDay(Number(e.target.value))}
+                        className="w-full rounded-xl border border-input bg-transparent dark:bg-input/30 px-3 py-2 text-sm text-foreground transition-colors cursor-pointer outline-none focus:outline-none focus:ring-2 focus:ring-ring/50 focus:border-ring [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border hover:[&::-webkit-scrollbar-thumb]:bg-muted-foreground/40"
+                      >
+                        <option value={0} className="bg-popover text-foreground">Sunday</option>
+                        <option value={1} className="bg-popover text-foreground">Monday</option>
+                        <option value={2} className="bg-popover text-foreground">Tuesday</option>
+                        <option value={3} className="bg-popover text-foreground">Wednesday</option>
+                        <option value={4} className="bg-popover text-foreground">Thursday</option>
+                        <option value={5} className="bg-popover text-foreground">Friday</option>
+                        <option value={6} className="bg-popover text-foreground">Saturday</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="slack-weekly-time">Weekly digest time</Label>
+                      <Input
+                        id="slack-weekly-time"
+                        value={slackWeeklyTime}
+                        onChange={(e) => setSlackWeeklyTime(e.target.value)}
+                        placeholder="17:00"
+                        className="rounded-xl"
+                        aria-invalid={!isValidTime(slackWeeklyTime) || undefined}
+                      />
+                      {!isValidTime(slackWeeklyTime) && (
+                        <p className="text-[11px] text-destructive">Format HH:MM, e.g. 17:00</p>
+                      )}
                     </div>
                   </div>
 
@@ -919,21 +1065,41 @@ export default function ProjectManagerPage() {
                   <div className="flex items-center gap-3 pt-1 flex-wrap">
                     <Button
                       onClick={handleSaveSlack}
-                      disabled={slackSaving || !slackWebhookUrl.trim()}
+                      disabled={
+                        slackSaving ||
+                        !slackWebhookUrl.trim() ||
+                        !isValidHttpsUrl(slackWebhookUrl.trim()) ||
+                        (slackManagerUrl.trim() !== '' && !isValidHttpsUrl(slackManagerUrl.trim())) ||
+                        (slackMemberUrl.trim() !== '' && !isValidHttpsUrl(slackMemberUrl.trim())) ||
+                        !isValidTime(slackDailyTime) ||
+                        !isValidTime(slackWeeklyTime)
+                      }
                       className="bg-[#FE812C] hover:bg-[#e5732a] text-white rounded-xl gap-2"
                     >
                       {slackSaving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
                       {slackSaving ? 'Saving...' : 'Save Integration'}
                     </Button>
                     {slackConfig && (
-                      <button
-                        onClick={handleTestSlack}
-                        disabled={slackTesting}
-                        className="flex items-center gap-1.5 px-4 py-2 rounded-xl border border-border text-sm font-medium hover:bg-muted transition-colors disabled:opacity-60"
-                      >
-                        {slackTesting ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
-                        {slackTesting ? 'Sending...' : 'Send Test Message'}
-                      </button>
+                      <>
+                        <button
+                          onClick={handleTestDaily}
+                          disabled={slackTestingDaily || !slackDailyEnabled}
+                          title={!slackDailyEnabled ? 'Enable daily digest first' : undefined}
+                          className="flex items-center gap-1.5 px-4 py-2 rounded-xl border border-border text-sm font-medium hover:bg-muted transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          {slackTestingDaily ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+                          {slackTestingDaily ? 'Sending...' : 'Test Daily'}
+                        </button>
+                        <button
+                          onClick={handleTestWeekly}
+                          disabled={slackTestingWeekly || !slackWeeklyEnabled}
+                          title={!slackWeeklyEnabled ? 'Enable weekly digest first' : undefined}
+                          className="flex items-center gap-1.5 px-4 py-2 rounded-xl border border-border text-sm font-medium hover:bg-muted transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          {slackTestingWeekly ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+                          {slackTestingWeekly ? 'Sending...' : 'Test Weekly'}
+                        </button>
+                      </>
                     )}
                     {slackConfig && (
                       <button

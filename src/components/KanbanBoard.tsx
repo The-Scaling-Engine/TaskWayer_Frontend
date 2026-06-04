@@ -402,9 +402,12 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
 
       const sorted = [...boardColumns].sort((a, b) => a.order - b.order);
       const targetIdx = sorted.findIndex(c => c.id === newColumnId);
+      const colName = (sorted[targetIdx]?.name ?? '').toLowerCase().trim();
+      const isDoneByName = /\bdone\b|\bcomplete[d]?\b|\bfinish(ed)?\b/.test(colName);
+      const isTodoByName = /\bto[\s-]?do\b|\btodo\b|\bbacklog\b|\bnew\b/.test(colName);
       const inferredStatus: 'todo' | 'doing' | 'done' =
-        targetIdx === sorted.length - 1 ? 'done' :
-        targetIdx === 0 ? 'todo' : 'doing';
+        isDoneByName || targetIdx === sorted.length - 1 ? 'done' :
+        isTodoByName || targetIdx === 0 ? 'todo' : 'doing';
 
       try { await moveTaskToColumn(taskId, newColumnId, inferredStatus); }
       catch (err) { toast.error(getApiErrorMessage(err, 'Failed to move task')); }

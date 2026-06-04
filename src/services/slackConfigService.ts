@@ -8,6 +8,12 @@ export interface SlackConfig {
   weeklyEnabled: boolean;
   managerWebhookUrl: string | null;
   memberWebhookUrl: string | null;
+  timezone: string;
+  dailyTime: string;
+  weeklyDay: number;
+  weeklyTime: string;
+  lastDailySentKey: string | null;
+  lastWeeklySentKey: string | null;
 }
 
 export interface SaveSlackConfigData {
@@ -16,6 +22,10 @@ export interface SaveSlackConfigData {
   weeklyEnabled?: boolean;
   managerWebhookUrl?: string | null;
   memberWebhookUrl?: string | null;
+  timezone?: string;
+  dailyTime?: string;
+  weeklyDay?: number;
+  weeklyTime?: string;
 }
 
 export const slackConfigService = {
@@ -33,7 +43,7 @@ export const slackConfigService = {
     await api.delete(`/projects/${projectId}/slack-config`);
   },
 
-  test: async (projectId: string): Promise<void> => {
-    await api.post(`/projects/${projectId}/slack-config/test`);
+  test: async (projectId: string, type: 'daily' | 'weekly'): Promise<void> => {
+    await api.post(`/projects/${projectId}/slack-config/test`, { type });
   },
 };
