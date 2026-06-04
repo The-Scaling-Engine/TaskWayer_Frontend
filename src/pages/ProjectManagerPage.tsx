@@ -12,7 +12,7 @@ import { userService } from '@/services/userService';
 import { projectService } from '@/services/projectService';
 import { departmentService } from '@/services/departmentService';
 import { slackConfigService } from '@/services/slackConfigService';
-import type { SlackConfig } from '@/services/slackConfigService';
+import type { SlackConfig, EmojiMappings, WebhookSecretInfo } from '@/services/slackConfigService';
 import type { ProjectDepartmentLink } from '@/types';
 import MilestoneList from '@/components/MilestoneList';
 import PlanningTreeView from '@/components/planning/PlanningTreeView';
@@ -143,6 +143,14 @@ export default function ProjectManagerPage() {
   const [slackWeeklyHour, setSlackWeeklyHour] = useState('5');
   const [slackWeeklyMin, setSlackWeeklyMin] = useState('00');
   const [slackWeeklyAmPm, setSlackWeeklyAmPm] = useState<'AM' | 'PM'>('PM');
+  // Phase 8 — Emoji mappings: rows in local edit state; stored as canonical names
+  const [emojiRows, setEmojiRows] = useState<Array<{ emoji: string; profileId: string }>>([]);
+  const [emojiSaving, setEmojiSaving] = useState(false);
+  // Phase 8 — Webhook secret: only masked info from GET; full secret only right after regenerate
+  const [webhookSecretInfo, setWebhookSecretInfo] = useState<WebhookSecretInfo | null>(null);
+  const [revealedSecret, setRevealedSecret] = useState<string | null>(null);
+  const [secretRegenerating, setSecretRegenerating] = useState(false);
+  const [secretConfirm, setSecretConfirm] = useState(false);
 
   // ── Add member state ───────────────────────────────────────────────────────
   const [addMemberOpen, setAddMemberOpen] = useState(false);
@@ -200,6 +208,15 @@ export default function ProjectManagerPage() {
           setSlackWeeklyDay(cfg.weeklyDay ?? 5);
           const w12 = to12h(cfg.weeklyTime ?? '17:00');
           setSlackWeeklyHour(w12.hour); setSlackWeeklyMin(w12.min); setSlackWeeklyAmPm(w12.ampm);
+          // Load Phase 8 data in parallel (ignore errors — non-critical)
+          slackConfigService.getEmojiMappings(projectId)
+            .then((m) => {
+              setEmojiRows(m ? Object.entries(m).map(([emoji, profileId]) => ({ emoji, profileId })) : []);
+            })
+            .catch(() => {});
+          slackConfigService.getWebhookSecretInfo(projectId)
+            .then(setWebhookSecretInfo)
+            .catch(() => {});
         }
       })
       .catch(() => {})
@@ -283,9 +300,47 @@ export default function ProjectManagerPage() {
       setSlackDailyHour('6'); setSlackDailyMin('00'); setSlackDailyAmPm('PM');
       setSlackWeeklyDay(5);
       setSlackWeeklyHour('5'); setSlackWeeklyMin('00'); setSlackWeeklyAmPm('PM');
+      setEmojiRows([]);
+      setWebhookSecretInfo(null);
+      setRevealedSecret(null);
       toast.success('Slack integration removed');
     } catch (err) {
       toast.error(getApiErrorMessage(err, 'Failed to remove Slack config'));
+    }
+  };
+
+  const handleSaveEmojiMappings = async () => {
+    if (!projectId) return;
+    setEmojiSaving(true);
+    try {
+      // Convert rows to canonical mappings object (keys already canonical, no colons)
+      const mappings: EmojiMappings = {};
+      for (const row of emojiRows) {
+        if (row.emoji && row.profileId) mappings[row.emoji] = row.profileId;
+      }
+      const saved = await slackConfigService.saveEmojiMappings(projectId, mappings);
+      setEmojiRows(saved ? Object.entries(saved).map(([emoji, profileId]) => ({ emoji, profileId })) : []);
+      toast.success('Emoji mappings saved');
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Failed to save emoji mappings'));
+    } finally {
+      setEmojiSaving(false);
+    }
+  };
+
+  const handleRegenerateSecret = async () => {
+    if (!projectId) return;
+    setSecretRegenerating(true);
+    setSecretConfirm(false);
+    try {
+      const result = await slackConfigService.regenerateWebhookSecret(projectId);
+      setRevealedSecret(result.secret);
+      setWebhookSecretInfo({ hasSecret: true, masked: result.masked });
+      toast.success('New webhook secret generated');
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Failed to regenerate webhook secret'));
+    } finally {
+      setSecretRegenerating(false);
     }
   };
 
@@ -1177,6 +1232,143 @@ export default function ProjectManagerPage() {
                       </button>
                     )}
                   </div>
+
+                  {/* ── Phase 8: Webhook Secret + Emoji Mapping ── */}
+                  {slackConfig && (
+                    <>
+                      <div className="border-t border-border/50" />
+
+                      {/* Webhook Secret */}
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm font-medium">Webhook Secret</p>
+                            <p className="text-xs text-muted-foreground">Authenticates inbound requests from n8n</p>
+                          </div>
+                        </div>
+
+                        {revealedSecret ? (
+                          <div className="rounded-xl bg-[#FE812C]/10 border border-[#FE812C]/30 px-3 py-2.5 space-y-1.5">
+                            <p className="text-[10px] text-[#FE812C] font-medium uppercase tracking-wide">Copy now — will not be shown again</p>
+                            <div className="flex items-center gap-2">
+                              <code className="flex-1 text-xs font-mono break-all text-foreground">{revealedSecret}</code>
+                              <button
+                                type="button"
+                                onClick={() => { void navigator.clipboard.writeText(revealedSecret); toast.success('Secret copied'); }}
+                                className="shrink-0 px-2 h-7 rounded-lg border border-[#FE812C]/40 text-[#FE812C] text-xs font-medium hover:bg-[#FE812C]/10 transition-colors"
+                              >Copy</button>
+                              <button
+                                type="button"
+                                onClick={() => setRevealedSecret(null)}
+                                className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
+                              ><X size={12} /></button>
+                            </div>
+                          </div>
+                        ) : webhookSecretInfo?.hasSecret ? (
+                          <div className="flex items-center gap-2">
+                            <code className="flex-1 text-xs font-mono text-muted-foreground bg-muted/40 rounded-lg px-2.5 py-1.5 border border-border/60">
+                              {webhookSecretInfo.masked}
+                            </code>
+                            <button
+                              type="button"
+                              onClick={() => setSecretConfirm(true)}
+                              disabled={secretRegenerating}
+                              className="shrink-0 px-3 h-8 rounded-xl border border-border text-xs font-medium hover:bg-muted transition-colors disabled:opacity-40"
+                            >
+                              {secretRegenerating ? <Loader2 size={12} className="animate-spin" /> : 'Regenerate'}
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setSecretConfirm(true)}
+                            disabled={secretRegenerating}
+                            className="flex items-center gap-1.5 px-3 h-8 rounded-xl bg-[#FE812C] hover:bg-[#e5732a] text-white text-xs font-medium transition-colors disabled:opacity-40"
+                          >
+                            {secretRegenerating ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
+                            Generate Secret
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="border-t border-border/50" />
+
+                      {/* Emoji Mapping */}
+                      <div className="space-y-2">
+                        <div>
+                          <p className="text-sm font-medium">Slack Emoji → Member Mapping</p>
+                          <p className="text-xs text-muted-foreground">When n8n detects an emoji in Slack, it creates a task assigned to the mapped member.</p>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          {emojiRows.map((row, i) => {
+                            const isValidEmoji = /^[a-z0-9_+-]+$/.test(row.emoji);
+                            return (
+                              <div key={i} className="flex items-center gap-2">
+                                <div className="flex items-center gap-1 min-w-0">
+                                  <span className="text-xs text-muted-foreground shrink-0">:</span>
+                                  <Input
+                                    value={row.emoji}
+                                    onChange={(e) => {
+                                      const val = e.target.value.replace(/:/g, '').toLowerCase();
+                                      setEmojiRows(rows => rows.map((r, idx) => idx === i ? { ...r, emoji: val } : r));
+                                    }}
+                                    placeholder="sunglasses"
+                                    className={cn('h-7 text-xs rounded-lg w-28 px-1.5', row.emoji && !isValidEmoji && 'border-destructive')}
+                                  />
+                                  <span className="text-xs text-muted-foreground shrink-0">:</span>
+                                </div>
+                                <span className="text-xs text-muted-foreground shrink-0">→</span>
+                                <select
+                                  value={row.profileId}
+                                  onChange={(e) => setEmojiRows(rows => rows.map((r, idx) => idx === i ? { ...r, profileId: e.target.value } : r))}
+                                  className="flex-1 rounded-lg border border-input bg-transparent dark:bg-input/30 px-2 h-7 text-xs text-foreground cursor-pointer outline-none focus:ring-2 focus:ring-ring/50 min-w-0"
+                                >
+                                  <option value="" className="bg-popover text-muted-foreground">— Select member —</option>
+                                  {members.map((m) => (
+                                    <option key={m.profileId} value={m.profileId} className="bg-popover text-foreground">
+                                      {m.profile?.name ?? m.profile?.email ?? m.profileId}
+                                    </option>
+                                  ))}
+                                </select>
+                                <button
+                                  type="button"
+                                  onClick={() => setEmojiRows(rows => rows.filter((_, idx) => idx !== i))}
+                                  className="shrink-0 text-muted-foreground hover:text-destructive transition-colors"
+                                ><X size={12} /></button>
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        {emojiRows.length < 20 && (
+                          <button
+                            type="button"
+                            onClick={() => setEmojiRows(rows => [...rows, { emoji: '', profileId: '' }])}
+                            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                          >
+                            <Plus size={12} /> Add mapping
+                          </button>
+                        )}
+
+                        <div className="flex items-center gap-2 pt-0.5">
+                          <button
+                            type="button"
+                            onClick={handleSaveEmojiMappings}
+                            disabled={
+                              emojiSaving ||
+                              emojiRows.some(r => !r.emoji || !r.profileId || !/^[a-z0-9_+-]+$/.test(r.emoji))
+                            }
+                            className="flex items-center gap-1.5 px-3 h-7 rounded-xl bg-[#FE812C] hover:bg-[#e5732a] text-white text-xs font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                          >
+                            {emojiSaving ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
+                            {emojiSaving ? 'Saving...' : 'Save mappings'}
+                          </button>
+                          <p className="text-[10px] text-muted-foreground">Lowercase letters, digits, _ - + · Max 20</p>
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
             </div>
@@ -1184,6 +1376,33 @@ export default function ProjectManagerPage() {
           </div>
         )}
       </div>
+
+      {/* Webhook secret regenerate confirm */}
+      {secretConfirm && (
+        <div className="fixed inset-0 z-[65] flex items-center justify-center bg-black/50 p-4 animate-in fade-in duration-200">
+          <div className="bg-card border border-border rounded-2xl p-6 max-w-sm w-full shadow-xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <h3 className="text-lg font-bold">Regenerate Webhook Secret</h3>
+            <p className="text-sm text-muted-foreground">
+              The current secret will be <span className="font-semibold text-foreground">immediately invalidated</span>. Any n8n workflows using it will stop working until updated. Continue?
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setSecretConfirm(false)}
+                disabled={secretRegenerating}
+                className="px-4 py-2 rounded-xl text-sm font-medium text-muted-foreground hover:bg-muted transition-colors disabled:opacity-50"
+              >Cancel</button>
+              <button
+                onClick={() => void handleRegenerateSecret()}
+                disabled={secretRegenerating}
+                className="px-4 py-2 rounded-xl text-sm font-medium bg-[#FE812C] hover:bg-[#e5732a] text-white transition-colors disabled:opacity-50 flex items-center gap-2"
+              >
+                {secretRegenerating && <Loader2 size={14} className="animate-spin" />}
+                Regenerate
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Archive confirm */}
       {archiveConfirm && (
