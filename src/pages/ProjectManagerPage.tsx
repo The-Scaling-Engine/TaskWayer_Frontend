@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   FolderOpen, ArrowLeft, Loader2, UserPlus, UserMinus,
   Search, X, Check, Trash2, Archive, ArchiveRestore, LogOut,
-  Bell, Send, Building2, Plus, Info,
+  Send, Building2, Plus, Info,
 } from 'lucide-react';
 import { useProjectStore } from '@/store/projectStore';
 import { useAuthStore } from '@/store/authStore';
@@ -56,8 +56,29 @@ function isValidHttpsUrl(url: string): boolean {
   catch { return false; }
 }
 
-const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
-function isValidTime(t: string): boolean { return TIME_RE.test(t); }
+function to12h(time24: string): { hour: string; min: string; ampm: 'AM' | 'PM' } {
+  const [hStr = '18', mStr = '00'] = time24.split(':');
+  let h = Number(hStr);
+  const ampm: 'AM' | 'PM' = h >= 12 ? 'PM' : 'AM';
+  if (h > 12) h -= 12;
+  if (h === 0) h = 12;
+  return { hour: String(h), min: mStr, ampm };
+}
+function to24h(hour: string, min: string, ampm: 'AM' | 'PM'): string {
+  let h = Number(hour);
+  if (ampm === 'PM' && h !== 12) h += 12;
+  if (ampm === 'AM' && h === 12) h = 0;
+  return `${String(h).padStart(2, '0')}:${min.padStart(2, '0')}`;
+}
+function isValidHour12(h: string): boolean {
+  const n = Number(h);
+  return h !== '' && Number.isInteger(n) && n >= 1 && n <= 12;
+}
+function isValidMin(m: string): boolean {
+  if (!/^\d{1,2}$/.test(m)) return false;
+  const n = Number(m);
+  return n >= 0 && n <= 59;
+}
 
 const ROLE_COLORS: Record<string, string> = {
   OWNER: 'bg-[#FE812C]/10 text-[#FE812C] border-[#FE812C]/20',
@@ -114,10 +135,14 @@ export default function ProjectManagerPage() {
   const [slackMemberUrl, setSlackMemberUrl] = useState('');
   const [slackDailyEnabled, setSlackDailyEnabled] = useState(true);
   const [slackWeeklyEnabled, setSlackWeeklyEnabled] = useState(true);
-  const [slackTimezone, setSlackTimezone] = useState(() => Intl.DateTimeFormat().resolvedOptions().timeZone);
-  const [slackDailyTime, setSlackDailyTime] = useState('18:00');
+  const [slackTimezone, setSlackTimezone] = useState('');
+  const [slackDailyHour, setSlackDailyHour] = useState('6');
+  const [slackDailyMin, setSlackDailyMin] = useState('00');
+  const [slackDailyAmPm, setSlackDailyAmPm] = useState<'AM' | 'PM'>('PM');
   const [slackWeeklyDay, setSlackWeeklyDay] = useState(5);
-  const [slackWeeklyTime, setSlackWeeklyTime] = useState('17:00');
+  const [slackWeeklyHour, setSlackWeeklyHour] = useState('5');
+  const [slackWeeklyMin, setSlackWeeklyMin] = useState('00');
+  const [slackWeeklyAmPm, setSlackWeeklyAmPm] = useState<'AM' | 'PM'>('PM');
 
   // ── Add member state ───────────────────────────────────────────────────────
   const [addMemberOpen, setAddMemberOpen] = useState(false);
@@ -169,10 +194,12 @@ export default function ProjectManagerPage() {
           setSlackMemberUrl(cfg.memberWebhookUrl ?? '');
           setSlackDailyEnabled(cfg.dailyEnabled);
           setSlackWeeklyEnabled(cfg.weeklyEnabled);
-          setSlackTimezone(cfg.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone);
-          setSlackDailyTime(cfg.dailyTime ?? '18:00');
+          setSlackTimezone(cfg.timezone ?? '');
+          const d12 = to12h(cfg.dailyTime ?? '18:00');
+          setSlackDailyHour(d12.hour); setSlackDailyMin(d12.min); setSlackDailyAmPm(d12.ampm);
           setSlackWeeklyDay(cfg.weeklyDay ?? 5);
-          setSlackWeeklyTime(cfg.weeklyTime ?? '17:00');
+          const w12 = to12h(cfg.weeklyTime ?? '17:00');
+          setSlackWeeklyHour(w12.hour); setSlackWeeklyMin(w12.min); setSlackWeeklyAmPm(w12.ampm);
         }
       })
       .catch(() => {})
@@ -203,9 +230,9 @@ export default function ProjectManagerPage() {
         managerWebhookUrl: slackManagerUrl.trim() || null,
         memberWebhookUrl: slackMemberUrl.trim() || null,
         timezone: slackTimezone,
-        dailyTime: slackDailyTime,
+        dailyTime: to24h(slackDailyHour, slackDailyMin, slackDailyAmPm),
         weeklyDay: slackWeeklyDay,
-        weeklyTime: slackWeeklyTime,
+        weeklyTime: to24h(slackWeeklyHour, slackWeeklyMin, slackWeeklyAmPm),
       });
       setSlackConfig(saved);
       toast.success('Slack integration saved');
@@ -252,10 +279,10 @@ export default function ProjectManagerPage() {
       setSlackMemberUrl('');
       setSlackDailyEnabled(true);
       setSlackWeeklyEnabled(true);
-      setSlackTimezone(Intl.DateTimeFormat().resolvedOptions().timeZone);
-      setSlackDailyTime('18:00');
+      setSlackTimezone('');
+      setSlackDailyHour('6'); setSlackDailyMin('00'); setSlackDailyAmPm('PM');
       setSlackWeeklyDay(5);
-      setSlackWeeklyTime('17:00');
+      setSlackWeeklyHour('5'); setSlackWeeklyMin('00'); setSlackWeeklyAmPm('PM');
       toast.success('Slack integration removed');
     } catch (err) {
       toast.error(getApiErrorMessage(err, 'Failed to remove Slack config'));
@@ -960,109 +987,152 @@ export default function ProjectManagerPage() {
                     );
                   })()}
 
-                  {/* Schedule settings */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="space-y-1.5">
-                      <Label htmlFor="slack-timezone">Timezone</Label>
-                      <select
-                        id="slack-timezone"
-                        value={slackTimezone}
-                        onChange={(e) => setSlackTimezone(e.target.value)}
-                        className="w-full rounded-xl border border-input bg-transparent dark:bg-input/30 px-3 py-2 text-sm text-foreground transition-colors cursor-pointer outline-none focus:outline-none focus:ring-2 focus:ring-ring/50 focus:border-ring [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border hover:[&::-webkit-scrollbar-thumb]:bg-muted-foreground/40"
-                      >
-                        {!COMMON_TIMEZONES.some(t => t.value === slackTimezone) && (
-                          <option value={slackTimezone} className="bg-popover text-foreground">{slackTimezone}</option>
+                  {/* Timezone + digest schedule */}
+                  <div className="space-y-3">
+
+                    {/* Timezone — compact, half-width */}
+                    <div className="flex flex-wrap items-center gap-3">
+                      <Label htmlFor="slack-timezone" className="shrink-0 w-24 text-xs text-muted-foreground">
+                        Timezone <span className="text-destructive">*</span>
+                      </Label>
+                      <div className="flex flex-col gap-1 flex-1 min-w-[180px] max-w-xs">
+                        <select
+                          id="slack-timezone"
+                          value={slackTimezone}
+                          onChange={(e) => setSlackTimezone(e.target.value)}
+                          className={cn(
+                            'w-full rounded-lg border px-2.5 py-1.5 text-xs transition-colors cursor-pointer outline-none focus:outline-none focus:ring-2 focus:ring-ring/50 focus:border-ring bg-transparent dark:bg-input/30 text-foreground [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border',
+                            !slackTimezone ? 'border-destructive' : 'border-input'
+                          )}
+                        >
+                          <option value="" disabled className="bg-popover text-muted-foreground">— Select timezone —</option>
+                          {COMMON_TIMEZONES.map(t => (
+                            <option key={t.value} value={t.value} className="bg-popover text-foreground">{t.label}</option>
+                          ))}
+                        </select>
+                        {!slackTimezone && (
+                          <p className="text-[10px] text-destructive">Required to schedule digests</p>
                         )}
-                        {COMMON_TIMEZONES.map(t => (
-                          <option key={t.value} value={t.value} className="bg-popover text-foreground">{t.label}</option>
-                        ))}
-                      </select>
+                      </div>
                     </div>
-                    <div className="space-y-1.5">
-                      <Label htmlFor="slack-daily-time">Daily digest time</Label>
-                      <Input
-                        id="slack-daily-time"
-                        value={slackDailyTime}
-                        onChange={(e) => setSlackDailyTime(e.target.value)}
-                        placeholder="18:00"
-                        className="rounded-xl"
-                        aria-invalid={!isValidTime(slackDailyTime) || undefined}
-                      />
-                      {!isValidTime(slackDailyTime) && (
-                        <p className="text-[11px] text-destructive">Format HH:MM, e.g. 18:00</p>
+
+                    <div className="border-t border-border/50" />
+
+                    {/* Daily + Weekly digest — same row, equal width */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+
+                    {/* Daily digest card */}
+                    <div className={cn(
+                      'rounded-xl border border-border/60 px-3 py-2.5 space-y-2 transition-opacity',
+                      !slackDailyEnabled && 'opacity-50'
+                    )}>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setSlackDailyEnabled(!slackDailyEnabled)}
+                          className={cn('relative rounded-full transition-colors shrink-0', slackDailyEnabled ? 'bg-[#FE812C]' : 'bg-muted-foreground/30')}
+                          style={{ height: '18px', width: '32px' }}
+                        >
+                          <span className={cn('absolute top-0.5 left-0.5 w-3.5 h-3.5 bg-white rounded-full shadow transition-transform', slackDailyEnabled ? 'translate-x-[14px]' : 'translate-x-0')} />
+                        </button>
+                        <span className="text-sm font-medium">Daily digest</span>
+                      </div>
+                      <div className="flex items-center gap-1 pl-1">
+                        <span className="text-xs text-muted-foreground mr-1">Send at</span>
+                        <Input
+                          value={slackDailyHour}
+                          onChange={(e) => setSlackDailyHour(e.target.value.replace(/\D/g, '').slice(0, 2))}
+                          placeholder="6"
+                          className={cn('rounded-lg w-10 text-center px-0 h-7 text-xs', !isValidHour12(slackDailyHour) && 'border-destructive')}
+                          maxLength={2}
+                        />
+                        <span className="text-muted-foreground font-bold text-xs">:</span>
+                        <Input
+                          value={slackDailyMin}
+                          onChange={(e) => setSlackDailyMin(e.target.value.replace(/\D/g, '').slice(0, 2))}
+                          placeholder="00"
+                          className={cn('rounded-lg w-10 text-center px-0 h-7 text-xs', !isValidMin(slackDailyMin) && 'border-destructive')}
+                          maxLength={2}
+                        />
+                        <select
+                          value={slackDailyAmPm}
+                          onChange={(e) => setSlackDailyAmPm(e.target.value as 'AM' | 'PM')}
+                          className="rounded-lg border border-input bg-transparent dark:bg-input/30 px-1.5 h-7 text-xs text-foreground cursor-pointer outline-none focus:outline-none focus:ring-2 focus:ring-ring/50"
+                        >
+                          <option value="AM" className="bg-popover text-foreground">AM</option>
+                          <option value="PM" className="bg-popover text-foreground">PM</option>
+                        </select>
+                      </div>
+                      {(!isValidHour12(slackDailyHour) || !isValidMin(slackDailyMin)) && (
+                        <p className="text-[10px] text-destructive">Hour 1–12 · Minute 00–59</p>
                       )}
                     </div>
-                    <div className="space-y-1.5">
-                      <Label htmlFor="slack-weekly-day">Weekly digest day</Label>
-                      <select
-                        id="slack-weekly-day"
-                        value={slackWeeklyDay}
-                        onChange={(e) => setSlackWeeklyDay(Number(e.target.value))}
-                        className="w-full rounded-xl border border-input bg-transparent dark:bg-input/30 px-3 py-2 text-sm text-foreground transition-colors cursor-pointer outline-none focus:outline-none focus:ring-2 focus:ring-ring/50 focus:border-ring [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border hover:[&::-webkit-scrollbar-thumb]:bg-muted-foreground/40"
-                      >
-                        <option value={0} className="bg-popover text-foreground">Sunday</option>
-                        <option value={1} className="bg-popover text-foreground">Monday</option>
-                        <option value={2} className="bg-popover text-foreground">Tuesday</option>
-                        <option value={3} className="bg-popover text-foreground">Wednesday</option>
-                        <option value={4} className="bg-popover text-foreground">Thursday</option>
-                        <option value={5} className="bg-popover text-foreground">Friday</option>
-                        <option value={6} className="bg-popover text-foreground">Saturday</option>
-                      </select>
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label htmlFor="slack-weekly-time">Weekly digest time</Label>
-                      <Input
-                        id="slack-weekly-time"
-                        value={slackWeeklyTime}
-                        onChange={(e) => setSlackWeeklyTime(e.target.value)}
-                        placeholder="17:00"
-                        className="rounded-xl"
-                        aria-invalid={!isValidTime(slackWeeklyTime) || undefined}
-                      />
-                      {!isValidTime(slackWeeklyTime) && (
-                        <p className="text-[11px] text-destructive">Format HH:MM, e.g. 17:00</p>
+
+                    {/* Weekly digest card */}
+                    <div className={cn(
+                      'rounded-xl border border-border/60 px-3 py-2.5 space-y-2 transition-opacity',
+                      !slackWeeklyEnabled && 'opacity-50'
+                    )}>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setSlackWeeklyEnabled(!slackWeeklyEnabled)}
+                          className={cn('relative rounded-full transition-colors shrink-0', slackWeeklyEnabled ? 'bg-[#FE812C]' : 'bg-muted-foreground/30')}
+                          style={{ height: '18px', width: '32px' }}
+                        >
+                          <span className={cn('absolute top-0.5 left-0.5 w-3.5 h-3.5 bg-white rounded-full shadow transition-transform', slackWeeklyEnabled ? 'translate-x-[14px]' : 'translate-x-0')} />
+                        </button>
+                        <span className="text-sm font-medium">Weekly digest</span>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-1 pl-1">
+                        <select
+                          value={slackWeeklyDay}
+                          onChange={(e) => setSlackWeeklyDay(Number(e.target.value))}
+                          className="rounded-lg border border-input bg-transparent dark:bg-input/30 px-1.5 h-7 text-xs text-foreground cursor-pointer outline-none focus:outline-none focus:ring-2 focus:ring-ring/50"
+                        >
+                          <option value={0} className="bg-popover text-foreground">Sunday</option>
+                          <option value={1} className="bg-popover text-foreground">Monday</option>
+                          <option value={2} className="bg-popover text-foreground">Tuesday</option>
+                          <option value={3} className="bg-popover text-foreground">Wednesday</option>
+                          <option value={4} className="bg-popover text-foreground">Thursday</option>
+                          <option value={5} className="bg-popover text-foreground">Friday</option>
+                          <option value={6} className="bg-popover text-foreground">Saturday</option>
+                        </select>
+                        <span className="text-xs text-muted-foreground mx-0.5">at</span>
+                        <Input
+                          value={slackWeeklyHour}
+                          onChange={(e) => setSlackWeeklyHour(e.target.value.replace(/\D/g, '').slice(0, 2))}
+                          placeholder="5"
+                          className={cn('rounded-lg w-10 text-center px-0 h-7 text-xs', !isValidHour12(slackWeeklyHour) && 'border-destructive')}
+                          maxLength={2}
+                        />
+                        <span className="text-muted-foreground font-bold text-xs">:</span>
+                        <Input
+                          value={slackWeeklyMin}
+                          onChange={(e) => setSlackWeeklyMin(e.target.value.replace(/\D/g, '').slice(0, 2))}
+                          placeholder="00"
+                          className={cn('rounded-lg w-10 text-center px-0 h-7 text-xs', !isValidMin(slackWeeklyMin) && 'border-destructive')}
+                          maxLength={2}
+                        />
+                        <select
+                          value={slackWeeklyAmPm}
+                          onChange={(e) => setSlackWeeklyAmPm(e.target.value as 'AM' | 'PM')}
+                          className="rounded-lg border border-input bg-transparent dark:bg-input/30 px-1.5 h-7 text-xs text-foreground cursor-pointer outline-none focus:outline-none focus:ring-2 focus:ring-ring/50"
+                        >
+                          <option value="AM" className="bg-popover text-foreground">AM</option>
+                          <option value="PM" className="bg-popover text-foreground">PM</option>
+                        </select>
+                      </div>
+                      {(!isValidHour12(slackWeeklyHour) || !isValidMin(slackWeeklyMin)) && (
+                        <p className="text-[10px] text-destructive">Hour 1–12 · Minute 00–59</p>
                       )}
                     </div>
+
+                    </div>{/* end grid */}
                   </div>
 
-                  <div className="flex flex-wrap gap-4 pt-1">
-                    <label className="flex items-center gap-2 cursor-pointer select-none">
-                      <button
-                        type="button"
-                        onClick={() => setSlackDailyEnabled(!slackDailyEnabled)}
-                        className={cn(
-                          'relative w-9 h-5 rounded-full transition-colors shrink-0',
-                          slackDailyEnabled ? 'bg-[#FE812C]' : 'bg-muted-foreground/30'
-                        )}
-                      >
-                        <span className={cn(
-                          'absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform',
-                          slackDailyEnabled ? 'translate-x-4' : 'translate-x-0'
-                        )} />
-                      </button>
-                      <span className="text-sm font-medium">Daily digest</span>
-                      <Bell size={13} className="text-muted-foreground" />
-                    </label>
-                    <label className="flex items-center gap-2 cursor-pointer select-none">
-                      <button
-                        type="button"
-                        onClick={() => setSlackWeeklyEnabled(!slackWeeklyEnabled)}
-                        className={cn(
-                          'relative w-9 h-5 rounded-full transition-colors shrink-0',
-                          slackWeeklyEnabled ? 'bg-[#FE812C]' : 'bg-muted-foreground/30'
-                        )}
-                      >
-                        <span className={cn(
-                          'absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform',
-                          slackWeeklyEnabled ? 'translate-x-4' : 'translate-x-0'
-                        )} />
-                      </button>
-                      <span className="text-sm font-medium">Weekly digest</span>
-                      <Bell size={13} className="text-muted-foreground" />
-                    </label>
-                  </div>
-
-                  <div className="flex items-center gap-3 pt-1 flex-wrap">
+                  {/* Action buttons */}
+                  <div className="flex items-center gap-2 pt-1 flex-wrap">
                     <Button
                       onClick={handleSaveSlack}
                       disabled={
@@ -1071,42 +1141,39 @@ export default function ProjectManagerPage() {
                         !isValidHttpsUrl(slackWebhookUrl.trim()) ||
                         (slackManagerUrl.trim() !== '' && !isValidHttpsUrl(slackManagerUrl.trim())) ||
                         (slackMemberUrl.trim() !== '' && !isValidHttpsUrl(slackMemberUrl.trim())) ||
-                        !isValidTime(slackDailyTime) ||
-                        !isValidTime(slackWeeklyTime)
+                        !slackTimezone ||
+                        !isValidHour12(slackDailyHour) || !isValidMin(slackDailyMin) ||
+                        !isValidHour12(slackWeeklyHour) || !isValidMin(slackWeeklyMin)
                       }
-                      className="bg-[#FE812C] hover:bg-[#e5732a] text-white rounded-xl gap-2"
+                      className="bg-[#FE812C] hover:bg-[#e5732a] text-white rounded-xl gap-2 h-8 text-xs px-3"
                     >
-                      {slackSaving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-                      {slackSaving ? 'Saving...' : 'Save Integration'}
+                      {slackSaving ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
+                      {slackSaving ? 'Saving...' : 'Save'}
                     </Button>
-                    {slackConfig && (
-                      <>
-                        <button
-                          onClick={handleTestDaily}
-                          disabled={slackTestingDaily || !slackDailyEnabled}
-                          title={!slackDailyEnabled ? 'Enable daily digest first' : undefined}
-                          className="flex items-center gap-1.5 px-4 py-2 rounded-xl border border-border text-sm font-medium hover:bg-muted transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                        >
-                          {slackTestingDaily ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
-                          {slackTestingDaily ? 'Sending...' : 'Test Daily'}
-                        </button>
-                        <button
-                          onClick={handleTestWeekly}
-                          disabled={slackTestingWeekly || !slackWeeklyEnabled}
-                          title={!slackWeeklyEnabled ? 'Enable weekly digest first' : undefined}
-                          className="flex items-center gap-1.5 px-4 py-2 rounded-xl border border-border text-sm font-medium hover:bg-muted transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                        >
-                          {slackTestingWeekly ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
-                          {slackTestingWeekly ? 'Sending...' : 'Test Weekly'}
-                        </button>
-                      </>
-                    )}
+                    <button
+                      onClick={handleTestDaily}
+                      disabled={slackTestingDaily || !slackConfig || !slackDailyEnabled}
+                      title={!slackConfig ? 'Save config first' : !slackDailyEnabled ? 'Enable daily digest first' : undefined}
+                      className="flex items-center gap-1.5 px-3 h-8 rounded-xl border border-border text-xs font-medium hover:bg-muted transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      {slackTestingDaily ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
+                      {slackTestingDaily ? 'Sending...' : 'Test Daily'}
+                    </button>
+                    <button
+                      onClick={handleTestWeekly}
+                      disabled={slackTestingWeekly || !slackConfig || !slackWeeklyEnabled}
+                      title={!slackConfig ? 'Save config first' : !slackWeeklyEnabled ? 'Enable weekly digest first' : undefined}
+                      className="flex items-center gap-1.5 px-3 h-8 rounded-xl border border-border text-xs font-medium hover:bg-muted transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      {slackTestingWeekly ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
+                      {slackTestingWeekly ? 'Sending...' : 'Test Weekly'}
+                    </button>
                     {slackConfig && (
                       <button
                         onClick={handleRemoveSlack}
-                        className="flex items-center gap-1.5 px-4 py-2 rounded-xl border border-destructive/30 text-destructive text-sm font-medium hover:bg-destructive hover:text-white transition-colors ml-auto"
+                        className="flex items-center gap-1.5 px-3 h-8 rounded-xl border border-destructive/30 text-destructive text-xs font-medium hover:bg-destructive hover:text-white transition-colors ml-auto"
                       >
-                        <X size={14} /> Remove
+                        <X size={12} /> Remove
                       </button>
                     )}
                   </div>

@@ -30,19 +30,7 @@ interface TaskCardProps {
   boardColumns?: BoardColumn[];
 }
 
-const statusColors: Record<string, string> = {
-  todo: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
-  doing: 'bg-[#FE812C]/10 text-[#FE812C]',
-  done: 'bg-primary/10 text-primary',
-};
-
-const statusLabels: Record<string, string> = {
-  todo: 'To Do',
-  doing: 'In Progress',
-  done: 'Done',
-};
-
-export default function TaskCard({ task, onEdit, onDelete, onComment, onCancelRecurring, commentCount: commentCountProp, hideProjectLabel, canEditTasks = true, canDeleteTasks, projectMembers, boardColumns }: TaskCardProps) {
+export default function TaskCard({ task, onEdit, onDelete, onComment, onCancelRecurring, commentCount: commentCountProp, hideProjectLabel, canEditTasks = true, canDeleteTasks, projectMembers }: TaskCardProps) {
   const commentCount = commentCountProp ?? task._count?.comments ?? 0;
   const { activeSession, elapsedSeconds, stopTracking } = useTimeTrackingStore();
   const isTracking = activeSession?.taskId === task._id;

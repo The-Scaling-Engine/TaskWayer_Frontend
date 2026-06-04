@@ -45,7 +45,7 @@ export default function PlanningTreeView({ projectId, canManage, projectMembers 
 
   const milestoneStore = useMilestoneStore();
   const { updateTask } = useTaskStore();
-  const { socket, connected, joinProject } = useSocketStore();
+  const { socket, connected } = useSocketStore();
 
   const [activeDrag, setActiveDrag] = useState<ActiveDragItem | null>(null);
   const [editingTask, setEditingTask] = useState<Task | null>(null);

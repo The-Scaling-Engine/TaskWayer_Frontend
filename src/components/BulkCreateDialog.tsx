@@ -81,7 +81,7 @@ export default function BulkCreateDialog({ open, onClose, projectId, onCreated }
           priority: match ? (match[1].toLowerCase() as Priority) : undefined,
         };
       })
-      .filter((x): x is { title: string; priority?: Priority } => x !== null);
+      .filter((x): x is NonNullable<typeof x> => x !== null);
   }, [text]);
 
   const handleCreate = async () => {

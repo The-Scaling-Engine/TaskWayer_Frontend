@@ -11,6 +11,7 @@ export interface CreateTaskData {
   scheduledAt?: string | null;
   projectId?: string;
   columnId?: string | null;
+  milestoneId?: string | null;
   isRecurring?: boolean;
   recurrenceType?: 'DAILY' | 'WEEKLY' | 'BIWEEKLY' | 'MONTHLY' | 'QUARTERLY' | 'YEARLY' | null;
   recurrenceInterval?: number | null;
