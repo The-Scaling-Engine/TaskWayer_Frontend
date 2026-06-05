@@ -19,7 +19,6 @@ import { useAuthStore } from '@/store/authStore';
 
 const CATEGORY_COLORS = {
   personal: '#3b82f6',
-  dept: '#FE812C',
   assigned: '#a855f7',
 } as const;
 
@@ -29,8 +28,7 @@ type FilterValue = 'all' | TaskCategory;
 const FILTER_LABELS: Record<FilterValue, string> = {
   all: 'All',
   personal: 'Personal',
-  dept: 'Department',
-  assigned: 'Assigned',
+  assigned: 'Assigned to me',
 };
 
 function getTaskCategory(task: Task, userId: string): TaskCategory {
@@ -212,7 +210,7 @@ export default function CalendarPage() {
         {/* Filter toggles + Legend */}
         <div className="flex items-center justify-between gap-3 mt-3 flex-wrap">
           <div className="flex items-center gap-1.5">
-            {(['all', 'personal', 'dept', 'assigned'] as const).map((f) => {
+            {(['all', 'personal', 'assigned'] as const).map((f) => {
               const isActive = categoryFilter === f;
               const color = f !== 'all' ? CATEGORY_COLORS[f] : undefined;
               return (
