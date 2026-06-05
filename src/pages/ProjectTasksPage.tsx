@@ -52,22 +52,24 @@ export default function ProjectTasksPage() {
     }
   }, [projectId, resetParams]);
 
-  // Open task from notification link
+  // Open task from notification link or Slack deep-link (?task=id)
   React.useEffect(() => {
     const { openTaskId, highlightCommentId, openNotesTab } = (location.state ?? {}) as {
       openTaskId?: string;
       highlightCommentId?: string;
       openNotesTab?: boolean;
     };
-    if (!openTaskId) return;
+    const taskFromUrl = new URLSearchParams(location.search).get('task') ?? undefined;
+    const resolvedId  = openTaskId ?? taskFromUrl;
+    if (!resolvedId) return;
     const timer = setTimeout(() => {
       if (boardRef.current) {
-        boardRef.current.openTaskById(openTaskId, highlightCommentId, openNotesTab);
+        boardRef.current.openTaskById(resolvedId, highlightCommentId, openNotesTab);
         navigate(location.pathname, { replace: true, state: {} });
       }
     }, 400);
     return () => clearTimeout(timer);
-  }, [location.state, navigate]);
+  }, [location.state, location.search, navigate]);
 
   if (!hasFetched) {
     return (
