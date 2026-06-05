@@ -56,29 +56,6 @@ function isValidHttpsUrl(url: string): boolean {
   catch { return false; }
 }
 
-function to12h(time24: string): { hour: string; min: string; ampm: 'AM' | 'PM' } {
-  const [hStr = '18', mStr = '00'] = time24.split(':');
-  let h = Number(hStr);
-  const ampm: 'AM' | 'PM' = h >= 12 ? 'PM' : 'AM';
-  if (h > 12) h -= 12;
-  if (h === 0) h = 12;
-  return { hour: String(h), min: mStr, ampm };
-}
-function to24h(hour: string, min: string, ampm: 'AM' | 'PM'): string {
-  let h = Number(hour);
-  if (ampm === 'PM' && h !== 12) h += 12;
-  if (ampm === 'AM' && h === 12) h = 0;
-  return `${String(h).padStart(2, '0')}:${min.padStart(2, '0')}`;
-}
-function isValidHour12(h: string): boolean {
-  const n = Number(h);
-  return h !== '' && Number.isInteger(n) && n >= 1 && n <= 12;
-}
-function isValidMin(m: string): boolean {
-  if (!/^\d{1,2}$/.test(m)) return false;
-  const n = Number(m);
-  return n >= 0 && n <= 59;
-}
 
 const ROLE_COLORS: Record<string, string> = {
   OWNER: 'bg-[#FE812C]/10 text-[#FE812C] border-[#FE812C]/20',
@@ -136,13 +113,9 @@ export default function ProjectManagerPage() {
   const [slackDailyEnabled, setSlackDailyEnabled] = useState(true);
   const [slackWeeklyEnabled, setSlackWeeklyEnabled] = useState(true);
   const [slackTimezone, setSlackTimezone] = useState('');
-  const [slackDailyHour, setSlackDailyHour] = useState('6');
-  const [slackDailyMin, setSlackDailyMin] = useState('00');
-  const [slackDailyAmPm, setSlackDailyAmPm] = useState<'AM' | 'PM'>('PM');
+  const [slackDailyTime, setSlackDailyTime] = useState('18:00');
   const [slackWeeklyDay, setSlackWeeklyDay] = useState(5);
-  const [slackWeeklyHour, setSlackWeeklyHour] = useState('5');
-  const [slackWeeklyMin, setSlackWeeklyMin] = useState('00');
-  const [slackWeeklyAmPm, setSlackWeeklyAmPm] = useState<'AM' | 'PM'>('PM');
+  const [slackWeeklyTime, setSlackWeeklyTime] = useState('17:00');
   // Phase 8 — Emoji mappings: rows in local edit state; stored as canonical names
   const [emojiRows, setEmojiRows] = useState<Array<{ emoji: string; profileId: string }>>([]);
   const [emojiSaving, setEmojiSaving] = useState(false);
@@ -203,11 +176,9 @@ export default function ProjectManagerPage() {
           setSlackDailyEnabled(cfg.dailyEnabled);
           setSlackWeeklyEnabled(cfg.weeklyEnabled);
           setSlackTimezone(cfg.timezone ?? '');
-          const d12 = to12h(cfg.dailyTime ?? '18:00');
-          setSlackDailyHour(d12.hour); setSlackDailyMin(d12.min); setSlackDailyAmPm(d12.ampm);
+          setSlackDailyTime(cfg.dailyTime ?? '18:00');
           setSlackWeeklyDay(cfg.weeklyDay ?? 5);
-          const w12 = to12h(cfg.weeklyTime ?? '17:00');
-          setSlackWeeklyHour(w12.hour); setSlackWeeklyMin(w12.min); setSlackWeeklyAmPm(w12.ampm);
+          setSlackWeeklyTime(cfg.weeklyTime ?? '17:00');
           // Load Phase 8 data in parallel (ignore errors — non-critical)
           slackConfigService.getEmojiMappings(projectId)
             .then((m) => {
@@ -247,9 +218,9 @@ export default function ProjectManagerPage() {
         managerWebhookUrl: slackManagerUrl.trim() || null,
         memberWebhookUrl: slackMemberUrl.trim() || null,
         timezone: slackTimezone,
-        dailyTime: to24h(slackDailyHour, slackDailyMin, slackDailyAmPm),
+        dailyTime: slackDailyTime,
         weeklyDay: slackWeeklyDay,
-        weeklyTime: to24h(slackWeeklyHour, slackWeeklyMin, slackWeeklyAmPm),
+        weeklyTime: slackWeeklyTime,
       });
       setSlackConfig(saved);
       toast.success('Slack integration saved');
@@ -1037,21 +1008,21 @@ export default function ProjectManagerPage() {
                     );
                   })()}
 
-                  {/* Timezone + digest schedule */}
-                  <div className="space-y-3">
+                  {/* Timezone + Daily + Weekly — 3 columns on same row */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
 
-                    {/* Timezone — compact, half-width */}
-                    <div className="flex flex-wrap items-center gap-3">
-                      <Label htmlFor="slack-timezone" className="shrink-0 w-24 text-xs text-muted-foreground">
-                        Timezone <span className="text-destructive">*</span>
-                      </Label>
-                      <div className="flex flex-col gap-1 flex-1 min-w-[180px] max-w-xs">
+                    {/* Timezone card */}
+                    <div className="rounded-xl border border-border/60 px-3 py-2.5 space-y-2">
+                      <span className="text-sm font-medium">
+                        Timezone <span className="text-destructive text-xs">*</span>
+                      </span>
+                      <div className="space-y-1">
                         <select
                           id="slack-timezone"
                           value={slackTimezone}
                           onChange={(e) => setSlackTimezone(e.target.value)}
                           className={cn(
-                            'w-full rounded-lg border px-2.5 py-1.5 text-xs transition-colors cursor-pointer outline-none focus:outline-none focus:ring-2 focus:ring-ring/50 focus:border-ring bg-transparent dark:bg-input/30 text-foreground [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border',
+                            'w-full rounded-lg border px-2 py-1.5 text-xs transition-colors cursor-pointer outline-none focus:outline-none focus:ring-2 focus:ring-ring/50 focus:border-ring bg-transparent dark:bg-input/30 text-foreground [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border',
                             !slackTimezone ? 'border-destructive' : 'border-input'
                           )}
                         >
@@ -1065,11 +1036,6 @@ export default function ProjectManagerPage() {
                         )}
                       </div>
                     </div>
-
-                    <div className="border-t border-border/50" />
-
-                    {/* Daily + Weekly digest — same row, equal width */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
 
                     {/* Daily digest card */}
                     <div className={cn(
@@ -1087,35 +1053,15 @@ export default function ProjectManagerPage() {
                         </button>
                         <span className="text-sm font-medium">Daily digest</span>
                       </div>
-                      <div className="flex items-center gap-1 pl-1">
-                        <span className="text-xs text-muted-foreground mr-1">Send at</span>
-                        <Input
-                          value={slackDailyHour}
-                          onChange={(e) => setSlackDailyHour(e.target.value.replace(/\D/g, '').slice(0, 2))}
-                          placeholder="6"
-                          className={cn('rounded-lg w-10 text-center px-0 h-7 text-xs', !isValidHour12(slackDailyHour) && 'border-destructive')}
-                          maxLength={2}
+                      <div className="flex items-center gap-2 pl-1">
+                        <span className="text-xs text-muted-foreground">Send at</span>
+                        <input
+                          type="time"
+                          value={slackDailyTime}
+                          onChange={(e) => setSlackDailyTime(e.target.value)}
+                          className="rounded-lg border border-input bg-transparent dark:bg-input/30 h-7 text-xs text-foreground px-2 cursor-pointer outline-none focus:ring-2 focus:ring-ring/50 focus:border-ring [color-scheme:light] dark:[color-scheme:dark]"
                         />
-                        <span className="text-muted-foreground font-bold text-xs">:</span>
-                        <Input
-                          value={slackDailyMin}
-                          onChange={(e) => setSlackDailyMin(e.target.value.replace(/\D/g, '').slice(0, 2))}
-                          placeholder="00"
-                          className={cn('rounded-lg w-10 text-center px-0 h-7 text-xs', !isValidMin(slackDailyMin) && 'border-destructive')}
-                          maxLength={2}
-                        />
-                        <select
-                          value={slackDailyAmPm}
-                          onChange={(e) => setSlackDailyAmPm(e.target.value as 'AM' | 'PM')}
-                          className="rounded-lg border border-input bg-transparent dark:bg-input/30 px-1.5 h-7 text-xs text-foreground cursor-pointer outline-none focus:outline-none focus:ring-2 focus:ring-ring/50"
-                        >
-                          <option value="AM" className="bg-popover text-foreground">AM</option>
-                          <option value="PM" className="bg-popover text-foreground">PM</option>
-                        </select>
                       </div>
-                      {(!isValidHour12(slackDailyHour) || !isValidMin(slackDailyMin)) && (
-                        <p className="text-[10px] text-destructive">Hour 1–12 · Minute 00–59</p>
-                      )}
                     </div>
 
                     {/* Weekly digest card */}
@@ -1149,36 +1095,15 @@ export default function ProjectManagerPage() {
                           <option value={6} className="bg-popover text-foreground">Saturday</option>
                         </select>
                         <span className="text-xs text-muted-foreground mx-0.5">at</span>
-                        <Input
-                          value={slackWeeklyHour}
-                          onChange={(e) => setSlackWeeklyHour(e.target.value.replace(/\D/g, '').slice(0, 2))}
-                          placeholder="5"
-                          className={cn('rounded-lg w-10 text-center px-0 h-7 text-xs', !isValidHour12(slackWeeklyHour) && 'border-destructive')}
-                          maxLength={2}
+                        <input
+                          type="time"
+                          value={slackWeeklyTime}
+                          onChange={(e) => setSlackWeeklyTime(e.target.value)}
+                          className="rounded-lg border border-input bg-transparent dark:bg-input/30 h-7 text-xs text-foreground px-2 cursor-pointer outline-none focus:ring-2 focus:ring-ring/50 focus:border-ring [color-scheme:light] dark:[color-scheme:dark]"
                         />
-                        <span className="text-muted-foreground font-bold text-xs">:</span>
-                        <Input
-                          value={slackWeeklyMin}
-                          onChange={(e) => setSlackWeeklyMin(e.target.value.replace(/\D/g, '').slice(0, 2))}
-                          placeholder="00"
-                          className={cn('rounded-lg w-10 text-center px-0 h-7 text-xs', !isValidMin(slackWeeklyMin) && 'border-destructive')}
-                          maxLength={2}
-                        />
-                        <select
-                          value={slackWeeklyAmPm}
-                          onChange={(e) => setSlackWeeklyAmPm(e.target.value as 'AM' | 'PM')}
-                          className="rounded-lg border border-input bg-transparent dark:bg-input/30 px-1.5 h-7 text-xs text-foreground cursor-pointer outline-none focus:outline-none focus:ring-2 focus:ring-ring/50"
-                        >
-                          <option value="AM" className="bg-popover text-foreground">AM</option>
-                          <option value="PM" className="bg-popover text-foreground">PM</option>
-                        </select>
                       </div>
-                      {(!isValidHour12(slackWeeklyHour) || !isValidMin(slackWeeklyMin)) && (
-                        <p className="text-[10px] text-destructive">Hour 1–12 · Minute 00–59</p>
-                      )}
                     </div>
 
-                    </div>{/* end grid */}
                   </div>
 
                   {/* Action buttons */}
@@ -1192,8 +1117,7 @@ export default function ProjectManagerPage() {
                         (slackManagerUrl.trim() !== '' && !isValidHttpsUrl(slackManagerUrl.trim())) ||
                         (slackMemberUrl.trim() !== '' && !isValidHttpsUrl(slackMemberUrl.trim())) ||
                         !slackTimezone ||
-                        !isValidHour12(slackDailyHour) || !isValidMin(slackDailyMin) ||
-                        !isValidHour12(slackWeeklyHour) || !isValidMin(slackWeeklyMin)
+                        !slackDailyTime || !slackWeeklyTime
                       }
                       className="bg-[#FE812C] hover:bg-[#e5732a] text-white rounded-xl gap-2 h-8 text-xs px-3"
                     >
@@ -1246,8 +1170,8 @@ export default function ProjectManagerPage() {
                               <span className="text-[11px] text-muted-foreground whitespace-nowrap">n8n secret:</span>
                               {webhookSecretInfo?.hasSecret ? (
                                 <>
-                                  <code className="text-[11px] font-mono text-muted-foreground bg-muted/50 rounded px-1.5 py-0.5 border border-border/60 whitespace-nowrap">
-                                    ••••{webhookSecretInfo.masked?.slice(-8)}
+                                  <code className="text-[11px] font-mono text-muted-foreground bg-muted/50 rounded px-1.5 py-0.5 border border-border/60 whitespace-nowrap tracking-wide">
+                                    {webhookSecretInfo.masked}
                                   </code>
                                   <button
                                     type="button"
@@ -1333,7 +1257,7 @@ export default function ProjectManagerPage() {
                             );
                           })}
 
-                          {emojiRows.length < 20 && (
+                          {emojiRows.length < 4 && (
                             <button
                               type="button"
                               onClick={() => setEmojiRows(rows => [...rows, { emoji: '', profileId: '' }])}
@@ -1357,7 +1281,7 @@ export default function ProjectManagerPage() {
                             {emojiSaving ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
                             {emojiSaving ? 'Saving...' : 'Save mappings'}
                           </button>
-                          <p className="text-[10px] text-muted-foreground">Lowercase letters, digits, _ - + · Max 20</p>
+                          <p className="text-[10px] text-muted-foreground">Lowercase letters, digits, _ - + · Max 4</p>
                         </div>
                       </div>
                     </>
