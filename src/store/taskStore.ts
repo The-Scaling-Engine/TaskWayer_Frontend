@@ -71,8 +71,15 @@ export const useTaskStore = create<TaskState>((set, get) => ({
   },
 
   updateTask: async (id: string, data: UpdateTaskData) => {
-    await taskService.updateTask(id, data);
-    await get().silentFetch();
+    const prev = get().tasks;
+    set({ tasks: prev.map(t => t._id === id ? { ...t, ...data } as Task : t) });
+    try {
+      await taskService.updateTask(id, data);
+      void get().silentFetch();
+    } catch (err) {
+      set({ tasks: prev });
+      throw err;
+    }
   },
 
   moveTask: async (id: string, status: 'todo' | 'doing' | 'done') => {

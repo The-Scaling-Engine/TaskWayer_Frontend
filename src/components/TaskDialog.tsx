@@ -364,6 +364,7 @@ export default function TaskDialog({
   const [milestoneId, setMilestoneId] = useState<string | null>(task?.milestoneId ?? null);
   const [projectMilestones, setProjectMilestones] = useState<Milestone[]>([]);
   const [error, setError] = useState('');
+  const [infiniteRecurringWarn, setInfiniteRecurringWarn] = useState(false);
 
   // ── Subtask state ──────────────────────────────────────────
   const [subtasks, setSubtasks] = useState<Task[]>([]);
@@ -536,37 +537,41 @@ export default function TaskDialog({
     setSubtasks([]); setNewSubtaskTitle('');
     setConfirmDeleteSubtaskId(null); setDeletingSubtaskIds(new Set());
     setError('');
+    setInfiniteRecurringWarn(false);
   };
 
   // ── Details form submit ───────────────────────────────────
+  const buildSubmitPayload = () => ({
+    title: title.trim(), description,
+    status: (status ?? 'todo') as 'todo' | 'doing' | 'done',
+    deadline: deadline ? new Date(deadline).toISOString() : undefined,
+    scheduledAt: scheduledAt ? new Date(scheduledAt).toISOString() : null,
+    priority,
+    tags: tagsInput.split(',').map(t => t.trim()).filter(Boolean),
+    projectId: projectId === '__none__' ? undefined : projectId || undefined,
+    ...(lockedProjectId && { columnId: columnId ?? null }),
+    isRecurring,
+    recurrenceType: isRecurring ? (recurrenceUnit as 'DAILY' | 'WEEKLY' | 'MONTHLY') : null,
+    recurrenceInterval: isRecurring && recurrenceInterval > 1 ? recurrenceInterval : null,
+    recurrenceEndDate: isRecurring && recurrenceEndDate ? new Date(`${recurrenceEndDate}T23:59:59`).toISOString() : null,
+    ...(lockedProjectId && { assignedTo }),
+    ...(lockedProjectId && canAssign && { milestoneId }),
+  });
+
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     if (isReadOnly) return;
     if (!title.trim()) { setError('Title is required'); return; }
     if (isRecurring) {
       if (!recurrenceUnit) { setError('Please select how often this task repeats'); return; }
+      if (!recurrenceEndDate) { setInfiniteRecurringWarn(true); return; }
     }
     if (deadline && !task?._id) {
       const s = new Date(deadline);
       if (isNaN(s.getTime())) { setError('Invalid deadline'); return; }
       if (s < new Date()) { setError('Deadline cannot be in the past'); return; }
     }
-    onSubmit({
-      title: title.trim(), description,
-      status: (status ?? 'todo') as 'todo' | 'doing' | 'done',
-      deadline: deadline ? new Date(deadline).toISOString() : undefined,
-      scheduledAt: scheduledAt ? new Date(scheduledAt).toISOString() : null,
-      priority,
-      tags: tagsInput.split(',').map(t => t.trim()).filter(Boolean),
-      projectId: projectId === '__none__' ? undefined : projectId || undefined,
-      ...(lockedProjectId && { columnId: columnId ?? null }),
-      isRecurring,
-      recurrenceType: isRecurring ? (recurrenceUnit as 'DAILY' | 'WEEKLY' | 'MONTHLY') : null,
-      recurrenceInterval: isRecurring && recurrenceInterval > 1 ? recurrenceInterval : null,
-      recurrenceEndDate: isRecurring && recurrenceEndDate ? new Date(`${recurrenceEndDate}T23:59:59`).toISOString() : null,
-      ...(lockedProjectId && { assignedTo }),
-      ...(lockedProjectId && canAssign && { milestoneId }),
-    });
+    onSubmit(buildSubmitPayload());
   };
 
   // ── Note handlers ─────────────────────────────────────────
@@ -1090,6 +1095,27 @@ export default function TaskDialog({
                 <div className="space-y-1">
                   <Label className="text-xs text-muted-foreground">Created at</Label>
                   <p className="text-xs text-muted-foreground px-3 py-1.5 bg-muted/40 rounded-xl">{formatCreatedAt(task.createdAt)}</p>
+                </div>
+              )}
+
+              {infiniteRecurringWarn && (
+                <div className="rounded-xl border border-orange-300/60 bg-orange-50/80 dark:bg-orange-950/20 dark:border-orange-800/40 px-4 py-3 text-sm flex flex-col gap-2.5">
+                  <p className="font-medium text-orange-800 dark:text-orange-300 text-xs leading-snug">
+                    ⚠️ No end date set — this task will repeat indefinitely. Are you sure?
+                  </p>
+                  <div className="flex gap-2">
+                    <Button type="button" size="sm" variant="outline" onClick={() => setInfiniteRecurringWarn(false)} className="rounded-xl h-7 text-xs px-3">
+                      Set an end date
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => { setInfiniteRecurringWarn(false); onSubmit(buildSubmitPayload()); }}
+                      className="rounded-xl h-7 text-xs px-3 bg-[#FE812C] hover:bg-[#e5732a] text-white"
+                    >
+                      Yes, continue
+                    </Button>
+                  </div>
                 </div>
               )}
 
