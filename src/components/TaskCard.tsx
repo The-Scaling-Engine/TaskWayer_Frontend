@@ -181,7 +181,7 @@ export default function TaskCard({ task, onEdit, onDelete, onComment, onCancelRe
             </Badge>
           )}
           {task.tags?.map((tag, idx) => (
-            <Badge key={idx} variant="secondary" className="text-[10px] font-medium bg-secondary/50 text-secondary-foreground hover:bg-secondary/70 h-5 px-1.5">
+            <Badge key={idx} variant="secondary" className="text-[10px] font-medium bg-secondary/50 text-secondary-foreground hover:bg-secondary/70 h-5 px-1.5 max-w-[80px] truncate">
               {tag}
             </Badge>
           ))}

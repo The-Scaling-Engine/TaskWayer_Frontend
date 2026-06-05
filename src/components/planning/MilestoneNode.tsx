@@ -121,7 +121,7 @@ export default function MilestoneNode({
         {canManage && (
           <button
             {...attributes} {...listeners}
-            className="shrink-0 cursor-grab active:cursor-grabbing text-muted-foreground/30 hover:text-muted-foreground opacity-0 group-hover/milestone:opacity-100 transition-opacity touch-none"
+            className="shrink-0 cursor-grab active:cursor-grabbing text-muted-foreground/30 hover:text-muted-foreground opacity-40 group-hover/milestone:opacity-100 transition-opacity touch-none"
           >
             <GripVertical size={14} />
           </button>
@@ -186,8 +186,9 @@ export default function MilestoneNode({
         {canManage && (
           <button
             onClick={() => onAddTask(milestone.id)}
-            className="shrink-0 opacity-0 group-hover/milestone:opacity-100 transition-opacity p-1 rounded-lg hover:bg-primary/10 text-muted-foreground hover:text-primary"
+            className="shrink-0 opacity-40 group-hover/milestone:opacity-100 transition-opacity p-1 rounded-lg hover:bg-primary/10 text-muted-foreground hover:text-primary"
             title="Add task to milestone"
+            aria-label="Add task to milestone"
           >
             <Plus size={12} />
           </button>

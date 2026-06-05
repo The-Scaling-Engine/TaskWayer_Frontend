@@ -124,6 +124,7 @@ export default function TimelineView({ projectId, onNavigateToPlanning }: Props)
   const [zoom, setZoom] = useState<Zoom>('month');
   const [tooltip, setTooltip] = useState<TooltipState | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [hoveredRow, setHoveredRow] = useState<number | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const load = async (silent = false) => {
@@ -249,7 +250,11 @@ export default function TimelineView({ projectId, onNavigateToPlanning }: Props)
             {data.milestones.map((m, i) => (
               <div
                 key={m.id}
-                className={`flex items-center gap-1.5 px-3 h-12 border-b border-border/50 last:border-b-0 ${i % 2 === 1 ? 'bg-muted/20' : ''}`}
+                onMouseEnter={() => setHoveredRow(i)}
+                onMouseLeave={() => setHoveredRow(null)}
+                className={`flex items-center gap-1.5 px-3 h-12 border-b border-border/50 last:border-b-0 transition-colors ${
+                  hoveredRow === i ? 'bg-primary/5' : i % 2 === 1 ? 'bg-muted/20' : ''
+                }`}
               >
                 {statusIcon(m)}
                 <button
@@ -292,7 +297,11 @@ export default function TimelineView({ projectId, onNavigateToPlanning }: Props)
                 return (
                   <div
                     key={m.id}
-                    className={`relative h-12 border-b border-border/50 last:border-b-0 ${i % 2 === 1 ? 'bg-muted/20' : ''}`}
+                    onMouseEnter={() => setHoveredRow(i)}
+                    onMouseLeave={() => setHoveredRow(null)}
+                    className={`relative h-12 border-b border-border/50 last:border-b-0 transition-colors ${
+                      hoveredRow === i ? 'bg-primary/5' : i % 2 === 1 ? 'bg-muted/20' : ''
+                    }`}
                   >
                     {/* Vertical grid lines (month/week separators) */}
                     {(zoom === 'month' ? monthSlots : weekSlots).map((slot, si) => (

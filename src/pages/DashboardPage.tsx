@@ -586,23 +586,30 @@ export default function DashboardPage() {
           </div>
 
           {/* Input */}
-          <div className="flex items-center gap-2 mb-4">
-            <input
-              ref={inputRef}
-              value={newText}
-              onChange={(e) => setNewText(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleAddTodo()}
-              placeholder="Add a Wayer Todo..."
-              maxLength={500}
-              className="flex-1 text-sm bg-muted/50 border border-border rounded-xl px-4 py-2.5 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 transition"
-            />
-            <button
-              onClick={handleAddTodo}
-              disabled={!newText.trim() || submitting}
-              className="shrink-0 flex items-center justify-center w-9 h-9 rounded-xl bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-40 transition"
-            >
-              {submitting ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />}
-            </button>
+          <div className="flex flex-col gap-1 mb-4">
+            <div className="flex items-center gap-2">
+              <input
+                ref={inputRef}
+                value={newText}
+                onChange={(e) => setNewText(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleAddTodo()}
+                placeholder="Add a Wayer Todo..."
+                maxLength={500}
+                className="flex-1 text-sm bg-muted/50 border border-border rounded-xl px-4 py-2.5 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 transition"
+              />
+              <button
+                onClick={handleAddTodo}
+                disabled={!newText.trim() || submitting}
+                className="shrink-0 flex items-center justify-center w-9 h-9 rounded-xl bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-40 transition"
+              >
+                {submitting ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />}
+              </button>
+            </div>
+            {newText.length >= 400 && (
+              <p className={`text-[10px] text-right pr-1 transition-colors ${newText.length >= 480 ? 'text-destructive' : 'text-amber-500'}`}>
+                {newText.length}/500
+              </p>
+            )}
           </div>
 
           {/* Todo List */}

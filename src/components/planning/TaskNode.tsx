@@ -70,7 +70,7 @@ export default function TaskNode({
         {canEdit && (
           <button
             {...attributes} {...listeners}
-            className="shrink-0 cursor-grab active:cursor-grabbing text-muted-foreground/30 hover:text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity touch-none"
+            className="shrink-0 cursor-grab active:cursor-grabbing text-muted-foreground/30 hover:text-muted-foreground opacity-40 group-hover:opacity-100 transition-opacity touch-none"
           >
             <GripVertical size={13} />
           </button>
@@ -137,8 +137,9 @@ export default function TaskNode({
           {canEdit && onAddSubtask && (
             <button
               onClick={() => onAddSubtask(task)}
-              className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded hover:bg-primary/10 text-muted-foreground hover:text-primary"
+              className="opacity-40 group-hover:opacity-100 transition-opacity p-0.5 rounded hover:bg-primary/10 text-muted-foreground hover:text-primary"
               title="Add subtask"
+              aria-label="Add subtask"
             >
               <Plus size={11} />
             </button>
