@@ -334,19 +334,48 @@ export default function TimelineView({ projectId, onNavigateToPlanning }: Props)
                           // Point marker (no startDate)
                           <div className={`w-3 h-3 rounded-full border-2 border-background ${barColor(m)} mx-auto`} />
                         ) : (
-                          <div className={`h-5 rounded-full ${barColor(m)} opacity-90 group-hover/bar:opacity-100 transition-opacity relative overflow-hidden`}>
-                            {/* Progress fill */}
-                            {m.status !== 'COMPLETED' && m.progress > 0 && (
-                              <div
-                                className="absolute left-0 top-0 h-full bg-black/20 rounded-l-full"
-                                style={{ width: `${m.progress}%` }}
-                              />
-                            )}
-                            {/* Progress % label (shown if bar wide enough) */}
-                            {geom.widthPct > 8 && (
-                              <span className="absolute inset-0 flex items-center justify-center text-[9px] font-bold text-white/90 select-none">
-                                {m.progress}%
-                              </span>
+                          <div className="relative h-5">
+                            <div className={`h-5 rounded-full ${barColor(m)} opacity-90 group-hover/bar:opacity-100 transition-opacity relative overflow-hidden`}>
+                              {/* Progress fill */}
+                              {m.status !== 'COMPLETED' && m.progress > 0 && (
+                                <div
+                                  className="absolute left-0 top-0 h-full bg-black/20 rounded-l-full"
+                                  style={{ width: `${m.progress}%` }}
+                                />
+                              )}
+                              {/* Progress % label (shown if bar wide enough) */}
+                              {geom.widthPct > 8 && (
+                                <span className="absolute inset-0 flex items-center justify-center text-[9px] font-bold text-white/90 select-none">
+                                  {m.progress}%
+                                </span>
+                              )}
+                            </div>
+                            {/* Assignee avatars */}
+                            {m.assignees.length > 0 && (
+                              <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center -space-x-1 pointer-events-none z-10">
+                                {m.assignees.slice(0, 3).map((a, ai) => (
+                                  <div
+                                    key={ai}
+                                    title={a.name}
+                                    className="w-3.5 h-3.5 rounded-full border border-white/50 overflow-hidden shrink-0 bg-white/20 flex items-center justify-center"
+                                  >
+                                    {a.avatar ? (
+                                      <img src={a.avatar} alt={a.name} className="w-full h-full object-cover" />
+                                    ) : (
+                                      <span className="text-[6px] font-bold text-white leading-none">
+                                        {a.name.charAt(0).toUpperCase()}
+                                      </span>
+                                    )}
+                                  </div>
+                                ))}
+                                {m.assignees.length > 3 && (
+                                  <div className="w-3.5 h-3.5 rounded-full border border-white/50 bg-white/20 flex items-center justify-center shrink-0">
+                                    <span className="text-[6px] font-bold text-white leading-none">
+                                      +{m.assignees.length - 3}
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
                             )}
                           </div>
                         )}

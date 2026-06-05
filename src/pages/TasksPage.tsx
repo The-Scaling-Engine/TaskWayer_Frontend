@@ -100,7 +100,7 @@ export default function TasksPage() {
       </div>
 
       {/* Toolbar */}
-      <div className="flex flex-col sm:flex-row gap-4 mb-4">
+      <div className="flex flex-col sm:flex-row sm:flex-wrap gap-4 mb-4">
         {/* Search */}
         <div className="flex-1 relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
@@ -120,7 +120,7 @@ export default function TasksPage() {
         />
 
         {/* Filters & Sort */}
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-3">
           <select
             value={params.status || ''}
             onChange={handleStatusChange}

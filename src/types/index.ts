@@ -681,6 +681,7 @@ export interface TimelineMilestone {
   taskCount: number;
   earliestTaskDeadline: string | null;
   latestTaskDeadline: string | null;
+  assignees: { name: string; avatar: string | null }[];
 }
 
 export interface TimelineData {
