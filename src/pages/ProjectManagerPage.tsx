@@ -1233,21 +1233,53 @@ export default function ProjectManagerPage() {
                     )}
                   </div>
 
-                  {/* ── Phase 8: Webhook Secret + Emoji Mapping ── */}
+                  {/* ── n8n Automation: Webhook Secret + Emoji Mapping ── */}
                   {slackConfig && (
                     <>
                       <div className="border-t border-border/50" />
 
-                      {/* Webhook Secret */}
+                      {/* Emoji Mapping — header row contains compact secret control */}
                       <div className="space-y-2">
-                        <div className="flex items-center justify-between">
+                        <div className="flex items-start justify-between gap-3">
                           <div>
-                            <p className="text-sm font-medium">Webhook Secret</p>
-                            <p className="text-xs text-muted-foreground">Authenticates inbound requests from n8n</p>
+                            <p className="text-sm font-medium">Slack Emoji → Member Mapping</p>
+                            <p className="text-xs text-muted-foreground">When n8n detects an emoji in Slack, it creates a task assigned to the mapped member.</p>
                           </div>
+                          {/* Webhook Secret — compact inline */}
+                          {!revealedSecret && (
+                            <div className="shrink-0 flex items-center gap-1.5">
+                              <span className="text-[11px] text-muted-foreground whitespace-nowrap">n8n secret:</span>
+                              {webhookSecretInfo?.hasSecret ? (
+                                <>
+                                  <code className="text-[11px] font-mono text-muted-foreground bg-muted/50 rounded px-1.5 py-0.5 border border-border/60 whitespace-nowrap">
+                                    ••••{webhookSecretInfo.masked?.slice(-8)}
+                                  </code>
+                                  <button
+                                    type="button"
+                                    onClick={() => setSecretConfirm(true)}
+                                    disabled={secretRegenerating}
+                                    className="text-[11px] text-muted-foreground hover:text-foreground border border-border/60 rounded-lg px-2 h-6 hover:bg-muted transition-colors disabled:opacity-40 whitespace-nowrap"
+                                  >
+                                    {secretRegenerating ? <Loader2 size={10} className="animate-spin inline" /> : 'Regenerate'}
+                                  </button>
+                                </>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => setSecretConfirm(true)}
+                                  disabled={secretRegenerating}
+                                  className="flex items-center gap-1 text-[11px] text-[#FE812C] border border-[#FE812C]/40 rounded-lg px-2 h-6 hover:bg-[#FE812C]/10 transition-colors disabled:opacity-40 whitespace-nowrap"
+                                >
+                                  {secretRegenerating ? <Loader2 size={10} className="animate-spin" /> : <Plus size={10} />}
+                                  Generate
+                                </button>
+                              )}
+                            </div>
+                          )}
                         </div>
 
-                        {revealedSecret ? (
+                        {/* Revealed secret banner */}
+                        {revealedSecret && (
                           <div className="rounded-xl bg-[#FE812C]/10 border border-[#FE812C]/30 px-3 py-2.5 space-y-1.5">
                             <p className="text-[10px] text-[#FE812C] font-medium uppercase tracking-wide">Copy now — will not be shown again</p>
                             <div className="flex items-center gap-2">
@@ -1264,41 +1296,7 @@ export default function ProjectManagerPage() {
                               ><X size={12} /></button>
                             </div>
                           </div>
-                        ) : webhookSecretInfo?.hasSecret ? (
-                          <div className="flex items-center gap-2">
-                            <code className="flex-1 text-xs font-mono text-muted-foreground bg-muted/40 rounded-lg px-2.5 py-1.5 border border-border/60">
-                              {webhookSecretInfo.masked}
-                            </code>
-                            <button
-                              type="button"
-                              onClick={() => setSecretConfirm(true)}
-                              disabled={secretRegenerating}
-                              className="shrink-0 px-3 h-8 rounded-xl border border-border text-xs font-medium hover:bg-muted transition-colors disabled:opacity-40"
-                            >
-                              {secretRegenerating ? <Loader2 size={12} className="animate-spin" /> : 'Regenerate'}
-                            </button>
-                          </div>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => setSecretConfirm(true)}
-                            disabled={secretRegenerating}
-                            className="flex items-center gap-1.5 px-3 h-8 rounded-xl bg-[#FE812C] hover:bg-[#e5732a] text-white text-xs font-medium transition-colors disabled:opacity-40"
-                          >
-                            {secretRegenerating ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
-                            Generate Secret
-                          </button>
                         )}
-                      </div>
-
-                      <div className="border-t border-border/50" />
-
-                      {/* Emoji Mapping */}
-                      <div className="space-y-2">
-                        <div>
-                          <p className="text-sm font-medium">Slack Emoji → Member Mapping</p>
-                          <p className="text-xs text-muted-foreground">When n8n detects an emoji in Slack, it creates a task assigned to the mapped member.</p>
-                        </div>
 
                         <div className="space-y-1.5">
                           {emojiRows.map((row, i) => {
