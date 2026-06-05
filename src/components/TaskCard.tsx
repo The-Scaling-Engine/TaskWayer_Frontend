@@ -92,6 +92,7 @@ export default function TaskCard({ task, onEdit, onDelete, onComment, onCancelRe
             onClick={(e) => { e.stopPropagation(); onComment(task); }}
             className="relative p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
             title="Comments"
+            aria-label="Comments"
           >
             <MessageSquare size={14} />
             {commentCount > 0 && (
@@ -106,6 +107,7 @@ export default function TaskCard({ task, onEdit, onDelete, onComment, onCancelRe
               onClick={(e) => { e.stopPropagation(); onCancelRecurring?.(task); }}
               className="p-1.5 rounded-lg hover:bg-amber-500/10 text-muted-foreground hover:text-amber-500 transition-colors"
               title="Cancel recurring"
+              aria-label="Cancel recurring"
             >
               <CircleSlash size={14} />
             </button>
@@ -115,7 +117,8 @@ export default function TaskCard({ task, onEdit, onDelete, onComment, onCancelRe
             <button
               onClick={(e) => { e.stopPropagation(); onEdit(task); }}
               className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-              title="Edit"
+              title="Edit task"
+              aria-label="Edit task"
             >
               <Pencil size={14} />
             </button>
@@ -124,7 +127,8 @@ export default function TaskCard({ task, onEdit, onDelete, onComment, onCancelRe
             <button
               onClick={(e) => { e.stopPropagation(); onDelete(task); }}
               className="p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
-              title="Delete"
+              title="Delete task"
+              aria-label="Delete task"
             >
               <Trash2 size={14} />
             </button>

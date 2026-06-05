@@ -99,7 +99,7 @@ export default function ProjectManagerPage() {
   const currentUser = useAuthStore((s) => s.user);
   const allMemberships = useDepartmentStore((s) => s.allMemberships);
 
-  const [tab, setTab] = useState<'members' | 'planning' | 'timeline' | 'milestones' | 'settings'>('members');
+  const [tab, setTab] = useState<'members' | 'planning' | 'timeline' | 'settings'>('members');
 
   // ── Settings form state ────────────────────────────────────────────────────
   const [editName, setEditName] = useState('');
@@ -614,7 +614,7 @@ export default function ProjectManagerPage() {
 
         {/* Tabs */}
         <div className="flex items-center gap-1 border-b border-border">
-          {(['members', 'planning', 'timeline', 'milestones', 'settings'] as const).map((t) => (
+          {(['members', 'planning', 'timeline', 'settings'] as const).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -625,7 +625,7 @@ export default function ProjectManagerPage() {
                   : 'border-transparent text-muted-foreground hover:text-foreground'
               )}
             >
-              {t === 'members' ? `Members (${members.length})` : t === 'planning' ? 'Planning' : t === 'timeline' ? 'Timeline' : t === 'milestones' ? 'Milestones' : 'Settings'}
+              {t === 'members' ? `Members (${members.length})` : t === 'planning' ? 'Planning' : t === 'timeline' ? 'Timeline' : 'Settings'}
             </button>
           ))}
         </div>
@@ -757,11 +757,6 @@ export default function ProjectManagerPage() {
               void milestoneId;
             }}
           />
-        )}
-
-        {/* ── Milestones tab ── */}
-        {tab === 'milestones' && projectId && (
-          <MilestoneList projectId={projectId} canManage={isOwnerOrManager} />
         )}
 
         {/* ── Settings tab ── */}

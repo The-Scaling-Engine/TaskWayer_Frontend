@@ -23,10 +23,13 @@ export default function SubtaskNode({ subtask, parentTaskId, onToggle, canEdit }
       ref={setNodeRef}
       className={`flex items-center gap-2 py-1 px-2 rounded-lg hover:bg-muted/40 group/subtask transition-colors ${isDragging ? 'opacity-40' : ''}`}
     >
+      <span className="shrink-0 text-muted-foreground/30 text-[10px] select-none">└</span>
+
       {canEdit && (
         <button
           {...attributes} {...listeners}
-          className="shrink-0 cursor-grab active:cursor-grabbing text-muted-foreground/30 hover:text-muted-foreground opacity-0 group-hover/subtask:opacity-100 transition-opacity touch-none"
+          className="shrink-0 cursor-grab active:cursor-grabbing text-muted-foreground/30 hover:text-muted-foreground opacity-40 group-hover/subtask:opacity-100 transition-opacity touch-none"
+          aria-label="Drag to reorder subtask"
         >
           <GripVertical size={11} />
         </button>

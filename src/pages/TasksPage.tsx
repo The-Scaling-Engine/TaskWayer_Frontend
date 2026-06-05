@@ -169,6 +169,7 @@ export default function TasksPage() {
             <button
               onClick={() => handlePageChange(pagination.currentPage - 1)}
               disabled={!pagination.hasPrevPage}
+              aria-label="Previous page"
               className="p-2 rounded-lg border border-border bg-card hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               <ChevronLeft size={16} />
@@ -176,6 +177,7 @@ export default function TasksPage() {
             <button
               onClick={() => handlePageChange(pagination.currentPage + 1)}
               disabled={!pagination.hasNextPage}
+              aria-label="Next page"
               className="p-2 rounded-lg border border-border bg-card hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               <ChevronRight size={16} />

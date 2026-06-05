@@ -1,14 +1,15 @@
 import { useState } from 'react';
-import { ChevronDown, ChevronRight, GripVertical, Calendar, CheckCircle2, AlertCircle, Clock, Circle, Plus, X, Loader2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, GripVertical, Calendar, CheckCircle2, AlertCircle, Clock, Circle, Plus, X, Loader2, Pencil, Trash2 } from 'lucide-react';
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { useDroppable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 import { usePlanningStore } from '@/store/planningStore';
 import TaskNode from './TaskNode';
-import type { PlanningMilestone, PlanningTask, PlanningSubtask, ProjectMember } from '@/types';
+import type { PlanningMilestone, PlanningTask, PlanningSubtask, ProjectMember, MilestoneStatus } from '@/types';
 import { toast } from 'sonner';
 import { getApiErrorMessage } from '@/services/api';
 import { subtaskService } from '@/services/subtaskService';
+import { milestoneService } from '@/services/milestoneService';
 
 interface Props {
   milestone: PlanningMilestone;
@@ -36,6 +37,51 @@ export default function MilestoneNode({
   const [addingSubtaskFor, setAddingSubtaskFor] = useState<string | null>(null);
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
   const [submittingSubtask, setSubmittingSubtask] = useState(false);
+
+  // ── Inline edit state ──────────────────────────────────────
+  const [isEditing, setIsEditing] = useState(false);
+  const [editForm, setEditForm] = useState({ title: '', startDate: '', deadline: '', status: 'ACTIVE' as string });
+  const [saving, setSaving] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
+
+  const handleEditOpen = () => {
+    setEditForm({
+      title: milestone.title,
+      startDate: milestone.startDate ? milestone.startDate.substring(0, 10) : '',
+      deadline: milestone.deadline ? milestone.deadline.substring(0, 10) : '',
+      status: milestone.status ?? 'ACTIVE',
+    });
+    setDeleteConfirm(false);
+    setIsEditing(true);
+  };
+
+  const handleSave = async () => {
+    if (!editForm.title.trim()) return;
+    setSaving(true);
+    try {
+      await milestoneService.updateMilestone(projectId, milestone.id, {
+        title: editForm.title.trim(),
+        startDate: editForm.startDate || null,
+        deadline: editForm.deadline || null,
+        status: editForm.status as MilestoneStatus,
+      });
+      setIsEditing(false);
+      await refresh();
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Failed to update milestone'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    try {
+      await milestoneService.deleteMilestone(projectId, milestone.id);
+      await refresh();
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Failed to delete milestone'));
+    }
+  };
 
   const {
     attributes, listeners, setNodeRef: setSortableRef, transform, transition, isDragging: isSortableDragging,
@@ -114,8 +160,8 @@ export default function MilestoneNode({
   return (
     <div ref={setSortableRef} style={style} className="group/milestone">
       {/* Milestone header */}
-      <div className={`flex items-center gap-2 p-3 rounded-xl border transition-all ${
-        isOver ? 'border-primary/40 bg-primary/5' : 'border-border bg-card hover:border-border/80'
+      <div className={`flex items-center gap-2 p-3 rounded-xl border-l-4 border border-border transition-all ${
+        isOver ? 'border-l-primary border-primary/20 bg-primary/5' : 'border-l-primary/30 bg-card hover:border-l-primary/60 hover:border-border/80'
       } shadow-sm`}>
         {/* Drag handle */}
         {canManage && (
@@ -193,7 +239,94 @@ export default function MilestoneNode({
             <Plus size={12} />
           </button>
         )}
+
+        {/* Edit milestone button */}
+        {canManage && (
+          <button
+            onClick={() => isEditing ? setIsEditing(false) : handleEditOpen()}
+            className="shrink-0 opacity-40 group-hover/milestone:opacity-100 transition-opacity p-1 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground"
+            title="Edit milestone"
+            aria-label="Edit milestone"
+          >
+            <Pencil size={12} />
+          </button>
+        )}
       </div>
+
+      {/* Inline edit form */}
+      {isEditing && (
+        <div className="mt-1 p-3 rounded-xl border border-border bg-card space-y-3 animate-in fade-in-0 slide-in-from-top-1 duration-150">
+          <div className="grid grid-cols-2 gap-2">
+            <div className="col-span-2 space-y-1">
+              <label className="text-[10px] text-muted-foreground font-medium">Title *</label>
+              <input
+                autoFocus
+                value={editForm.title}
+                onChange={e => setEditForm(f => ({ ...f, title: e.target.value }))}
+                onKeyDown={e => { if (e.key === 'Enter') void handleSave(); if (e.key === 'Escape') setIsEditing(false); }}
+                className="w-full text-xs bg-muted/50 border border-border rounded-lg px-2 py-1.5 outline-none focus:border-primary/40"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] text-muted-foreground font-medium">Start date</label>
+              <input
+                type="date"
+                value={editForm.startDate}
+                onChange={e => setEditForm(f => ({ ...f, startDate: e.target.value }))}
+                className="w-full text-xs bg-muted/50 border border-border rounded-lg px-2 py-1.5 outline-none focus:border-primary/40"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] text-muted-foreground font-medium">Deadline</label>
+              <input
+                type="date"
+                value={editForm.deadline}
+                onChange={e => setEditForm(f => ({ ...f, deadline: e.target.value }))}
+                className="w-full text-xs bg-muted/50 border border-border rounded-lg px-2 py-1.5 outline-none focus:border-primary/40"
+              />
+            </div>
+            <div className="col-span-2 space-y-1">
+              <label className="text-[10px] text-muted-foreground font-medium">Status</label>
+              <select
+                value={editForm.status}
+                onChange={e => setEditForm(f => ({ ...f, status: e.target.value }))}
+                className="w-full text-xs bg-muted/50 border border-border rounded-lg px-2 py-1.5 outline-none focus:border-primary/40"
+              >
+                <option value="ACTIVE">Active</option>
+                <option value="COMPLETED">Completed</option>
+                <option value="CANCELLED">Cancelled</option>
+              </select>
+            </div>
+          </div>
+          <div className="flex items-center justify-between">
+            {deleteConfirm ? (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground">Delete this milestone?</span>
+                <button onClick={() => setDeleteConfirm(false)} className="text-xs px-2 py-1 rounded-lg border border-border hover:bg-muted">Keep</button>
+                <button onClick={() => void handleDelete()} className="text-xs px-2 py-1 rounded-lg bg-destructive/10 text-destructive hover:bg-destructive/20">Delete</button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setDeleteConfirm(true)}
+                className="flex items-center gap-1 text-xs text-destructive/60 hover:text-destructive transition-colors"
+              >
+                <Trash2 size={11} /> Delete milestone
+              </button>
+            )}
+            <div className="flex items-center gap-2">
+              <button onClick={() => setIsEditing(false)} className="text-xs px-3 py-1 rounded-lg border border-border hover:bg-muted transition-colors">Cancel</button>
+              <button
+                onClick={() => void handleSave()}
+                disabled={saving || !editForm.title.trim()}
+                className="flex items-center gap-1 text-xs px-3 py-1 rounded-lg bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-40 transition-opacity"
+              >
+                {saving && <Loader2 size={10} className="animate-spin" />}
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Tasks list (expanded) */}
       {isExpanded && (
@@ -249,8 +382,12 @@ export default function MilestoneNode({
           </SortableContext>
 
           {milestone.tasks.length === 0 && (
-            <div className="py-3 text-center text-xs text-muted-foreground/50 italic">
-              No tasks — drag one here or click + to add
+            <div className={`min-h-[48px] flex items-center justify-center rounded-lg border border-dashed text-xs transition-colors ${
+              isOver
+                ? 'border-primary/60 bg-primary/5 text-primary'
+                : 'border-border/40 text-muted-foreground/40'
+            }`}>
+              {isOver ? 'Release to add here' : 'Drop a task here or click + to add'}
             </div>
           )}
         </div>

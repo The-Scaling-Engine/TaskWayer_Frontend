@@ -356,7 +356,12 @@ export default function TimelineView({ projectId, onNavigateToPlanning }: Props)
                     {/* No deadline marker */}
                     {!geom && (
                       <div className="absolute inset-0 flex items-center justify-center">
-                        <span className="text-[10px] text-muted-foreground/40 italic">no deadline</span>
+                        <button
+                          onClick={() => onNavigateToPlanning?.(m.id)}
+                          className="text-[10px] text-muted-foreground/40 italic border border-dashed border-muted-foreground/20 rounded px-2 py-0.5 hover:text-muted-foreground hover:border-muted-foreground/50 transition-all"
+                        >
+                          + Add dates
+                        </button>
                       </div>
                     )}
                   </div>
