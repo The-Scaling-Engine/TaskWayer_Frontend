@@ -1298,31 +1298,31 @@ export default function ProjectManagerPage() {
                           </div>
                         )}
 
-                        <div className="space-y-1.5">
+                        <div className="grid grid-cols-4 gap-2">
                           {emojiRows.map((row, i) => {
                             const isValidEmoji = /^[a-z0-9_+-]+$/.test(row.emoji);
                             return (
-                              <div key={i} className="flex items-center gap-2">
-                                <div className="flex items-center gap-1 min-w-0">
-                                  <span className="text-xs text-muted-foreground shrink-0">:</span>
-                                  <Input
-                                    value={row.emoji}
-                                    onChange={(e) => {
-                                      const val = e.target.value.replace(/:/g, '').toLowerCase();
-                                      setEmojiRows(rows => rows.map((r, idx) => idx === i ? { ...r, emoji: val } : r));
-                                    }}
-                                    placeholder="sunglasses"
-                                    className={cn('h-7 text-xs rounded-lg w-28 px-1.5', row.emoji && !isValidEmoji && 'border-destructive')}
-                                  />
-                                  <span className="text-xs text-muted-foreground shrink-0">:</span>
-                                </div>
-                                <span className="text-xs text-muted-foreground shrink-0">→</span>
+                              <div key={i} className="flex items-center gap-1 min-w-0 rounded-lg border border-border bg-muted/20 px-2 py-1.5">
+                                <span className="text-[10px] text-muted-foreground shrink-0">:</span>
+                                <Input
+                                  value={row.emoji}
+                                  onChange={(e) => {
+                                    const val = e.target.value.replace(/:/g, '').toLowerCase();
+                                    setEmojiRows(rows => rows.map((r, idx) => idx === i ? { ...r, emoji: val } : r));
+                                  }}
+                                  placeholder="emoji"
+                                  className={cn(
+                                    'h-6 text-[10px] rounded px-1 min-w-0 flex-[2] border-border bg-background focus-visible:ring-1',
+                                    row.emoji && !isValidEmoji && 'border-destructive',
+                                  )}
+                                />
+                                <span className="text-[10px] text-muted-foreground shrink-0">:</span>
                                 <select
                                   value={row.profileId}
                                   onChange={(e) => setEmojiRows(rows => rows.map((r, idx) => idx === i ? { ...r, profileId: e.target.value } : r))}
-                                  className="flex-1 rounded-lg border border-input bg-transparent dark:bg-input/30 px-2 h-7 text-xs text-foreground cursor-pointer outline-none focus:ring-2 focus:ring-ring/50 min-w-0"
+                                  className="h-6 flex-[3] min-w-0 rounded border border-input bg-transparent dark:bg-input/30 text-[10px] text-foreground cursor-pointer outline-none focus:ring-1 focus:ring-ring/50 px-0.5 truncate"
                                 >
-                                  <option value="" className="bg-popover text-muted-foreground">— Select member —</option>
+                                  <option value="" className="bg-popover text-muted-foreground">—</option>
                                   {members.map((m) => (
                                     <option key={m.profileId} value={m.profileId} className="bg-popover text-foreground">
                                       {m.profile?.name ?? m.profile?.email ?? m.profileId}
@@ -1333,21 +1333,21 @@ export default function ProjectManagerPage() {
                                   type="button"
                                   onClick={() => setEmojiRows(rows => rows.filter((_, idx) => idx !== i))}
                                   className="shrink-0 text-muted-foreground hover:text-destructive transition-colors"
-                                ><X size={12} /></button>
+                                ><X size={10} /></button>
                               </div>
                             );
                           })}
-                        </div>
 
-                        {emojiRows.length < 20 && (
-                          <button
-                            type="button"
-                            onClick={() => setEmojiRows(rows => [...rows, { emoji: '', profileId: '' }])}
-                            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-                          >
-                            <Plus size={12} /> Add mapping
-                          </button>
-                        )}
+                          {emojiRows.length < 20 && (
+                            <button
+                              type="button"
+                              onClick={() => setEmojiRows(rows => [...rows, { emoji: '', profileId: '' }])}
+                              className="flex items-center justify-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors rounded-lg border border-dashed border-border/60 hover:border-border py-1.5"
+                            >
+                              <Plus size={12} /> Add mapping
+                            </button>
+                          )}
+                        </div>
 
                         <div className="flex items-center gap-2 pt-0.5">
                           <button
