@@ -30,7 +30,7 @@ const statusConfig = {
 };
 
 export default function MilestoneNode({
-  milestone, canManage, projectMembers, onOpenTask, onAddTask,
+  milestone, canManage, projectMembers, onOpenTask, onAddTask, projectId,
 }: Props) {
   const { expandedMilestones, toggleMilestone, refresh, patchMilestones } = usePlanningStore();
   const isExpanded = expandedMilestones.has(milestone.id);
