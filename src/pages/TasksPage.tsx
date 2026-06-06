@@ -2,7 +2,8 @@ import React, { useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import KanbanBoard from '@/components/KanbanBoard';
 import type { KanbanBoardRef } from '@/components/KanbanBoard';
-import { Search, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
+import BulkCreatePersonalDialog from '@/components/BulkCreatePersonalDialog';
+import { Search, ChevronLeft, ChevronRight, Plus, Layers } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useTaskStore } from '@/store/taskStore';
 import DateRangePicker from '@/components/DateRangePicker';
@@ -13,7 +14,8 @@ export default function TasksPage() {
   const boardRef = useRef<KanbanBoardRef>(null);
   const location = useLocation();
   const navigate = useNavigate();
-  const { params, setParams, resetParams, pagination } = useTaskStore();
+  const { params, setParams, resetParams, pagination, silentFetch } = useTaskStore();
+  const [bulkDialogOpen, setBulkDialogOpen] = React.useState(false);
   const [searchValue, setSearchValue] = React.useState(params.search || '');
 
   React.useEffect(() => {
@@ -92,6 +94,14 @@ export default function TasksPage() {
         </div>
         <div className="flex items-center gap-2">
           <TimerStartButton fetchParams={{ status: 'doing', personal: true, limit: 50 }} />
+          <Button
+            variant="outline"
+            onClick={() => setBulkDialogOpen(true)}
+            className="rounded-xl gap-2"
+          >
+            <Layers size={16} />
+            <span className="hidden sm:inline">Bulk Create</span>
+          </Button>
           <Button onClick={() => boardRef.current?.openCreateTask()} className="bg-[#FE812C] hover:bg-[#e5732a] text-white rounded-xl shadow-md shadow-[#FE812C]/20 gap-2">
             <Plus size={18} />
             <span className="hidden sm:inline">Create Task</span>
@@ -185,6 +195,12 @@ export default function TasksPage() {
           </div>
         </div>
       )}
+
+      <BulkCreatePersonalDialog
+        open={bulkDialogOpen}
+        onClose={() => setBulkDialogOpen(false)}
+        onCreated={() => silentFetch()}
+      />
     </div>
   );
 }
