@@ -9,7 +9,7 @@ import { userService } from '@/services/userService';
 import { toast } from 'sonner';
 import {
   Building2, ChevronDown, RefreshCw, Loader2, Users, Clock, AlertTriangle, Zap,
-  ChevronLeft, ChevronRight, X, UserPlus, UserMinus, Mail, Search, Timer, MessageSquare,
+  ChevronLeft, ChevronRight, X, Check, UserPlus, UserMinus, Mail, Search, Timer, MessageSquare,
   ClipboardPlus, Pencil, Trash2,
 } from 'lucide-react';
 import CommentDialog from '@/components/CommentDialog';
@@ -91,10 +91,9 @@ export default function DepartmentManagerPage() {
   const [inviteLoading, setInviteLoading] = useState(false);
   const [addMemberOpen, setAddMemberOpen] = useState(false);
   const [memberSearch, setMemberSearch] = useState('');
-  const [memberSearchResults, setMemberSearchResults] = useState<{ id: string; email: string; name?: string | null }[]>([]);
+  const [memberSearchResults, setMemberSearchResults] = useState<{ id: string; email: string; name?: string | null; username?: string | null }[]>([]);
   const [memberSearchLoading, setMemberSearchLoading] = useState(false);
-  const [selectedUserId, setSelectedUserId] = useState('');
-  const [selectedUserLabel, setSelectedUserLabel] = useState('');
+  const [selectedDeptUsers, setSelectedDeptUsers] = useState<{ id: string; email: string; name?: string | null; avatar?: string | null; username?: string | null }[]>([]);
   const [addMemberRole, setAddMemberRole] = useState('MEMBER');
   const [addMemberLoading, setAddMemberLoading] = useState(false);
   const [transferOwnerConfirm, setTransferOwnerConfirm] = useState<{ userId: string; label: string } | null>(null);
@@ -286,7 +285,7 @@ export default function DepartmentManagerPage() {
         const res = await userService.searchUsers({ q: memberSearch, limit: 8 });
         if (res.success) {
           setMemberSearchResults(res.data.users.map(u => ({
-            id: u.id, email: u.email, name: u.name,
+            id: u.id, email: u.email, name: u.name, username: u.username, avatar: u.avatar,
           })));
         }
       } catch { setMemberSearchResults([]); } finally {
@@ -378,18 +377,22 @@ export default function DepartmentManagerPage() {
 
   const closeAddMember = () => {
     setAddMemberOpen(false); setMemberSearch(''); setMemberSearchResults([]);
-    setSelectedUserId(''); setSelectedUserLabel(''); setAddMemberRole('MEMBER');
+    setSelectedDeptUsers([]); setAddMemberRole('MEMBER');
   };
 
-  const handleAddMember = async () => {
-    if (!departmentId || !selectedUserId) { toast.error('Please select a user'); return; }
+  const toggleDeptUser = (u: { id: string; email: string; name?: string | null; avatar?: string | null; username?: string | null }) => {
+    setSelectedDeptUsers((prev) => prev.some(x => x.id === u.id) ? prev.filter(x => x.id !== u.id) : [...prev, u]);
+  };
+
+  const handleBulkAddDeptMembers = async () => {
+    if (!departmentId || selectedDeptUsers.length === 0) { toast.error('Please select at least one user'); return; }
     setAddMemberLoading(true);
     try {
-      await departmentService.addMember(departmentId, { userId: selectedUserId, role: addMemberRole });
-      toast.success('Member added');
+      const res = await departmentService.bulkAddMembers(departmentId, selectedDeptUsers.map(u => ({ userId: u.id, role: addMemberRole })));
+      toast.success(res.message);
       closeAddMember();
       fetchMembers();
-    } catch (err) { toast.error(getApiErrorMessage(err, 'Failed to add member')); } finally {
+    } catch (err) { toast.error(getApiErrorMessage(err, 'Failed to add members')); } finally {
       setAddMemberLoading(false);
     }
   };
@@ -1078,42 +1081,120 @@ export default function DepartmentManagerPage() {
       {/* Add member directly */}
       {addMemberOpen && (
         <div className="fixed inset-0 z-[65] flex items-center justify-center bg-black/50 p-4 animate-in fade-in duration-200">
-          <div className="bg-card border border-border rounded-2xl p-6 max-w-md w-full shadow-xl space-y-4 animate-in fade-in zoom-in-95 duration-150 ease-out">
-            <h3 className="text-lg font-bold">Add Member to {department.name}</h3>
-            <div className="space-y-3">
-              <div>
-                <label className="text-xs font-semibold text-muted-foreground mb-1 block">Search User</label>
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={14} />
-                  <input type="text" value={memberSearch} onChange={(e) => { setMemberSearch(e.target.value); if (selectedUserId) { setSelectedUserId(''); setSelectedUserLabel(''); } }} placeholder="Search by name or email..." className="w-full bg-muted/50 border border-border focus:border-primary/50 rounded-xl pl-9 pr-3 py-2 text-sm outline-none transition-all" autoFocus />
-                </div>
-                {memberSearchLoading && <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1"><Loader2 size={10} className="animate-spin" /> Searching...</p>}
-                {memberSearchResults.length > 0 && !selectedUserId && (
-                  <div className="mt-1 border border-border rounded-xl bg-card shadow-sm overflow-hidden max-h-44 overflow-y-auto">
-                    {memberSearchResults.map((u) => (
-                      <button key={u.id} onClick={() => { setSelectedUserId(u.id); setSelectedUserLabel(u.name ? `${u.name} (${u.email})` : u.email); setMemberSearch(u.name ?? u.email); setMemberSearchResults([]); }} className="w-full text-left px-3 py-2.5 hover:bg-muted text-sm transition-colors border-b border-border last:border-0">
-                        <span className="font-medium text-foreground">{u.name ?? u.email}</span>
-                        {u.name && <span className="text-muted-foreground text-xs ml-2">{u.email}</span>}
-                      </button>
-                    ))}
-                  </div>
+          <div className="bg-card border border-border rounded-2xl p-6 max-w-lg w-full shadow-xl space-y-4 animate-in fade-in zoom-in-95 duration-150 ease-out">
+            {/* Header */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <h3 className="text-lg font-bold">Add Members to {department.name}</h3>
+                {selectedDeptUsers.length > 0 && (
+                  <span className="px-2 py-0.5 bg-primary/10 text-primary text-xs font-bold rounded-full border border-primary/20">
+                    {selectedDeptUsers.length} selected
+                  </span>
                 )}
-                {selectedUserId && <p className="text-xs text-primary mt-1.5 font-medium">✓ {selectedUserLabel}</p>}
               </div>
-              <div>
-                <label className="text-xs font-semibold text-muted-foreground mb-1 block">Role</label>
-                <select value={addMemberRole} onChange={(e) => setAddMemberRole(e.target.value)} className="w-full bg-muted/50 border border-border rounded-xl px-3 py-2 text-sm outline-none cursor-pointer">
+              <button onClick={closeAddMember} className="p-1 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Selected chips */}
+            {selectedDeptUsers.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 p-2.5 bg-muted/30 rounded-xl border border-border max-h-24 overflow-y-auto">
+                {selectedDeptUsers.map((u) => (
+                  <span key={u.id} className="flex items-center gap-1 bg-card border border-border rounded-full pl-0.5 pr-2 py-0.5 text-xs">
+                    {u.avatar ? (
+                      <img src={u.avatar} alt="" className="w-5 h-5 rounded-full object-cover shrink-0" />
+                    ) : (
+                      <div className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center text-primary text-[10px] font-bold shrink-0">
+                        {(u.name ?? u.email).charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                    <span className="font-medium text-foreground max-w-[120px] truncate">{u.name ?? u.email}</span>
+                    <button onClick={() => toggleDeptUser(u)} className="ml-0.5 text-muted-foreground hover:text-destructive transition-colors">
+                      <X size={10} />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {/* Search input */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={14} />
+              <input
+                type="text"
+                value={memberSearch}
+                onChange={(e) => setMemberSearch(e.target.value)}
+                placeholder="Search by name, email, or @username..."
+                className="w-full bg-muted/50 border border-border focus:border-primary/50 rounded-xl pl-9 pr-3 py-2 text-sm outline-none transition-all"
+                autoFocus
+              />
+            </div>
+
+            {/* Search results list */}
+            <div className="border border-border rounded-xl bg-card overflow-hidden max-h-52 overflow-y-auto">
+              {memberSearchLoading ? (
+                <div className="px-3 py-4 text-center text-xs text-muted-foreground flex items-center justify-center gap-2">
+                  <Loader2 size={12} className="animate-spin" /> Searching...
+                </div>
+              ) : memberSearch.trim() ? (
+                memberSearchResults.length === 0 ? (
+                  <div className="px-3 py-4 text-center text-xs text-muted-foreground">No users found</div>
+                ) : (
+                  memberSearchResults
+                    .filter((u) => !members.some((m) => m.userId === u.id))
+                    .map((u) => {
+                      const isSelected = selectedDeptUsers.some((s) => s.id === u.id);
+                      return (
+                        <button
+                          key={u.id}
+                          onClick={() => toggleDeptUser(u)}
+                          className={cn('w-full text-left px-3 py-2.5 hover:bg-muted text-sm transition-colors border-b border-border last:border-0 flex items-center gap-2.5', isSelected && 'bg-primary/5')}
+                        >
+                          {u.avatar ? (
+                            <img src={u.avatar} alt="" className="w-7 h-7 rounded-full object-cover shrink-0" />
+                          ) : (
+                            <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center text-primary text-xs font-bold shrink-0">
+                              {(u.name ?? u.email).charAt(0).toUpperCase()}
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-foreground truncate">{u.name ?? u.email}</p>
+                            {u.name && <p className="text-xs text-muted-foreground truncate">{u.email}{u.username ? ` · @${u.username}` : ''}</p>}
+                          </div>
+                          {isSelected && <Check size={14} className="text-primary shrink-0" />}
+                        </button>
+                      );
+                    })
+                )
+              ) : (
+                <div className="px-3 py-4 text-center text-xs text-muted-foreground">
+                  Type a name, email, or @username to search
+                </div>
+              )}
+            </div>
+
+            {/* Role + submit */}
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 flex-1">
+                <label className="text-xs font-semibold text-muted-foreground whitespace-nowrap">Role</label>
+                <select value={addMemberRole} onChange={(e) => setAddMemberRole(e.target.value)} className="flex-1 bg-muted/50 border border-border rounded-xl px-3 py-2 text-sm outline-none cursor-pointer">
                   <option value="ADMIN">ADMIN</option>
                   <option value="MEMBER">MEMBER</option>
                   <option value="VIEWER">VIEWER</option>
                 </select>
               </div>
-            </div>
-            <div className="flex gap-3 justify-end">
-              <button onClick={closeAddMember} className="px-4 py-2 rounded-xl text-sm font-medium text-muted-foreground hover:bg-muted transition-colors">Cancel</button>
-              <button onClick={handleAddMember} disabled={addMemberLoading || !selectedUserId} className="px-4 py-2 rounded-xl text-sm font-medium text-white bg-primary hover:bg-primary/90 disabled:opacity-60 transition-colors">
-                {addMemberLoading ? 'Adding...' : 'Add Member'}
-              </button>
+              <div className="flex gap-2">
+                <button onClick={closeAddMember} className="px-4 py-2 rounded-xl text-sm font-medium text-muted-foreground hover:bg-muted transition-colors">Cancel</button>
+                <button
+                  onClick={handleBulkAddDeptMembers}
+                  disabled={addMemberLoading || selectedDeptUsers.length === 0}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium text-white bg-primary hover:bg-primary/90 disabled:opacity-60 transition-colors"
+                >
+                  {addMemberLoading && <Loader2 size={14} className="animate-spin" />}
+                  {addMemberLoading ? 'Adding...' : `Add${selectedDeptUsers.length > 0 ? ` (${selectedDeptUsers.length})` : ''}`}
+                </button>
+              </div>
             </div>
           </div>
         </div>
