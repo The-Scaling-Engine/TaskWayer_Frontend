@@ -56,6 +56,19 @@ function isValidHttpsUrl(url: string): boolean {
 }
 
 
+interface UserOption {
+  id: string;
+  email: string;
+  name?: string | null;
+  avatar?: string | null;
+  username?: string | null;
+}
+
+interface AddMemberDeptTab {
+  dept: { id: string; name: string };
+  members: UserOption[];
+}
+
 const ROLE_COLORS: Record<string, string> = {
   OWNER: 'bg-[#FE812C]/10 text-[#FE812C] border-[#FE812C]/20',
   MANAGER: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20',
@@ -68,7 +81,7 @@ export default function ProjectManagerPage() {
   const navigate = useNavigate();
   const {
     currentProject, currentLoading,
-    fetchProject, updateProject, archiveProject, unarchiveProject,
+    fetchProject, setCurrentProject, updateProject, archiveProject, unarchiveProject,
     deleteProject, leaveProject, transferOwnership,
     addMember, removeMember, updateMemberRole,
   } = useProjectStore();
@@ -127,12 +140,14 @@ export default function ProjectManagerPage() {
   // ── Add member state ───────────────────────────────────────────────────────
   const [addMemberOpen, setAddMemberOpen] = useState(false);
   const [memberSearch, setMemberSearch] = useState('');
-  const [memberSearchResults, setMemberSearchResults] = useState<{ id: string; email: string; name?: string | null }[]>([]);
+  const [memberSearchResults, setMemberSearchResults] = useState<UserOption[]>([]);
   const [memberSearchLoading, setMemberSearchLoading] = useState(false);
-  const [selectedProfileId, setSelectedProfileId] = useState('');
-  const [selectedProfileLabel, setSelectedProfileLabel] = useState('');
+  const [selectedUsers, setSelectedUsers] = useState<UserOption[]>([]);
   const [addRole, setAddRole] = useState<ProjectMemberRole>('MEMBER');
   const [addMemberLoading, setAddMemberLoading] = useState(false);
+  const [addMemberDepts, setAddMemberDepts] = useState<AddMemberDeptTab[]>([]);
+  const [activeDeptTab, setActiveDeptTab] = useState<string>('search');
+  const [addMemberDeptsLoading, setAddMemberDeptsLoading] = useState(false);
   const [removeMemberConfirm, setRemoveMemberConfirm] = useState<{ profileId: string; label: string } | null>(null);
   const [removeMemberLoading, setRemoveMemberLoading] = useState(false);
 
@@ -329,39 +344,65 @@ export default function ProjectManagerPage() {
 
   // ── User search ────────────────────────────────────────────────────────────
   useEffect(() => {
-    if (!memberSearch.trim()) { setMemberSearchResults([]); return; }
+    if (!memberSearch.trim() || activeDeptTab !== 'search') { if (!memberSearch.trim()) setMemberSearchResults([]); return; }
     const timer = setTimeout(async () => {
       setMemberSearchLoading(true);
       try {
-        const res = await userService.searchUsers({ q: memberSearch, limit: 8 });
+        const res = await userService.searchUsers({ q: memberSearch, limit: 10 });
         if (res.success) {
-          setMemberSearchResults(res.data.users.map((u) => ({ id: u.id, email: u.email, name: u.name })));
+          setMemberSearchResults(res.data.users.map((u) => ({ id: u.id, email: u.email, name: u.name, avatar: u.avatar, username: u.username })));
         }
       } catch { setMemberSearchResults([]); } finally {
         setMemberSearchLoading(false);
       }
     }, 400);
     return () => clearTimeout(timer);
-  }, [memberSearch]);
+  }, [memberSearch, activeDeptTab]);
+
+  const openAddMember = async () => {
+    setAddMemberOpen(true);
+    setActiveDeptTab('search');
+    if (!projectId) return;
+    setAddMemberDeptsLoading(true);
+    try {
+      const res = await projectService.getLinkedDeptMembers(projectId);
+      const depts = res.data ?? [];
+      setAddMemberDepts(depts);
+      if (depts.length > 0) setActiveDeptTab(depts[0].dept.id);
+    } catch { setAddMemberDepts([]); } finally {
+      setAddMemberDeptsLoading(false);
+    }
+  };
 
   const closeAddMember = () => {
     setAddMemberOpen(false);
     setMemberSearch('');
     setMemberSearchResults([]);
-    setSelectedProfileId('');
-    setSelectedProfileLabel('');
+    setSelectedUsers([]);
     setAddRole('MEMBER');
+    setAddMemberDepts([]);
   };
 
-  const handleAddMember = async () => {
-    if (!projectId || !selectedProfileId) { toast.error('Please select a user'); return; }
+  const toggleUser = (user: UserOption) => {
+    setSelectedUsers((prev) => {
+      const exists = prev.some((u) => u.id === user.id);
+      return exists ? prev.filter((u) => u.id !== user.id) : [...prev, user];
+    });
+  };
+
+  const handleBulkAdd = async () => {
+    if (!projectId || selectedUsers.length === 0) { toast.error('Please select at least one user'); return; }
     setAddMemberLoading(true);
     try {
-      await addMember(projectId, { profileId: selectedProfileId, role: addRole });
-      toast.success('Member added');
+      const res = await projectService.bulkAddMembers(projectId, selectedUsers.map((u) => ({ profileId: u.id, role: addRole })));
+      toast.success(res.message);
+      const membersRes = await projectService.getMembers(projectId);
+      if (membersRes.success && currentProject) {
+        setCurrentProject({ ...currentProject, members: membersRes.data as typeof currentProject.members });
+      }
       closeAddMember();
     } catch (err) {
-      toast.error(getApiErrorMessage(err, 'Failed to add member'));
+      toast.error(getApiErrorMessage(err, 'Failed to add members'));
     } finally {
       setAddMemberLoading(false);
     }
@@ -607,7 +648,7 @@ export default function ProjectManagerPage() {
               <p className="text-sm text-muted-foreground">{members.length} member{members.length !== 1 ? 's' : ''}</p>
               {isOwnerOrManager && (
                 <button
-                  onClick={() => setAddMemberOpen(true)}
+                  onClick={openAddMember}
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 text-primary hover:bg-primary hover:text-white rounded-xl text-xs font-semibold transition-colors"
                 >
                   <UserPlus size={13} /> Add Member
@@ -1363,83 +1404,191 @@ export default function ProjectManagerPage() {
       {/* ── Add member modal ── */}
       {addMemberOpen && (
         <div className="fixed inset-0 z-[65] flex items-center justify-center bg-black/50 p-4 animate-in fade-in duration-200">
-          <div className="bg-card border border-border rounded-2xl p-6 max-w-md w-full shadow-xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
+          <div className="bg-card border border-border rounded-2xl p-6 max-w-lg w-full shadow-xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            {/* Header */}
             <div className="flex items-center justify-between">
-              <h3 className="text-lg font-bold">Add Member</h3>
+              <div className="flex items-center gap-2">
+                <h3 className="text-lg font-bold">Add Members</h3>
+                {selectedUsers.length > 0 && (
+                  <span className="px-2 py-0.5 bg-primary/10 text-primary text-xs font-bold rounded-full border border-primary/20">
+                    {selectedUsers.length} selected
+                  </span>
+                )}
+              </div>
               <button onClick={closeAddMember} className="p-1 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
                 <X size={16} />
               </button>
             </div>
-            <div className="space-y-3">
-              <div>
-                <label className="text-xs font-semibold text-muted-foreground mb-1 block">Search User</label>
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={14} />
-                  <input
-                    type="text"
-                    value={memberSearch}
-                    onChange={(e) => {
-                      setMemberSearch(e.target.value);
-                      if (selectedProfileId) { setSelectedProfileId(''); setSelectedProfileLabel(''); }
-                    }}
-                    placeholder="Search by name or email..."
-                    className="w-full bg-muted/50 border border-border focus:border-primary/50 rounded-xl pl-9 pr-3 py-2 text-sm outline-none transition-all"
-                    autoFocus
-                  />
-                </div>
-                {memberSearchLoading && (
-                  <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
-                    <Loader2 size={10} className="animate-spin" /> Searching...
-                  </p>
-                )}
-                {memberSearchResults.length > 0 && !selectedProfileId && (
-                  <div className="mt-1 border border-border rounded-xl bg-card shadow-sm overflow-hidden max-h-44 overflow-y-auto">
-                    {memberSearchResults.map((u) => (
-                      <button
-                        key={u.id}
-                        onClick={() => {
-                          setSelectedProfileId(u.id);
-                          setSelectedProfileLabel(u.name ? `${u.name} (${u.email})` : u.email);
-                          setMemberSearch(u.name ?? u.email);
-                          setMemberSearchResults([]);
-                        }}
-                        className="w-full text-left px-3 py-2.5 hover:bg-muted text-sm transition-colors border-b border-border last:border-0"
-                      >
-                        <span className="font-medium text-foreground">{u.name ?? u.email}</span>
-                        {u.name && <span className="text-muted-foreground text-xs ml-2">{u.email}</span>}
-                      </button>
-                    ))}
-                  </div>
-                )}
-                {selectedProfileId && (
-                  <p className="text-xs text-[#FE812C] mt-1.5 font-medium">✓ {selectedProfileLabel}</p>
-                )}
+
+            {/* Selected chips */}
+            {selectedUsers.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 p-2.5 bg-muted/30 rounded-xl border border-border max-h-24 overflow-y-auto">
+                {selectedUsers.map((u) => (
+                  <span key={u.id} className="flex items-center gap-1 bg-card border border-border rounded-full pl-0.5 pr-2 py-0.5 text-xs">
+                    {u.avatar ? (
+                      <img src={u.avatar} alt="" className="w-5 h-5 rounded-full object-cover shrink-0" />
+                    ) : (
+                      <div className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center text-primary text-[10px] font-bold shrink-0">
+                        {(u.name ?? u.email).charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                    <span className="font-medium text-foreground max-w-[120px] truncate">{u.name ?? u.email}</span>
+                    <button onClick={() => toggleUser(u)} className="ml-0.5 text-muted-foreground hover:text-destructive transition-colors">
+                      <X size={10} />
+                    </button>
+                  </span>
+                ))}
               </div>
-              <div>
-                <label className="text-xs font-semibold text-muted-foreground mb-1 block">Role</label>
+            )}
+
+            {/* Search input */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={14} />
+              <input
+                type="text"
+                value={memberSearch}
+                onChange={(e) => setMemberSearch(e.target.value)}
+                placeholder={activeDeptTab === 'search' ? 'Search by name, email, or @username...' : 'Filter by name, email, or @username...'}
+                className="w-full bg-muted/50 border border-border focus:border-primary/50 rounded-xl pl-9 pr-3 py-2 text-sm outline-none transition-all"
+                autoFocus
+              />
+            </div>
+
+            {/* Dept tabs */}
+            {addMemberDeptsLoading ? (
+              <div className="flex items-center gap-2 text-muted-foreground text-xs">
+                <Loader2 size={12} className="animate-spin" /> Loading departments...
+              </div>
+            ) : addMemberDepts.length > 0 && (
+              <div className="flex items-center gap-0.5 border-b border-border overflow-x-auto scrollbar-hide pb-0">
+                <button
+                  onClick={() => setActiveDeptTab('search')}
+                  className={cn('px-3 py-1.5 text-xs font-medium border-b-2 -mb-px transition-colors whitespace-nowrap',
+                    activeDeptTab === 'search' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground')}
+                >
+                  Search
+                </button>
+                {addMemberDepts.map((d) => (
+                  <button
+                    key={d.dept.id}
+                    onClick={() => setActiveDeptTab(d.dept.id)}
+                    className={cn('px-3 py-1.5 text-xs font-medium border-b-2 -mb-px transition-colors whitespace-nowrap',
+                      activeDeptTab === d.dept.id ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground')}
+                  >
+                    {d.dept.name}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* User list */}
+            <div className="border border-border rounded-xl bg-card overflow-hidden max-h-52 overflow-y-auto">
+              {activeDeptTab === 'search' ? (
+                memberSearchLoading ? (
+                  <div className="px-3 py-4 text-center text-xs text-muted-foreground flex items-center justify-center gap-2">
+                    <Loader2 size={12} className="animate-spin" /> Searching...
+                  </div>
+                ) : memberSearch.trim() ? (
+                  memberSearchResults.length === 0 ? (
+                    <div className="px-3 py-4 text-center text-xs text-muted-foreground">No users found</div>
+                  ) : (
+                    memberSearchResults
+                      .filter((u) => !members.some((m) => m.profileId === u.id))
+                      .map((u) => {
+                        const isSelected = selectedUsers.some((s) => s.id === u.id);
+                        return (
+                          <button
+                            key={u.id}
+                            onClick={() => toggleUser(u)}
+                            className={cn('w-full text-left px-3 py-2.5 hover:bg-muted text-sm transition-colors border-b border-border last:border-0 flex items-center gap-2.5', isSelected && 'bg-primary/5')}
+                          >
+                            {u.avatar ? (
+                              <img src={u.avatar} alt="" className="w-7 h-7 rounded-full object-cover shrink-0" />
+                            ) : (
+                              <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center text-primary text-xs font-bold shrink-0">
+                                {(u.name ?? u.email).charAt(0).toUpperCase()}
+                              </div>
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium text-foreground truncate">{u.name ?? u.email}</p>
+                              {u.name && <p className="text-xs text-muted-foreground truncate">{u.email}{u.username ? ` · @${u.username}` : ''}</p>}
+                            </div>
+                            {isSelected && <Check size={14} className="text-primary shrink-0" />}
+                          </button>
+                        );
+                      })
+                  )
+                ) : (
+                  <div className="px-3 py-4 text-center text-xs text-muted-foreground">
+                    {addMemberDepts.length === 0 ? 'Type a name, email, or @username to search' : 'Switch to a department tab to browse members, or type to search'}
+                  </div>
+                )
+              ) : (() => {
+                const deptData = addMemberDepts.find((d) => d.dept.id === activeDeptTab);
+                const existingIds = new Set(members.map((m) => m.profileId));
+                const q = memberSearch.trim().toLowerCase();
+                const filtered = (deptData?.members ?? []).filter((u) => {
+                  if (!q) return !existingIds.has(u.id);
+                  if (q.startsWith('@')) return (u.username?.toLowerCase().includes(q.slice(1)) ?? false) && !existingIds.has(u.id);
+                  return ((u.name?.toLowerCase().includes(q) || u.email.toLowerCase().includes(q)) && !existingIds.has(u.id));
+                });
+                return filtered.length === 0 ? (
+                  <div className="px-3 py-4 text-center text-xs text-muted-foreground">
+                    {q ? 'No matching members' : 'All department members are already in this project'}
+                  </div>
+                ) : filtered.map((u) => {
+                  const isSelected = selectedUsers.some((s) => s.id === u.id);
+                  return (
+                    <button
+                      key={u.id}
+                      onClick={() => toggleUser(u)}
+                      className={cn('w-full text-left px-3 py-2.5 hover:bg-muted text-sm transition-colors border-b border-border last:border-0 flex items-center gap-2.5', isSelected && 'bg-primary/5')}
+                    >
+                      {u.avatar ? (
+                        <img src={u.avatar} alt="" className="w-7 h-7 rounded-full object-cover shrink-0" />
+                      ) : (
+                        <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center text-primary text-xs font-bold shrink-0">
+                          {(u.name ?? u.email).charAt(0).toUpperCase()}
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-foreground truncate">{u.name ?? u.email}</p>
+                        {u.name && <p className="text-xs text-muted-foreground truncate">{u.email}{u.username ? ` · @${u.username}` : ''}</p>}
+                      </div>
+                      {isSelected && <Check size={14} className="text-primary shrink-0" />}
+                    </button>
+                  );
+                });
+              })()}
+            </div>
+
+            {/* Role + submit */}
+            <div className="flex items-center gap-3 pt-1">
+              <div className="flex items-center gap-2 flex-1">
+                <label className="text-xs font-semibold text-muted-foreground whitespace-nowrap">Role</label>
                 <select
                   value={addRole}
                   onChange={(e) => setAddRole(e.target.value as ProjectMemberRole)}
-                  className="w-full bg-muted/50 border border-border rounded-xl px-3 py-2 text-sm outline-none cursor-pointer"
+                  className="flex-1 bg-muted/50 border border-border rounded-xl px-3 py-2 text-sm outline-none cursor-pointer"
                 >
                   <option value="MANAGER">MANAGER</option>
                   <option value="MEMBER">MEMBER</option>
                   <option value="VIEWER">VIEWER</option>
                 </select>
               </div>
-            </div>
-            <div className="flex gap-3 justify-end">
-              <button onClick={closeAddMember} className="px-4 py-2 rounded-xl text-sm font-medium text-muted-foreground hover:bg-muted transition-colors">
-                Cancel
-              </button>
-              <button
-                onClick={handleAddMember}
-                disabled={addMemberLoading || !selectedProfileId}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium text-white bg-[#FE812C] hover:bg-[#e5732a] disabled:opacity-60 transition-colors"
-              >
-                {addMemberLoading && <Loader2 size={14} className="animate-spin" />}
-                {addMemberLoading ? 'Adding...' : 'Add Member'}
-              </button>
+              <div className="flex gap-2">
+                <button onClick={closeAddMember} className="px-4 py-2 rounded-xl text-sm font-medium text-muted-foreground hover:bg-muted transition-colors">
+                  Cancel
+                </button>
+                <button
+                  onClick={handleBulkAdd}
+                  disabled={addMemberLoading || selectedUsers.length === 0}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium text-white bg-[#FE812C] hover:bg-[#e5732a] disabled:opacity-60 transition-colors"
+                >
+                  {addMemberLoading && <Loader2 size={14} className="animate-spin" />}
+                  {addMemberLoading ? 'Adding...' : `Add${selectedUsers.length > 0 ? ` (${selectedUsers.length})` : ''}`}
+                </button>
+              </div>
             </div>
           </div>
         </div>
