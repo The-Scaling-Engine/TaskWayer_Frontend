@@ -83,7 +83,7 @@ export default function ProjectManagerPage() {
     currentProject, currentLoading,
     fetchProject, setCurrentProject, updateProject, archiveProject, unarchiveProject,
     deleteProject, leaveProject, transferOwnership,
-    addMember, removeMember, updateMemberRole,
+    removeMember, updateMemberRole,
   } = useProjectStore();
   const currentUser = useAuthStore((s) => s.user);
   const allMemberships = useDepartmentStore((s) => s.allMemberships);
