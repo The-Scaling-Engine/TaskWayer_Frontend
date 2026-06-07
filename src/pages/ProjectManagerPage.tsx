@@ -595,7 +595,7 @@ export default function ProjectManagerPage() {
                   : 'border-transparent text-muted-foreground hover:text-foreground'
               )}
             >
-              {t === 'members' ? `Members (${members.length})` : t === 'planning' ? 'Planning' : t === 'timeline' ? 'Timeline' : 'Settings'}
+              {t === 'members' ? `Members (${members.length})` : t === 'planning' ? 'Roadmap & Planning' : t === 'timeline' ? 'Timeline' : 'Settings'}
             </button>
           ))}
         </div>
