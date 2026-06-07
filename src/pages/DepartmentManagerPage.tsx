@@ -91,7 +91,7 @@ export default function DepartmentManagerPage() {
   const [inviteLoading, setInviteLoading] = useState(false);
   const [addMemberOpen, setAddMemberOpen] = useState(false);
   const [memberSearch, setMemberSearch] = useState('');
-  const [memberSearchResults, setMemberSearchResults] = useState<{ id: string; email: string; name?: string | null; username?: string | null }[]>([]);
+  const [memberSearchResults, setMemberSearchResults] = useState<{ id: string; email: string; name?: string | null; username?: string | null; avatar?: string | null }[]>([]);
   const [memberSearchLoading, setMemberSearchLoading] = useState(false);
   const [selectedDeptUsers, setSelectedDeptUsers] = useState<{ id: string; email: string; name?: string | null; avatar?: string | null; username?: string | null }[]>([]);
   const [addMemberRole, setAddMemberRole] = useState('MEMBER');
