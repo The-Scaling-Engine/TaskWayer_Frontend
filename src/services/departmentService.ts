@@ -18,6 +18,14 @@ export const departmentService = {
     return response.data;
   },
 
+  bulkAddMembers: async (
+    deptId: string,
+    members: { userId: string; role?: string }[]
+  ): Promise<{ success: boolean; message: string; data: { added: number; skipped: number } }> => {
+    const response = await api.post(`/departments/${deptId}/members/bulk`, { members });
+    return response.data;
+  },
+
   removeMember: async (
     deptId: string,
     userId: string
