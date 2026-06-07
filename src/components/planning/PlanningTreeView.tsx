@@ -62,6 +62,7 @@ export default function PlanningTreeView({ projectId, canManage, projectMembers 
   const [createForm, setCreateForm] = useState({ title: '', description: '', startDate: '', deadline: '' });
   const [creatingMilestone, setCreatingMilestone] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'OVERDUE' | 'COMPLETED' | 'CANCELLED'>('ALL');
 
   useEffect(() => {
     fetchTree(projectId);
@@ -397,7 +398,19 @@ export default function PlanningTreeView({ projectId, canManage, projectMembers 
     return rank(a) - rank(b);
   });
 
-  const milestoneIds = sortedMilestones.map(m => m.id);
+  const filteredMilestones = statusFilter === 'ALL' ? sortedMilestones
+    : statusFilter === 'OVERDUE' ? sortedMilestones.filter(m => m.isOverdue && m.status !== 'COMPLETED')
+    : sortedMilestones.filter(m => m.status === statusFilter);
+
+  const milestoneIds = filteredMilestones.map(m => m.id);
+
+  const filterCounts = {
+    ALL: sortedMilestones.length,
+    ACTIVE: sortedMilestones.filter(m => m.status === 'ACTIVE' && !m.isOverdue).length,
+    OVERDUE: sortedMilestones.filter(m => m.isOverdue && m.status !== 'COMPLETED').length,
+    COMPLETED: sortedMilestones.filter(m => m.status === 'COMPLETED').length,
+    CANCELLED: sortedMilestones.filter(m => m.status === 'CANCELLED').length,
+  };
 
   if (loading || !tree) {
     return (
@@ -449,6 +462,33 @@ export default function PlanningTreeView({ projectId, canManage, projectMembers 
             New Milestone
           </button>
         )}
+      </div>
+
+      {/* Status filter pills */}
+      <div className="flex items-center gap-1.5 flex-wrap">
+        {([ 'ALL', 'ACTIVE', 'OVERDUE', 'COMPLETED', 'CANCELLED'] as const).map((f) => {
+          const count = filterCounts[f];
+          if (f !== 'ALL' && count === 0) return null;
+          const active = statusFilter === f;
+          const colors: Record<typeof f, string> = {
+            ALL:       active ? 'bg-foreground text-background border-foreground' : 'text-muted-foreground border-border hover:border-foreground/40 hover:text-foreground',
+            ACTIVE:    active ? 'bg-blue-500 text-white border-blue-500' : 'text-blue-600 dark:text-blue-400 border-blue-500/30 hover:border-blue-500/60',
+            OVERDUE:   active ? 'bg-destructive text-white border-destructive' : 'text-destructive border-destructive/30 hover:border-destructive/60',
+            COMPLETED: active ? 'bg-emerald-500 text-white border-emerald-500' : 'text-emerald-600 dark:text-emerald-400 border-emerald-500/30 hover:border-emerald-500/60',
+            CANCELLED: active ? 'bg-muted-foreground text-background border-muted-foreground' : 'text-muted-foreground border-border hover:border-muted-foreground/50',
+          };
+          const labels: Record<typeof f, string> = { ALL: 'All', ACTIVE: 'Active', OVERDUE: 'Overdue', COMPLETED: 'Completed', CANCELLED: 'Cancelled' };
+          return (
+            <button
+              key={f}
+              onClick={() => setStatusFilter(f)}
+              className={`flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full border transition-colors ${colors[f]}`}
+            >
+              {labels[f]}
+              <span className={`text-[10px] font-bold tabular-nums ${active ? 'opacity-80' : 'opacity-60'}`}>{count}</span>
+            </button>
+          );
+        })}
       </div>
 
       {/* Create Milestone Dialog */}
@@ -534,7 +574,7 @@ export default function PlanningTreeView({ projectId, canManage, projectMembers 
       >
         <SortableContext items={milestoneIds} strategy={verticalListSortingStrategy}>
           <div className="space-y-2">
-            {sortedMilestones.map(milestone => (
+            {filteredMilestones.map(milestone => (
               <MilestoneNode
                 key={milestone.id}
                 milestone={milestone}
@@ -573,9 +613,11 @@ export default function PlanningTreeView({ projectId, canManage, projectMembers 
           </div>
         )}
 
-        {sortedMilestones.length === 0 && tree.unassigned.data.length === 0 && (
+        {filteredMilestones.length === 0 && (
           <div className="text-center py-12 text-muted-foreground/50 text-sm">
-            No milestones yet. Create one to start planning.
+            {statusFilter === 'ALL'
+              ? 'No milestones yet. Create one to start planning.'
+              : `No ${statusFilter.toLowerCase()} milestones.`}
           </div>
         )}
 
