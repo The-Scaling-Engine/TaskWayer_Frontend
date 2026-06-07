@@ -15,7 +15,7 @@ export const userService = {
     return response.data;
   },
 
-  searchUsers: async (params: { q: string; limit?: number }): Promise<{ success: boolean; data: { users: { id: string; email: string; name?: string | null; avatar?: string | null }[] } }> => {
+  searchUsers: async (params: { q: string; limit?: number }): Promise<{ success: boolean; data: { users: { id: string; email: string; name?: string | null; avatar?: string | null; username?: string | null }[] } }> => {
     const response = await api.get('/user/search', { params });
     return response.data;
   },
