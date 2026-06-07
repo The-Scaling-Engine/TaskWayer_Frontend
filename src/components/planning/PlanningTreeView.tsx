@@ -4,7 +4,7 @@ import {
   type DragStartEvent, type DragEndEvent, type DragOverEvent,
 } from '@dnd-kit/core';
 import { SortableContext, arrayMove, verticalListSortingStrategy } from '@dnd-kit/sortable';
-import { Loader2, Plus, ChevronsUpDown, RefreshCw, X, Check } from 'lucide-react';
+import { Loader2, Plus, ChevronsUpDown, RefreshCw } from 'lucide-react';
 import { usePlanningStore } from '@/store/planningStore';
 import { useMilestoneStore } from '@/store/milestoneStore';
 import MilestoneNode from './MilestoneNode';
@@ -18,6 +18,13 @@ import { getApiErrorMessage } from '@/services/api';
 import TaskDialog from '@/components/TaskDialog';
 import { useTaskStore } from '@/store/taskStore';
 import { useSocketStore } from '@/store/socketStore';
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 
 interface Props {
   projectId: string;
@@ -51,8 +58,8 @@ export default function PlanningTreeView({ projectId, canManage, projectMembers 
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [createForMilestone, setCreateForMilestone] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [showNewMilestoneForm, setShowNewMilestoneForm] = useState(false);
-  const [newMilestoneTitle, setNewMilestoneTitle] = useState('');
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [createForm, setCreateForm] = useState({ title: '', description: '', startDate: '', deadline: '' });
   const [creatingMilestone, setCreatingMilestone] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -359,20 +366,27 @@ export default function PlanningTreeView({ projectId, canManage, projectMembers 
     setEditingTask({ _id: '__new__', title: '', description: '', status: 'todo', priority: 'medium', tags: [] } as unknown as Task);
   }, []);
 
+  const toIso = (val: string) => val ? `${val}T00:00:00.000Z` : null;
+
   const handleCreateMilestone = useCallback(async () => {
-    if (!newMilestoneTitle.trim() || creatingMilestone) return;
+    if (!createForm.title.trim() || creatingMilestone) return;
     setCreatingMilestone(true);
     try {
-      await milestoneStore.create(projectId, { title: newMilestoneTitle.trim() });
+      await milestoneStore.create(projectId, {
+        title:       createForm.title.trim(),
+        description: createForm.description.trim() || undefined,
+        startDate:   toIso(createForm.startDate),
+        deadline:    toIso(createForm.deadline),
+      });
       await refresh();
-      setShowNewMilestoneForm(false);
-      setNewMilestoneTitle('');
+      setShowCreateDialog(false);
+      setCreateForm({ title: '', description: '', startDate: '', deadline: '' });
     } catch (err) {
       toast.error(getApiErrorMessage(err, 'Failed to create milestone'));
     } finally {
       setCreatingMilestone(false);
     }
-  }, [newMilestoneTitle, creatingMilestone, milestoneStore, projectId, refresh]);
+  }, [createForm, creatingMilestone, milestoneStore, projectId, refresh]);
 
   // Overdue milestones bubble to top; within same rank, original server order preserved
   const sortedMilestones = [...(tree?.milestones ?? [])].sort((a, b) => {
@@ -428,7 +442,7 @@ export default function PlanningTreeView({ projectId, canManage, projectMembers 
 
         {canManage && (
           <button
-            onClick={() => { setShowNewMilestoneForm(true); setNewMilestoneTitle(''); }}
+            onClick={() => { setCreateForm({ title: '', description: '', startDate: '', deadline: '' }); setShowCreateDialog(true); }}
             className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
           >
             <Plus size={12} />
@@ -437,35 +451,79 @@ export default function PlanningTreeView({ projectId, canManage, projectMembers 
         )}
       </div>
 
-      {/* Inline new milestone form */}
-      {canManage && showNewMilestoneForm && (
-        <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl border border-primary/30 bg-card animate-in fade-in-0 slide-in-from-top-1 duration-150">
-          <input
-            autoFocus
-            value={newMilestoneTitle}
-            onChange={e => setNewMilestoneTitle(e.target.value)}
-            onKeyDown={e => {
-              if (e.key === 'Enter') { void handleCreateMilestone(); }
-              if (e.key === 'Escape') { setShowNewMilestoneForm(false); setNewMilestoneTitle(''); }
-            }}
-            placeholder="Milestone title..."
-            className="flex-1 text-sm bg-transparent outline-none text-foreground placeholder:text-muted-foreground"
-          />
-          <button
-            onClick={() => void handleCreateMilestone()}
-            disabled={!newMilestoneTitle.trim() || creatingMilestone}
-            className="p-1.5 rounded-lg hover:bg-primary/10 text-primary disabled:opacity-40 transition-colors"
-          >
-            {creatingMilestone ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-          </button>
-          <button
-            onClick={() => { setShowNewMilestoneForm(false); setNewMilestoneTitle(''); }}
-            className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground transition-colors"
-          >
-            <X size={14} />
-          </button>
-        </div>
-      )}
+      {/* Create Milestone Dialog */}
+      <Dialog open={showCreateDialog} onOpenChange={(open) => {
+        if (!open && !creatingMilestone) {
+          setShowCreateDialog(false);
+          setCreateForm({ title: '', description: '', startDate: '', deadline: '' });
+        }
+      }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>New Milestone</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-1">
+            <div className="space-y-1.5">
+              <Label htmlFor="ms-title">Title <span className="text-destructive">*</span></Label>
+              <Input
+                id="ms-title"
+                autoFocus
+                placeholder="Milestone title..."
+                value={createForm.title}
+                onChange={e => setCreateForm(f => ({ ...f, title: e.target.value }))}
+                onKeyDown={e => { if (e.key === 'Enter') void handleCreateMilestone(); }}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="ms-desc">Description</Label>
+              <Textarea
+                id="ms-desc"
+                placeholder="Optional description..."
+                value={createForm.description}
+                onChange={e => setCreateForm(f => ({ ...f, description: e.target.value }))}
+                rows={3}
+                className="resize-none text-sm"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="ms-start">Start Date</Label>
+                <Input
+                  id="ms-start"
+                  type="date"
+                  value={createForm.startDate}
+                  onChange={e => setCreateForm(f => ({ ...f, startDate: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="ms-deadline">Deadline</Label>
+                <Input
+                  id="ms-deadline"
+                  type="date"
+                  value={createForm.deadline}
+                  onChange={e => setCreateForm(f => ({ ...f, deadline: e.target.value }))}
+                />
+              </div>
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => { setShowCreateDialog(false); setCreateForm({ title: '', description: '', startDate: '', deadline: '' }); }}
+              disabled={creatingMilestone}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => void handleCreateMilestone()}
+              disabled={!createForm.title.trim() || creatingMilestone}
+              className="bg-[#FE812C] hover:bg-[#e5732a] text-white"
+            >
+              {creatingMilestone ? <><Loader2 size={14} className="animate-spin mr-1.5" />Creating...</> : 'Create Milestone'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* DnD Context */}
       <DndContext
