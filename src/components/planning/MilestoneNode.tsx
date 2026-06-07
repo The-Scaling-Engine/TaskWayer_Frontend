@@ -40,30 +40,34 @@ export default function MilestoneNode({
 
   // ── Inline edit state ──────────────────────────────────────
   const [isEditing, setIsEditing] = useState(false);
-  const [editForm, setEditForm] = useState({ title: '', startDate: '', deadline: '', status: 'ACTIVE' as string });
+  const [editForm, setEditForm] = useState({ title: '', description: '', startDate: '', deadline: '', status: 'ACTIVE' as string });
   const [saving, setSaving] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
 
   const handleEditOpen = () => {
     setEditForm({
-      title: milestone.title,
-      startDate: milestone.startDate ? milestone.startDate.substring(0, 10) : '',
-      deadline: milestone.deadline ? milestone.deadline.substring(0, 10) : '',
-      status: milestone.status ?? 'ACTIVE',
+      title:       milestone.title,
+      description: milestone.description ?? '',
+      startDate:   milestone.startDate ? milestone.startDate.substring(0, 10) : '',
+      deadline:    milestone.deadline  ? milestone.deadline.substring(0, 10)  : '',
+      status:      milestone.status ?? 'ACTIVE',
     });
     setDeleteConfirm(false);
     setIsEditing(true);
   };
+
+  const toIso = (val: string) => val ? `${val}T00:00:00.000Z` : null;
 
   const handleSave = async () => {
     if (!editForm.title.trim()) return;
     setSaving(true);
     try {
       await milestoneService.updateMilestone(projectId, milestone.id, {
-        title: editForm.title.trim(),
-        startDate: editForm.startDate || null,
-        deadline: editForm.deadline || null,
-        status: editForm.status as MilestoneStatus,
+        title:       editForm.title.trim(),
+        description: editForm.description.trim() || null,
+        startDate:   toIso(editForm.startDate),
+        deadline:    toIso(editForm.deadline),
+        status:      editForm.status as MilestoneStatus,
       });
       setIsEditing(false);
       await refresh();
@@ -256,47 +260,64 @@ export default function MilestoneNode({
       {/* Inline edit form */}
       {isEditing && (
         <div className="mt-1 p-3 rounded-xl border border-border bg-card space-y-3 animate-in fade-in-0 slide-in-from-top-1 duration-150">
-          <div className="grid grid-cols-2 gap-2">
-            <div className="col-span-2 space-y-1">
-              <label className="text-[10px] text-muted-foreground font-medium">Title *</label>
-              <input
-                autoFocus
-                value={editForm.title}
-                onChange={e => setEditForm(f => ({ ...f, title: e.target.value }))}
-                onKeyDown={e => { if (e.key === 'Enter') void handleSave(); if (e.key === 'Escape') setIsEditing(false); }}
-                className="w-full text-xs bg-muted/50 border border-border rounded-lg px-2 py-1.5 outline-none focus:border-primary/40"
+          {/* Top row: left = title + dates (50%), right = description (50%) */}
+          <div className="grid grid-cols-2 gap-3 items-stretch">
+            {/* Left column */}
+            <div className="flex flex-col gap-2">
+              <div className="space-y-1">
+                <label className="text-[10px] text-muted-foreground font-medium">Title *</label>
+                <input
+                  autoFocus
+                  value={editForm.title}
+                  onChange={e => setEditForm(f => ({ ...f, title: e.target.value }))}
+                  onKeyDown={e => { if (e.key === 'Enter') void handleSave(); if (e.key === 'Escape') setIsEditing(false); }}
+                  className="w-full text-xs bg-muted/50 border border-border rounded-lg px-2 py-1.5 outline-none focus:border-primary/40"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <label className="text-[10px] text-muted-foreground font-medium">Start date</label>
+                  <input
+                    type="date"
+                    value={editForm.startDate}
+                    onChange={e => setEditForm(f => ({ ...f, startDate: e.target.value }))}
+                    className="w-full text-xs bg-muted/50 border border-border rounded-lg px-2 py-1.5 outline-none focus:border-primary/40"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] text-muted-foreground font-medium">Deadline</label>
+                  <input
+                    type="date"
+                    value={editForm.deadline}
+                    onChange={e => setEditForm(f => ({ ...f, deadline: e.target.value }))}
+                    className="w-full text-xs bg-muted/50 border border-border rounded-lg px-2 py-1.5 outline-none focus:border-primary/40"
+                  />
+                </div>
+              </div>
+            </div>
+            {/* Right column — description fills full height of left */}
+            <div className="flex flex-col space-y-1">
+              <label className="text-[10px] text-muted-foreground font-medium">Description</label>
+              <textarea
+                value={editForm.description}
+                onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))}
+                placeholder="Optional description..."
+                className="flex-1 resize-none text-xs bg-muted/50 border border-border rounded-lg px-2 py-1.5 outline-none focus:border-primary/40 min-h-0"
               />
             </div>
-            <div className="space-y-1">
-              <label className="text-[10px] text-muted-foreground font-medium">Start date</label>
-              <input
-                type="date"
-                value={editForm.startDate}
-                onChange={e => setEditForm(f => ({ ...f, startDate: e.target.value }))}
-                className="w-full text-xs bg-muted/50 border border-border rounded-lg px-2 py-1.5 outline-none focus:border-primary/40"
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-[10px] text-muted-foreground font-medium">Deadline</label>
-              <input
-                type="date"
-                value={editForm.deadline}
-                onChange={e => setEditForm(f => ({ ...f, deadline: e.target.value }))}
-                className="w-full text-xs bg-muted/50 border border-border rounded-lg px-2 py-1.5 outline-none focus:border-primary/40"
-              />
-            </div>
-            <div className="col-span-2 space-y-1">
-              <label className="text-[10px] text-muted-foreground font-medium">Status</label>
-              <select
-                value={editForm.status}
-                onChange={e => setEditForm(f => ({ ...f, status: e.target.value }))}
-                className="w-full text-xs bg-muted/50 border border-border rounded-lg px-2 py-1.5 outline-none focus:border-primary/40"
-              >
-                <option value="ACTIVE">Active</option>
-                <option value="COMPLETED">Completed</option>
-                <option value="CANCELLED">Cancelled</option>
-              </select>
-            </div>
+          </div>
+          {/* Status row */}
+          <div className="space-y-1">
+            <label className="text-[10px] text-muted-foreground font-medium">Status</label>
+            <select
+              value={editForm.status}
+              onChange={e => setEditForm(f => ({ ...f, status: e.target.value }))}
+              className="w-full text-xs bg-muted/50 border border-border rounded-lg px-2 py-1.5 outline-none focus:border-primary/40"
+            >
+              <option value="ACTIVE">Active</option>
+              <option value="COMPLETED">Completed</option>
+              <option value="CANCELLED">Cancelled</option>
+            </select>
           </div>
           <div className="flex items-center justify-between">
             {deleteConfirm ? (
