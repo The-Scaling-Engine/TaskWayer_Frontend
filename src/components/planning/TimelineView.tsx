@@ -96,6 +96,15 @@ interface TooltipState { x: number; y: number; milestone: TimelineMilestone }
 
 function Tooltip({ tip }: { tip: TooltipState }) {
   const { milestone: m } = tip;
+
+  const plannedVsActual = (() => {
+    if (m.status !== 'COMPLETED' || !m.completedAt || !m.deadline) return null;
+    const diff = diffDays(new Date(m.deadline), new Date(m.completedAt));
+    if (diff === 0) return { label: 'On time',            color: 'text-emerald-500', icon: '✓' };
+    if (diff < 0)  return { label: `${Math.abs(diff)}d early`, color: 'text-emerald-500', icon: '✓' };
+    return               { label: `${diff}d late`,        color: 'text-amber-500',   icon: '⚠' };
+  })();
+
   return (
     <div
       className="fixed z-50 pointer-events-none bg-popover border border-border rounded-xl shadow-xl p-3 text-xs w-52"
@@ -104,11 +113,14 @@ function Tooltip({ tip }: { tip: TooltipState }) {
       <p className="font-semibold text-sm text-foreground truncate mb-1.5">{m.title}</p>
       <div className="space-y-1 text-muted-foreground">
         {m.startDate  && <p>Start: <span className="text-foreground">{formatDate(m.startDate,  { month: 'short', day: 'numeric', year: 'numeric' })}</span></p>}
-        {m.deadline   && <p>Due:   <span className={`font-medium ${m.isOverdue ? 'text-red-500' : 'text-foreground'}`}>{formatDate(m.deadline, { month: 'short', day: 'numeric', year: 'numeric' })}</span></p>}
+        {m.deadline   && <p>Planned: <span className={`font-medium ${m.isOverdue ? 'text-red-500' : 'text-foreground'}`}>{formatDate(m.deadline, { month: 'short', day: 'numeric', year: 'numeric' })}</span></p>}
         <p>Progress: <span className="text-foreground font-medium">{m.progress}%</span></p>
         <p>Tasks: <span className="text-foreground">{m.taskCount}</span></p>
         {m.status === 'COMPLETED' && m.completedAt && (
-          <p>Completed: <span className="text-primary">{formatDate(m.completedAt, { month: 'short', day: 'numeric' })}</span></p>
+          <p>Actual: <span className="text-emerald-500 font-medium">{formatDate(m.completedAt, { month: 'short', day: 'numeric', year: 'numeric' })}</span></p>
+        )}
+        {plannedVsActual && (
+          <p className={`font-semibold ${plannedVsActual.color}`}>{plannedVsActual.icon} {plannedVsActual.label}</p>
         )}
         {m.isOverdue && <p className="text-red-500 font-medium">Overdue</p>}
       </div>
@@ -235,6 +247,13 @@ export default function TimelineView({ projectId, onNavigateToPlanning }: Props)
         <span className="flex items-center gap-1"><span className="w-3 h-2 rounded-sm bg-amber-500 inline-block" />&lt; 7 days</span>
         <span className="flex items-center gap-1"><span className="w-3 h-2 rounded-sm bg-red-500 inline-block" />Overdue</span>
         <span className="flex items-center gap-1"><span className="w-3 h-2 rounded-sm bg-muted-foreground/30 inline-block" />Completed</span>
+        <span className="flex items-center gap-1.5">
+          <span className="relative inline-flex items-center justify-center w-3 h-3">
+            <span className="w-px h-3 bg-emerald-500 absolute" />
+            <span className="w-1.5 h-1.5 rotate-45 bg-emerald-500 absolute" />
+          </span>
+          Actual
+        </span>
         {!data.milestones.some(m => m.startDate) && (
           <span className="text-muted-foreground/60 italic">* No startDate — bars estimated from deadline</span>
         )}
@@ -294,11 +313,15 @@ export default function TimelineView({ projectId, onNavigateToPlanning }: Props)
               {/* Milestone rows */}
               {data.milestones.map((m, i) => {
                 const geom = barGeom(m);
+                const actualPct = (m.status === 'COMPLETED' && m.completedAt)
+                  ? Math.max(0, Math.min(100, (diffDays(rangeStart, new Date(m.completedAt)) / totalDays) * 100))
+                  : null;
                 return (
                   <div
                     key={m.id}
-                    onMouseEnter={() => setHoveredRow(i)}
-                    onMouseLeave={() => setHoveredRow(null)}
+                    onMouseEnter={(e) => { setHoveredRow(i); setTooltip({ x: e.clientX, y: e.clientY, milestone: m }); }}
+                    onMouseMove={(e) => setTooltip(prev => prev ? { ...prev, x: e.clientX, y: e.clientY } : null)}
+                    onMouseLeave={() => { setHoveredRow(null); setTooltip(null); }}
                     className={`relative h-12 border-b border-border/50 last:border-b-0 transition-colors ${
                       hoveredRow === i ? 'bg-primary/5' : i % 2 === 1 ? 'bg-muted/20' : ''
                     }`}
@@ -325,9 +348,6 @@ export default function TimelineView({ projectId, onNavigateToPlanning }: Props)
                       <div
                         className="absolute top-1/2 -translate-y-1/2 z-20 cursor-pointer group/bar"
                         style={{ left: `${geom.leftPct}%`, width: `${geom.widthPct}%` }}
-                        onMouseEnter={e => setTooltip({ x: e.clientX, y: e.clientY, milestone: m })}
-                        onMouseMove={e => setTooltip(prev => prev ? { ...prev, x: e.clientX, y: e.clientY } : null)}
-                        onMouseLeave={() => setTooltip(null)}
                         onClick={() => onNavigateToPlanning?.(m.id)}
                       >
                         {geom.isPointOnly ? (
@@ -379,6 +399,17 @@ export default function TimelineView({ projectId, onNavigateToPlanning }: Props)
                             )}
                           </div>
                         )}
+                      </div>
+                    )}
+
+                    {/* Actual completion marker — green vertical line + diamond */}
+                    {actualPct !== null && (
+                      <div
+                        className="absolute top-0 h-full z-30 pointer-events-none"
+                        style={{ left: `${actualPct}%` }}
+                      >
+                        <div className="absolute inset-y-0 left-0 w-px bg-emerald-500/80" />
+                        <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-2 h-2 rotate-45 bg-emerald-500 border border-background" />
                       </div>
                     )}
 
