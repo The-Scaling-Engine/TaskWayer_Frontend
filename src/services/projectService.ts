@@ -100,6 +100,21 @@ export const projectService = {
     return response.data;
   },
 
+  bulkAddMembers: async (
+    projectId: string,
+    members: { profileId: string; role?: ProjectMemberRole }[]
+  ): Promise<{ success: boolean; message: string; data: { added: number; skipped: number } }> => {
+    const response = await api.post(`/projects/${projectId}/members/bulk`, { members });
+    return response.data;
+  },
+
+  getLinkedDeptMembers: async (
+    projectId: string
+  ): Promise<{ success: boolean; data: { dept: { id: string; name: string }; members: { id: string; name: string | null; email: string; avatar: string | null; username: string | null }[] }[] }> => {
+    const response = await api.get(`/projects/${projectId}/linked-department-members`);
+    return response.data;
+  },
+
   // ── Departments ───────────────────────────────────────────────
 
   getDepartments: async (projectId: string): Promise<{ success: boolean; data: ProjectDepartmentLink[] }> => {
