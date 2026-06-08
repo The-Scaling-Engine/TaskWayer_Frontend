@@ -81,7 +81,7 @@ export default function InvitationPage() {
               ? 'You have declined this invitation.'
               : !isAuthenticated
               ? 'Please log in to accept this invitation.'
-              : "You've been invited to join a department on Wayer Tasks."}
+              : "You've been invited to join a department on Wayer Ops."}
           </p>
         </div>
 

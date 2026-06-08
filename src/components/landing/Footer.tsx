@@ -11,7 +11,7 @@ export default function Footer() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-10">
           {/* Brand */}
           <div className="col-span-2 md:col-span-1">
-            <span className="text-lg font-bold text-foreground">Wayer Tasks</span>
+            <span className="text-lg font-bold text-foreground">Wayer Ops</span>
             <p className="text-sm text-muted-foreground mt-2 leading-relaxed max-w-[200px]">
               Smart, simple, and efficient task management for modern teams.
             </p>
@@ -48,7 +48,7 @@ export default function Footer() {
           </div>
 
           <p className="text-sm text-muted-foreground order-3 sm:order-2">
-            © {new Date().getFullYear()} Wayer Tasks. All rights reserved.
+            © {new Date().getFullYear()} Wayer Ops. All rights reserved.
           </p>
 
           {/* Social icons */}
