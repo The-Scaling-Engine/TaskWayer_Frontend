@@ -1,9 +1,10 @@
 import React, { useMemo } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { ArrowLeft, FolderOpen, ChevronDown, Plus, Search, Loader2, Layers } from 'lucide-react';
+import { ArrowLeft, FolderOpen, ChevronDown, Plus, Search, Loader2, Layers, Sparkles } from 'lucide-react';
 import KanbanBoard from '@/components/KanbanBoard';
 import type { KanbanBoardRef } from '@/components/KanbanBoard';
 import BulkCreateDialog from '@/components/BulkCreateDialog';
+import ImportMarkdownDialog from '@/components/ImportMarkdownDialog';
 import { Button } from '@/components/ui/button';
 import TimerStartButton from '@/components/TimerStartButton';
 import { useTaskStore } from '@/store/taskStore';
@@ -17,6 +18,7 @@ export default function ProjectTasksPage() {
   const location = useLocation();
   const boardRef = React.useRef<KanbanBoardRef>(null);
   const [bulkDialogOpen, setBulkDialogOpen] = React.useState(false);
+  const [importDialogOpen, setImportDialogOpen] = React.useState(false);
   const { resetParams, silentFetch } = useTaskStore();
   const projects = useProjectStore((s) => s.projects);
   const hasFetched = useProjectStore((s) => s.hasFetched);
@@ -188,6 +190,16 @@ export default function ProjectTasksPage() {
           )}
           {canEditTasks && (
             <Button
+              variant="outline"
+              onClick={() => setImportDialogOpen(true)}
+              className="rounded-xl gap-2"
+            >
+              <Sparkles size={16} className="text-[#FE812C]" />
+              <span className="hidden sm:inline">Import from Notes</span>
+            </Button>
+          )}
+          {canEditTasks && (
+            <Button
               onClick={() => boardRef.current?.openCreateTask()}
               className="bg-[#FE812C] hover:bg-[#e5732a] text-white rounded-xl shadow-md shadow-[#FE812C]/20 gap-2"
             >
@@ -212,6 +224,15 @@ export default function ProjectTasksPage() {
         <BulkCreateDialog
           open={bulkDialogOpen}
           onClose={() => setBulkDialogOpen(false)}
+          projectId={projectId}
+          onCreated={() => silentFetch()}
+        />
+      )}
+
+      {projectId && (
+        <ImportMarkdownDialog
+          open={importDialogOpen}
+          onClose={() => setImportDialogOpen(false)}
           projectId={projectId}
           onCreated={() => silentFetch()}
         />
