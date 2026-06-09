@@ -12,10 +12,19 @@ export interface CreateTaskData {
   projectId?: string;
   columnId?: string | null;
   milestoneId?: string | null;
+  assignedTo?: string | null;
   isRecurring?: boolean;
   recurrenceType?: 'DAILY' | 'WEEKLY' | 'BIWEEKLY' | 'MONTHLY' | 'QUARTERLY' | 'YEARLY' | null;
   recurrenceInterval?: number | null;
   recurrenceEndDate?: string | null;
+}
+
+export interface DraftTask {
+  title: string;
+  description?: string;
+  priority: 'low' | 'medium' | 'high';
+  assignee?: string;
+  dueDate?: string;
 }
 
 export interface BulkCreateTaskInput {
@@ -102,5 +111,13 @@ export const taskService = {
   bulkCreateTasks: async (data: BulkCreateTaskInput): Promise<{ success: boolean; message: string; data: { count: number; tasks: Task[] } }> => {
     const response = await api.post('/tasks/bulk', data);
     return response.data;
+  },
+
+  importDraftFromMarkdown: async (
+    projectId: string,
+    markdown: string
+  ): Promise<DraftTask[]> => {
+    const response = await api.post(`/projects/${projectId}/tasks/import-draft`, { markdown });
+    return response.data?.data ?? [];
   },
 };
