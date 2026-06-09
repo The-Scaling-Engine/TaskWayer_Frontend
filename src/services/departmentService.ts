@@ -85,4 +85,18 @@ export const departmentService = {
     const response = await api.get('/departments/linkable');
     return response.data?.data ?? [];
   },
+
+  getLinkedProjects: async (deptId: string): Promise<LinkedProject[]> => {
+    const response = await api.get(`/departments/${deptId}/projects`);
+    return response.data?.data ?? [];
+  },
 };
+
+export interface LinkedProject {
+  id: string;
+  name: string;
+  description: string | null;
+  linkedAt: string;
+  memberCount: number;
+  owner: { id: string; name: string | null; avatar: string | null } | null;
+}

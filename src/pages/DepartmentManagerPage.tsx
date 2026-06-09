@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useDepartmentStore } from '@/store/departmentStore';
 import { useAuthStore } from '@/store/authStore';
-import { departmentService } from '@/services/departmentService';
+import { departmentService, type LinkedProject } from '@/services/departmentService';
 import { taskService } from '@/services/taskService';
 import { invitationService } from '@/services/invitationService';
 import { userService } from '@/services/userService';
@@ -10,7 +10,7 @@ import { toast } from 'sonner';
 import {
   Building2, ChevronDown, RefreshCw, Loader2, Users, Clock, AlertTriangle, Zap,
   ChevronLeft, ChevronRight, X, Check, UserPlus, UserMinus, Mail, Search, Timer, MessageSquare,
-  ClipboardPlus, Pencil, Trash2,
+  ClipboardPlus, Pencil, Trash2, FolderOpen, Link2,
 } from 'lucide-react';
 import CommentDialog from '@/components/CommentDialog';
 import TaskDialog from '@/components/TaskDialog';
@@ -46,7 +46,7 @@ export default function DepartmentManagerPage() {
   const { myDepartments, loading: storeLoading, hasFetched, fetchMyDepartments } = useDepartmentStore();
 
   // ── Page tabs ──────────────────────────────────────────────────────────────
-  const [pageTab, setPageTab] = useState<'workload' | 'members'>('workload');
+  const [pageTab, setPageTab] = useState<'workload' | 'members' | 'projects'>('workload');
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [switcherSearch, setSwitcherSearch] = useState('');
   const [refreshing, setRefreshing] = useState(false);
@@ -98,6 +98,10 @@ export default function DepartmentManagerPage() {
   const [addMemberLoading, setAddMemberLoading] = useState(false);
   const [transferOwnerConfirm, setTransferOwnerConfirm] = useState<{ userId: string; label: string } | null>(null);
   const [transferOwnerLoading, setTransferOwnerLoading] = useState(false);
+
+  // ── Linked Projects ────────────────────────────────────────────────────────
+  const [linkedProjects, setLinkedProjects] = useState<LinkedProject[]>([]);
+  const [linkedProjectsLoading, setLinkedProjectsLoading] = useState(false);
 
   // ── Auth / access ──────────────────────────────────────────────────────────
   const currentMembership: MyDepartmentMembership | undefined = myDepartments.find(
@@ -160,6 +164,15 @@ export default function DepartmentManagerPage() {
       fetchMembers();
     }
   }, [pageTab, departmentId, currentMembership, fetchMembers]);
+
+  useEffect(() => {
+    if (pageTab !== 'projects' || !departmentId || !currentMembership) return;
+    setLinkedProjectsLoading(true);
+    departmentService.getLinkedProjects(departmentId)
+      .then(data => setLinkedProjects(data))
+      .catch(() => {})
+      .finally(() => setLinkedProjectsLoading(false));
+  }, [pageTab, departmentId, currentMembership]);
 
   // ── Activity tab: fetch member's doing tasks + auto-refresh ──────────────
   const fetchActivityDoingTasks = useCallback(async (profileId: string) => {
@@ -527,16 +540,20 @@ export default function DepartmentManagerPage() {
 
         {/* Page tabs */}
         <div className="flex items-center gap-1 border-b border-border">
-          {(['workload', 'members'] as const).map((t) => (
+          {([
+            { key: 'workload',  label: 'Workload' },
+            { key: 'members',   label: 'Members' },
+            { key: 'projects',  label: 'Linked Projects' },
+          ] as const).map(({ key, label }) => (
             <button
-              key={t}
-              onClick={() => setPageTab(t)}
+              key={key}
+              onClick={() => setPageTab(key)}
               className={cn(
                 'px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors',
-                pageTab === t ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
+                pageTab === key ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
               )}
             >
-              {t === 'workload' ? 'Workload' : 'Members'}
+              {label}
             </button>
           ))}
         </div>
@@ -625,6 +642,71 @@ export default function DepartmentManagerPage() {
                   </div>
                 )}
               </>
+            )}
+          </div>
+        )}
+
+        {/* ── Linked Projects tab ── */}
+        {pageTab === 'projects' && (
+          <div className="space-y-3">
+            {!linkedProjectsLoading && (
+              <p className="text-sm text-muted-foreground">
+                {linkedProjects.length} linked project{linkedProjects.length !== 1 ? 's' : ''}
+              </p>
+            )}
+
+            {linkedProjectsLoading ? (
+              <div className="flex items-center justify-center py-16">
+                <Loader2 className="animate-spin text-primary" size={24} />
+              </div>
+            ) : linkedProjects.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-16 gap-2">
+                <Link2 size={32} className="text-muted-foreground/40" />
+                <p className="text-muted-foreground text-sm">No projects linked to this department yet.</p>
+              </div>
+            ) : (
+              <div className="grid gap-3 sm:grid-cols-2">
+                {linkedProjects.map((p) => (
+                  <button
+                    key={p.id}
+                    onClick={() => navigate(`/dashboard/projects/${p.id}/tasks`)}
+                    className="flex items-start gap-3 p-4 rounded-2xl border border-border bg-card hover:bg-muted/50 hover:border-primary/30 transition-colors text-left w-full group"
+                  >
+                    <div className="w-10 h-10 rounded-xl bg-[#FE812C]/10 flex items-center justify-center shrink-0">
+                      <FolderOpen size={18} className="text-[#FE812C]" />
+                    </div>
+                    <div className="flex-1 min-w-0 space-y-1">
+                      <p className="font-semibold text-sm text-foreground truncate group-hover:text-primary transition-colors">
+                        {p.name}
+                      </p>
+                      {p.description && (
+                        <p className="text-xs text-muted-foreground truncate">{p.description}</p>
+                      )}
+                      <div className="flex items-center gap-3 pt-0.5">
+                        <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                          <Users size={11} />
+                          {p.memberCount} member{p.memberCount !== 1 ? 's' : ''}
+                        </span>
+                        {p.owner && (
+                          <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                            {p.owner.avatar ? (
+                              <img src={p.owner.avatar} className="w-3.5 h-3.5 rounded-full object-cover" />
+                            ) : (
+                              <div className="w-3.5 h-3.5 rounded-full bg-primary/20 flex items-center justify-center text-[8px] font-bold text-primary">
+                                {p.owner.name?.[0]?.toUpperCase() ?? '?'}
+                              </div>
+                            )}
+                            {p.owner.name ?? 'Unknown'}
+                          </span>
+                        )}
+                        <span className="text-xs text-muted-foreground ml-auto">
+                          {new Date(p.linkedAt).toLocaleDateString()}
+                        </span>
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
             )}
           </div>
         )}
