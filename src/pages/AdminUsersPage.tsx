@@ -259,6 +259,7 @@ export default function AdminUsersPage() {
             <thead className="bg-muted/50 text-muted-foreground text-xs uppercase tracking-wider border-b border-border">
               <tr>
                 <th className="px-6 py-4 font-semibold">User details</th>
+                <th className="px-6 py-4 font-semibold">Name</th>
                 <th className="px-6 py-4 font-semibold">Role</th>
                 <th className="px-6 py-4 font-semibold">Status</th>
                 <th className="px-6 py-4 font-semibold">Joined at</th>
@@ -268,20 +269,20 @@ export default function AdminUsersPage() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={5} className="px-6 py-12 text-center">
+                  <td colSpan={6} className="px-6 py-12 text-center">
                     <Loader2 className="animate-spin text-primary mx-auto mb-2" size={24} />
                     <span className="text-muted-foreground">Loading users...</span>
                   </td>
                 </tr>
               ) : error ? (
                 <tr>
-                  <td colSpan={5} className="px-6 py-12 text-center text-destructive">
+                  <td colSpan={6} className="px-6 py-12 text-center text-destructive">
                     {error}
                   </td>
                 </tr>
               ) : filteredUsers.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-6 py-12 text-center text-muted-foreground">
+                  <td colSpan={6} className="px-6 py-12 text-center text-muted-foreground">
                     No users found matching your filters.
                   </td>
                 </tr>
@@ -295,9 +296,20 @@ export default function AdminUsersPage() {
                         </div>
                         <div>
                           <p className="font-medium text-foreground">{user.email || 'Unknown User'}</p>
-                          <p className="text-xs text-muted-foreground mt-0.5">ID: {(user.id ?? user._id)?.slice(-6) ?? 'N/A'}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
+                            <span>ID: {(user.id ?? user._id)?.slice(-6) ?? 'N/A'}</span>
+                            {user.username && (
+                              <>
+                                <span className="text-muted-foreground/40">|</span>
+                                <span className="text-primary/70">@{user.username}</span>
+                              </>
+                            )}
+                          </p>
                         </div>
                       </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <p className="font-medium text-foreground">{user.name || '—'}</p>
                     </td>
                     <td className="px-6 py-4">
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${
