@@ -100,7 +100,7 @@ function DroppableColumn({ id, children }: { id: string; children: React.ReactNo
   const { setNodeRef, isOver } = useDroppable({ id });
   return (
     <div ref={setNodeRef}
-      className={`space-y-2.5 min-h-[120px] rounded-xl p-2.5 transition-colors duration-150 ${
+      className={`flex-1 space-y-2.5 min-h-[120px] rounded-xl p-2.5 transition-colors duration-150 ${
         isOver ? 'bg-primary/10 ring-2 ring-primary/30 ring-inset' : 'bg-muted/30'
       }`}>
       {children}
@@ -116,7 +116,7 @@ function ProjectTaskDropZone({ columnId, children }: { columnId: string; childre
   });
   return (
     <div ref={setNodeRef}
-      className={`space-y-2.5 min-h-[120px] rounded-xl p-2.5 transition-colors duration-150 ${
+      className={`flex-1 space-y-2.5 min-h-[120px] rounded-xl p-2.5 transition-colors duration-150 ${
         isOver ? 'bg-primary/10 ring-2 ring-primary/30 ring-inset' : 'bg-muted/30'
       }`}>
       {children}
@@ -141,7 +141,7 @@ function SortableColumnShell({
       style={{ transform: CSS.Transform.toString(transform), transition }}
       {...attributes}
       className={cn(
-        'shrink-0 w-72',
+        'shrink-0 w-72 flex flex-col',
         isDragging && 'opacity-40',
         isNew && 'animate-in fade-in-0 slide-in-from-right-4 duration-300',
       )}>
@@ -709,7 +709,7 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
             <SortableContext
               items={boardColumns.map(c => `col-${c.id}`)}
               strategy={horizontalListSortingStrategy}>
-              <div className="flex gap-5 overflow-x-auto pb-4 min-h-[200px]">
+              <div className="flex gap-5 overflow-x-auto pb-4 items-stretch">
                 {boardColumns.map(col => {
                   const colTasks = getTasksByColumn(col);
                   const isRenaming = renamingColumnId === col.id;
@@ -718,7 +718,7 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
                   return (
                     <SortableColumnShell key={col.id} col={col} isNew={col.id === newColumnId}>
                       {({ dragListeners }) => (
-                        <div className="group space-y-3 w-full">
+                        <div className="group flex flex-col gap-3 w-full h-full">
                           {/* Column Header */}
                           <div className="flex items-center gap-1.5">
                             {/* Drag handle */}
