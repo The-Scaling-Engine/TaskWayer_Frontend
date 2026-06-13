@@ -578,7 +578,7 @@ export default function DepartmentManagerPage() {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-border bg-muted/30">
-                        {['Member', 'Job Title', 'Role', 'Todo', 'Doing', 'Done', 'Overdue', 'Session'].map((h, i) => (
+                        {['Member', 'Job Title', 'Role', 'Todo', 'Doing', 'Done', 'Overdue', 'Est. Hours', 'Session'].map((h, i) => (
                           <th key={h} className={cn('px-3 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider', i === 0 ? 'px-5 text-left' : i < 3 ? 'text-left' : 'text-center')}>{h}</th>
                         ))}
                       </tr>
@@ -588,7 +588,11 @@ export default function DepartmentManagerPage() {
                         <tr
                           key={m.memberId}
                           onClick={() => { setDetailMember(m); setDetailTab('activity'); setMemberTasks([]); setMemberTaskFilter('all'); setAssignedTasks([]); }}
-                          className={cn('transition-colors hover:bg-primary/5 cursor-pointer', m.tasks.overdue > 0 && 'bg-red-500/5')}
+                          className={cn(
+                            'transition-colors hover:bg-primary/5 cursor-pointer',
+                            m.tasks.overdue > 0 && 'bg-red-500/5',
+                            m.isOverloaded && 'ring-1 ring-inset ring-red-500/40',
+                          )}
                         >
                           <td className="px-5 py-3">
                             <div className="flex items-center gap-3">
@@ -600,7 +604,12 @@ export default function DepartmentManagerPage() {
                                 </div>
                               )}
                               <div className="min-w-0">
-                                <p className="font-medium text-foreground truncate">{m.profile.name || m.profile.email}</p>
+                                <div className="flex items-center gap-1.5">
+                                  <p className="font-medium text-foreground truncate">{m.profile.name || m.profile.email}</p>
+                                  {m.isOverloaded && (
+                                    <span className="shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-red-500/10 text-red-500 border border-red-500/30 uppercase tracking-wide">Overloaded</span>
+                                  )}
+                                </div>
                                 {m.profile.username && <p className="text-xs text-muted-foreground truncate">@{m.profile.username}</p>}
                               </div>
                             </div>
@@ -618,6 +627,24 @@ export default function DepartmentManagerPage() {
                             {m.tasks.overdue > 0 ? (
                               <span className="inline-flex items-center gap-1 text-red-500 font-semibold"><AlertTriangle size={12} />{m.tasks.overdue}</span>
                             ) : <span className="text-muted-foreground">0</span>}
+                          </td>
+                          <td className="px-3 py-3 text-center min-w-[110px]">
+                            {m.tasks.totalEstimatedHours > 0 ? (
+                              <div className="flex flex-col items-center gap-1">
+                                <span className={cn('text-xs font-semibold tabular-nums', m.isOverloaded ? 'text-red-500' : 'text-foreground')}>
+                                  {m.tasks.totalEstimatedHours}h
+                                </span>
+                                <div className="w-full max-w-[80px] h-1.5 rounded-full bg-muted overflow-hidden">
+                                  <div
+                                    className={cn('h-full rounded-full transition-all', m.isOverloaded ? 'bg-red-500' : 'bg-primary')}
+                                    style={{ width: `${Math.min((m.tasks.totalEstimatedHours / 40) * 100, 100)}%` }}
+                                  />
+                                </div>
+                                <span className="text-[10px] text-muted-foreground">/40h</span>
+                              </div>
+                            ) : (
+                              <span className="text-muted-foreground text-xs">—</span>
+                            )}
                           </td>
                           <td className="px-3 py-3 text-center">
                             {m.hasActiveSession ? (
