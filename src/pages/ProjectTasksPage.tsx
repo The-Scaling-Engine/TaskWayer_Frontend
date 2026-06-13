@@ -22,6 +22,8 @@ export default function ProjectTasksPage() {
   const { resetParams, silentFetch } = useTaskStore();
   const projects = useProjectStore((s) => s.projects);
   const hasFetched = useProjectStore((s) => s.hasFetched);
+  const fetchProjects = useProjectStore((s) => s.fetchProjects);
+  const projectsLoading = useProjectStore((s) => s.loading);
 
   const [switcherOpen, setSwitcherOpen] = React.useState(false);
   const [switcherSearch, setSwitcherSearch] = React.useState('');
@@ -54,6 +56,14 @@ export default function ProjectTasksPage() {
     }
   }, [projectId, resetParams]);
 
+  // If project not found in store after initial fetch, re-fetch the list once.
+  // Covers: (1) user added as member after session started, (2) stale store after account switch.
+  React.useEffect(() => {
+    if (hasFetched && !currentProject && projectId && !projectsLoading) {
+      fetchProjects();
+    }
+  }, [hasFetched, projectId]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Open task from notification link or Slack deep-link (?task=id)
   React.useEffect(() => {
     const { openTaskId, highlightCommentId, openNotesTab } = (location.state ?? {}) as {
@@ -73,7 +83,7 @@ export default function ProjectTasksPage() {
     return () => clearTimeout(timer);
   }, [location.state, location.search, navigate]);
 
-  if (!hasFetched) {
+  if (!hasFetched || (!currentProject && projectsLoading)) {
     return (
       <div className="flex items-center justify-center py-20">
         <Loader2 className="animate-spin text-primary" size={32} />
