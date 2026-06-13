@@ -17,6 +17,7 @@ export interface CreateTaskData {
   recurrenceType?: 'DAILY' | 'WEEKLY' | 'BIWEEKLY' | 'MONTHLY' | 'QUARTERLY' | 'YEARLY' | null;
   recurrenceInterval?: number | null;
   recurrenceEndDate?: string | null;
+  estimatedHours?: number | null;
 }
 
 export interface DraftTask {
@@ -53,6 +54,7 @@ export interface UpdateTaskData {
   assignedTo?: string | null;
   milestoneId?: string | null;
   milestoneOrder?: number | null;
+  estimatedHours?: number | null;
 }
 
 export const taskService = {
