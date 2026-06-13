@@ -242,7 +242,7 @@ export default function TimesheetPage() {
                       <YAxis tick={{ fontSize: 11 }} unit="h" />
                       <Tooltip
                         contentStyle={tooltipStyle}
-                        formatter={(v: number) => [`${v}h`, 'Hours']}
+                        formatter={(v) => [`${Number(v ?? 0)}h`, 'Hours']}
                       />
                       <Bar dataKey="hours" fill="#FE812C" radius={[4, 4, 0, 0]} maxBarSize={40} />
                     </BarChart>
@@ -272,7 +272,7 @@ export default function TimesheetPage() {
                       </Pie>
                       <Tooltip
                         contentStyle={tooltipStyle}
-                        formatter={(v: number) => [`${v}h`]}
+                        formatter={(v) => [`${Number(v ?? 0)}h`]}
                       />
                       <Legend
                         iconSize={10}
