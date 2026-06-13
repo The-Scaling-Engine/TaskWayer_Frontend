@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { analyticsService } from '@/services/analyticsService';
+import TimesheetPage from './TimesheetPage';
 import type { AnalyticsSummary, AnalyticsCompletion, AnalyticsTrend, AnalyticsTimeEntry, AnalyticsHeatmapEntry } from '@/types';
 import {
   ResponsiveContainer,
@@ -14,6 +15,7 @@ import {
   Legend,
 } from 'recharts';
 import { CheckSquare, Clock, TrendingUp, AlertTriangle, Loader2, BarChart2, Timer, RefreshCw, Grid } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -60,6 +62,7 @@ export default function AnalyticsPage() {
   const [loading, setLoading] = useState(true);
   const [timeRefreshing, setTimeRefreshing] = useState(false);
   const [range, setRange] = useState<Range>('30D');
+  const [activeTab, setActiveTab] = useState<'analytics' | 'timesheet'>('analytics');
 
   const fetchRangeData = useCallback(async (r: Range) => {
     try {
@@ -120,12 +123,40 @@ export default function AnalyticsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {/* Header + Tabs */}
       <div>
-        <h1 className="text-3xl font-bold text-foreground">Analytics</h1>
-        <p className="text-muted-foreground mt-1">Your personal task performance and productivity overview</p>
+        <h1 className="text-3xl font-bold text-foreground">Analytics & Timesheet</h1>
+        <p className="text-muted-foreground mt-1">Your personal task performance, productivity overview, and time tracking</p>
+        <div className="flex gap-1 mt-4 border-b border-border">
+          <button
+            onClick={() => setActiveTab('analytics')}
+            className={cn(
+              'px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors',
+              activeTab === 'analytics'
+                ? 'border-primary text-primary'
+                : 'border-transparent text-muted-foreground hover:text-foreground',
+            )}
+          >
+            Analytics
+          </button>
+          <button
+            onClick={() => setActiveTab('timesheet')}
+            className={cn(
+              'px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors',
+              activeTab === 'timesheet'
+                ? 'border-primary text-primary'
+                : 'border-transparent text-muted-foreground hover:text-foreground',
+            )}
+          >
+            Timesheet
+          </button>
+        </div>
       </div>
 
+      {activeTab === 'timesheet' ? (
+        <TimesheetPage />
+      ) : (
+      <>
       {loading ? (
         <div className="flex flex-col items-center justify-center py-20 bg-card rounded-2xl border border-border">
           <Loader2 className="animate-spin text-primary mb-4" size={40} />
@@ -336,6 +367,8 @@ export default function AnalyticsPage() {
             </div>
           </div>
         </>
+      )}
+      </>
       )}
     </div>
   );
