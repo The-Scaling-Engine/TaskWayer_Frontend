@@ -165,6 +165,7 @@ export interface AdminUser {
   id?: string;
   email: string;
   name?: string;
+  username?: string;
   role: 'USER' | 'ADMIN' | 'DEPT_MANAGER' | 'DEPT_MEMBER';
   status: 'PENDING' | 'ACTIVE' | 'BANNED';
   createdAt?: string;
