@@ -44,6 +44,7 @@ export interface Task {
   milestoneOrder?: number | null;
   inProgressAt?: string | null;
   parentTaskId?: string | null;
+  estimatedHours?: number | null;
   subtaskProgress?: { completed: number; total: number };
   __v?: number;
   _count?: { comments: number };
@@ -407,8 +408,10 @@ export interface MemberWorkload {
     overdue: number;
     highPriority: number;
     nearDeadline: number;
+    totalEstimatedHours: number;
   };
   hasActiveSession: boolean;
+  isOverloaded: boolean;
 }
 
 export interface WorkloadResponse {
