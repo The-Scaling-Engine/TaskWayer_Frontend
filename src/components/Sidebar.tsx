@@ -17,6 +17,9 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useDepartmentStore } from '@/store/departmentStore';
+import { useProjectStore } from '@/store/projectStore';
+import { useMilestoneStore } from '@/store/milestoneStore';
+import { usePlanningStore } from '@/store/planningStore';
 
 interface SidebarProps {
   collapsed: boolean;
@@ -46,6 +49,10 @@ export default function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose
   const location = useLocation();
   const myDepartments = useDepartmentStore((s) => s.myDepartments);
   const recentDeptIds = useDepartmentStore((s) => s.recentDeptIds);
+  const resetProjects    = useProjectStore((s) => s.reset);
+  const resetDepartments = useDepartmentStore((s) => s.reset);
+  const resetMilestones  = useMilestoneStore((s) => s.reset);
+  const resetPlanning    = usePlanningStore((s) => s.reset);
 
   const topDepts = useMemo(() => {
     return [...myDepartments]
@@ -62,6 +69,10 @@ export default function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose
   }, [myDepartments, recentDeptIds]);
 
   const handleLogout = () => {
+    resetProjects();
+    resetDepartments();
+    resetMilestones();
+    resetPlanning();
     logout();
     navigate('/login');
   };
