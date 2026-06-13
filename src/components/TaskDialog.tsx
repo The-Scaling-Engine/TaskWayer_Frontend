@@ -33,6 +33,8 @@ import Placeholder from '@tiptap/extension-placeholder';
 import DOMPurify from 'dompurify';
 import { cn } from '@/lib/utils';
 import { taskNoteService } from '@/services/taskNoteService';
+import { useTaskPresence } from '@/hooks/useTaskPresence';
+import PresenceAvatars from '@/components/PresenceAvatars';
 import {
   DndContext,
   closestCenter,
@@ -336,6 +338,9 @@ export default function TaskDialog({
   const myProfileId = user?.id ?? (user as { _id?: string })?._id;
   const myRole = projectMembers?.find(m => m.profileId === myProfileId)?.role;
   const canSelfAssignOnly = !canAssign && myRole === 'MEMBER';
+
+  // ── Presence ───────────────────────────────────────────────
+  const { activeUsers } = useTaskPresence(task?._id, open);
 
   // MEMBER creating a new task in project mode: default assignee to self
   useEffect(() => {
@@ -754,6 +759,7 @@ export default function TaskDialog({
                 <UserCheck size={11} /> Assigned
               </span>
             )}
+            <PresenceAvatars users={activeUsers} />
           </div>
         </DialogHeader>
 
