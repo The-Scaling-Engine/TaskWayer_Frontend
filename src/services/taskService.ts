@@ -120,4 +120,9 @@ export const taskService = {
     const response = await api.post(`/projects/${projectId}/tasks/import-draft`, { markdown });
     return response.data?.data ?? [];
   },
+
+  breakdownTask: async (taskId: string): Promise<string[]> => {
+    const response = await api.post(`/tasks/${taskId}/breakdown`);
+    return response.data?.data?.items ?? [];
+  },
 };
