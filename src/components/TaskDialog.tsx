@@ -23,8 +23,9 @@ import {
 import type { Task, TaskNote, ProjectMember } from '@/types';
 import { useProjectStore } from '@/store/projectStore';
 import { useAuthStore } from '@/store/authStore';
-import { UserCheck, Bold, Italic, List, Pencil, Trash2, Check, GripVertical, Plus, Loader2 } from 'lucide-react';
+import { UserCheck, Bold, Italic, List, Pencil, Trash2, Check, GripVertical, Plus, Loader2, Sparkles, X } from 'lucide-react';
 import { subtaskService } from '@/services/subtaskService';
+import { taskService } from '@/services/taskService';
 import DescriptionEditor from '@/components/DescriptionEditor';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
@@ -386,6 +387,12 @@ export default function TaskDialog({
   const [deletingNoteIds, setDeletingNoteIds] = useState<Set<string>>(new Set());
   const [newNoteId, setNewNoteId] = useState<string | null>(null);
 
+  // ── AI Breakdown state ─────────────────────────────────────
+  const [breakdownLoading, setBreakdownLoading] = useState(false);
+  const [breakdownItems, setBreakdownItems] = useState<string[]>([]);
+  const [breakdownError, setBreakdownError] = useState('');
+  const [addingBreakdown, setAddingBreakdown] = useState<'notes' | 'subtasks' | null>(null);
+
   // ── Sorted notes: undone (by order) then done (by createdAt)
   const sortedNotes = useMemo(() => {
     const undone = notes.filter(n => !n.done).sort((a, b) => a.order - b.order);
@@ -536,6 +543,7 @@ export default function TaskDialog({
     setMilestoneId(null); setProjectMilestones([]);
     setSubtasks([]); setNewSubtaskTitle('');
     setConfirmDeleteSubtaskId(null); setDeletingSubtaskIds(new Set());
+    setBreakdownItems([]); setBreakdownError(''); setAddingBreakdown(null);
     setError('');
     setInfiniteRecurringWarn(false);
   };
@@ -751,7 +759,7 @@ export default function TaskDialog({
 
         {/* ── Tab bar — only when editing an existing task ─── */}
         {task?._id && (
-          <div className="flex border-b border-border -mt-1">
+          <div className="flex items-center border-b border-border -mt-1">
             <button
               type="button"
               onClick={() => handleTabChange('details')}
@@ -808,6 +816,40 @@ export default function TaskDialog({
                 </span>
               )}
             </button>
+
+            {!isReadOnly && (
+              <div className="ml-auto flex items-center gap-2 pr-1">
+                {breakdownError && (
+                  <span className="text-xs text-destructive">{breakdownError}</span>
+                )}
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (breakdownItems.length > 0) { setBreakdownItems([]); setBreakdownError(''); return; }
+                    setBreakdownLoading(true);
+                    setBreakdownError('');
+                    try {
+                      const items = await taskService.breakdownTask(task._id!);
+                      setBreakdownItems(items);
+                      handleTabChange('details');
+                    } catch {
+                      setBreakdownError('AI breakdown failed. Please try again.');
+                    } finally {
+                      setBreakdownLoading(false);
+                    }
+                  }}
+                  disabled={breakdownLoading}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-50"
+                >
+                  {breakdownLoading ? (
+                    <Loader2 size={13} className="animate-spin" />
+                  ) : (
+                    <Sparkles size={13} className="text-[#FE812C]" />
+                  )}
+                  {breakdownItems.length > 0 ? 'Clear' : 'AI Breakdown'}
+                </button>
+              </div>
+            )}
           </div>
         )}
 
@@ -874,6 +916,84 @@ export default function TaskDialog({
                     autoFocus={!isReadOnly}
                     disabled={isReadOnly}
                   />
+                </div>
+              )}
+
+              {breakdownItems.length > 0 && task?._id && !isReadOnly && (
+                <div className="rounded-xl border border-border bg-muted/30 p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+                      <Sparkles size={11} className="text-[#FE812C]" />
+                      AI Suggested Breakdown
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setBreakdownItems([])}
+                      className="text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      <X size={13} />
+                    </button>
+                  </div>
+                  <ul className="space-y-1">
+                    {breakdownItems.map((item, i) => (
+                      <li key={i} className="flex items-start gap-2 text-sm">
+                        <span className="mt-1 w-3.5 h-3.5 rounded border border-border shrink-0" />
+                        <span className="leading-snug">{item}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="flex items-center gap-2 pt-1">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={addingBreakdown !== null}
+                      onClick={async () => {
+                        setAddingBreakdown('notes');
+                        try {
+                          for (const item of breakdownItems) {
+                            await taskNoteService.addNote(task._id!, `<p>${item}</p>`);
+                          }
+                          setBreakdownItems([]);
+                          setActiveTab('notes');
+                        } catch {
+                          setBreakdownError('Failed to add items as notes.');
+                        } finally {
+                          setAddingBreakdown(null);
+                        }
+                      }}
+                      className="rounded-lg text-xs gap-1.5 h-7 px-3"
+                    >
+                      {addingBreakdown === 'notes' ? <Loader2 size={12} className="animate-spin" /> : <List size={12} />}
+                      Add as Notes
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={addingBreakdown !== null}
+                      onClick={async () => {
+                        setAddingBreakdown('subtasks');
+                        try {
+                          for (const item of breakdownItems) {
+                            await subtaskService.create(task._id!, { title: item });
+                          }
+                          const refreshed = await subtaskService.list(task._id!);
+                          setSubtasks(refreshed.data);
+                          setBreakdownItems([]);
+                          setActiveTab('subtasks');
+                        } catch {
+                          setBreakdownError('Failed to add items as subtasks.');
+                        } finally {
+                          setAddingBreakdown(null);
+                        }
+                      }}
+                      className="rounded-lg text-xs gap-1.5 h-7 px-3"
+                    >
+                      {addingBreakdown === 'subtasks' ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
+                      Add as Subtasks
+                    </Button>
+                  </div>
                 </div>
               )}
 
