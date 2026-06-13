@@ -964,7 +964,8 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
           onCountUpdate={(taskId, count) =>
             setCommentCounts((prev) => ({ ...prev, [taskId]: count }))
           }
-          highlightCommentId={highlightCommentId} />
+          highlightCommentId={highlightCommentId}
+          projectMembers={lockedProjectId ? projectMembers : undefined} />
       )}
 
       {/* Cancel Recurring Dialog */}
