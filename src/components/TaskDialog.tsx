@@ -1016,7 +1016,7 @@ export default function TaskDialog({
                     value={description}
                     onChange={setDescription}
                     disabled={isReadOnly}
-                    className="min-h-[150px]"
+                    className="min-h-[160px]"
                   />
                 </div>
                 <div className="space-y-2.5 w-[160px] shrink-0">
@@ -1151,7 +1151,7 @@ export default function TaskDialog({
                 );
               })()}
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-[4fr_4fr_2fr] gap-3">
                 <div className="space-y-2">
                   <Label htmlFor="task-scheduled" className="font-medium">Scheduled for</Label>
                   <Input id="task-scheduled" type="datetime-local" step="60" value={scheduledAt} onChange={(e) => setScheduledAt(e.target.value)} className="rounded-xl" disabled={isReadOnly} />
@@ -1167,7 +1167,7 @@ export default function TaskDialog({
                   )}
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="task-estimated-hours" className="font-medium">Estimated hours <span className="text-muted-foreground font-normal">(opt.)</span></Label>
+                  <Label htmlFor="task-estimated-hours" className="font-medium">Est. hours <span className="text-muted-foreground font-normal">(opt.)</span></Label>
                   <Input
                     id="task-estimated-hours"
                     type="number"
