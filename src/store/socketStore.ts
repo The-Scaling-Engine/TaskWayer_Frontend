@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { io, type Socket } from 'socket.io-client';
+import { supabase } from '@/lib/supabase';
 
 const SOCKET_URL = (import.meta.env.VITE_API_URL as string)?.replace('/api', '') ?? 'http://localhost:3000';
 
@@ -24,11 +25,18 @@ export const useSocketStore = create<SocketStore>((set, get) => ({
     if (existing) { existing.removeAllListeners(); existing.disconnect(); }
 
     const socket = io(SOCKET_URL, {
-      auth: { token },
+      // Async auth: fetch the freshest Supabase session on every connect/reconnect
+      // so expired tokens are never sent after a silent refresh.
+      auth: (cb: (data: { token: string }) => void) => {
+        supabase.auth.getSession()
+          .then(({ data: { session } }) => cb({ token: session?.access_token ?? token }))
+          .catch(() => cb({ token }));
+      },
       transports: ['websocket', 'polling'],
       reconnection: true,
-      reconnectionDelay: 2000,
-      reconnectionAttempts: 5,
+      reconnectionDelay: 3000,
+      reconnectionDelayMax: 10000,
+      reconnectionAttempts: Infinity,
     });
 
     socket.on('connect', () => set({ connected: true }));
@@ -49,13 +57,8 @@ export const useSocketStore = create<SocketStore>((set, get) => ({
     set({ socket: null, connected: false });
   },
 
-  // Update auth token so reconnections use the latest token
-  updateToken: (token: string) => {
-    const socket = get().socket;
-    if (socket) {
-      (socket as Socket & { auth: { token: string } }).auth = { token };
-    }
-  },
+  // No-op: token is now fetched dynamically via supabase.auth.getSession() on each connect
+  updateToken: (_token: string) => {},
 
   joinTask: (taskId: string) => {
     get().socket?.emit('join:task', taskId);

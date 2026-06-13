@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useAuthStore } from '@/store/authStore';
 import { useNotificationStore } from '@/store/notificationStore';
 import { useDepartmentStore } from '@/store/departmentStore';
+import { useSocketStore } from '@/store/socketStore';
 import { Link, useNavigate } from 'react-router-dom';
 import type { Notification } from '@/types';
 import { cn } from '@/lib/utils';
@@ -31,15 +32,18 @@ export default function Topbar({ sidebarCollapsed }: TopbarProps) {
   const myDepartments = useDepartmentStore((s) => s.myDepartments);
   const navigate = useNavigate();
 
+  const connected = useSocketStore((s) => s.connected);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Fetch unread count on mount and poll every 30s
+  // Fetch unread count on mount and poll every 30s — skip when server is unreachable
   useEffect(() => {
-    fetchUnreadCount();
-    const interval = setInterval(fetchUnreadCount, 30000);
+    if (connected) fetchUnreadCount();
+    const interval = setInterval(() => {
+      if (useSocketStore.getState().connected) fetchUnreadCount();
+    }, 30000);
     return () => clearInterval(interval);
-  }, [fetchUnreadCount]);
+  }, [fetchUnreadCount, connected]);
 
   // Fetch full list when dropdown opens
   useEffect(() => {
