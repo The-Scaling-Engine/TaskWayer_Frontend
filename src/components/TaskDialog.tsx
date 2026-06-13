@@ -359,6 +359,9 @@ export default function TaskDialog({
   const [priority, setPriority] = useState<'low' | 'medium' | 'high'>(task?.priority || 'medium');
   const [tagsInput, setTagsInput] = useState(task?.tags?.join(', ') || '');
   const [projectId, setProjectId] = useState(lockedProjectId || task?.projectId || '__none__');
+  const [estimatedHours, setEstimatedHours] = useState<string>(
+    task?.estimatedHours != null ? String(task.estimatedHours) : ''
+  );
   const [isRecurring, setIsRecurring] = useState(task?.isRecurring ?? false);
   const [recurrenceUnit, setRecurrenceUnit] = useState<'DAILY' | 'WEEKLY' | 'MONTHLY' | ''>(() => toRecurrenceUnit(task));
   const [recurrenceInterval, setRecurrenceInterval] = useState<number>(() => toRecurrenceIntervalValue(task));
@@ -445,6 +448,7 @@ export default function TaskDialog({
       setColumnId(task?.columnId ?? null);
       setAssignedTo(task?.assignedTo ?? null);
       setMilestoneId(task?.milestoneId ?? null);
+      setEstimatedHours(task?.estimatedHours != null ? String(task.estimatedHours) : '');
       setError('');
     }
   }, [task, open, defaultDeadline, defaultScheduledAt]);
@@ -569,6 +573,7 @@ export default function TaskDialog({
     recurrenceEndDate: isRecurring && recurrenceEndDate ? new Date(`${recurrenceEndDate}T23:59:59`).toISOString() : null,
     ...(lockedProjectId && { assignedTo }),
     ...(lockedProjectId && canAssign && { milestoneId }),
+    estimatedHours: estimatedHours !== '' ? parseFloat(estimatedHours) : null,
   });
 
   const handleSubmit = (e: FormEvent) => {
@@ -1160,6 +1165,20 @@ export default function TaskDialog({
                   ) : (
                     <Input id="task-deadline" type="datetime-local" step="60" value={deadline} onChange={(e) => setDeadline(e.target.value)} className="rounded-xl" disabled={isReadOnly} />
                   )}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="task-estimated-hours" className="font-medium">Estimated hours <span className="text-muted-foreground font-normal">(opt.)</span></Label>
+                  <Input
+                    id="task-estimated-hours"
+                    type="number"
+                    min="0"
+                    step="0.5"
+                    placeholder="e.g. 4"
+                    value={estimatedHours}
+                    onChange={(e) => setEstimatedHours(e.target.value)}
+                    className="rounded-xl"
+                    disabled={isReadOnly}
+                  />
                 </div>
               </div>
 
