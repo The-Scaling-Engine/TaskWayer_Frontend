@@ -33,7 +33,7 @@ const navItems = [
   { icon: CheckSquare, label: 'My Tasks', path: '/dashboard/tasks' },
   { icon: FolderOpen, label: 'Projects', path: '/dashboard/projects' },
   { icon: CalendarDays, label: 'Calendar', path: '/dashboard/calendar' },
-  { icon: BarChart2, label: 'Analytics', path: '/dashboard/analytics' },
+  { icon: BarChart2, label: 'Analytics & Timesheet', path: '/dashboard/analytics' },
   { icon: Settings, label: 'Settings', path: '/dashboard/settings' },
 ];
 
