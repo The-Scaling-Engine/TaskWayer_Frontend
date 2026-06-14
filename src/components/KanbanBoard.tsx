@@ -100,7 +100,7 @@ function DroppableColumn({ id, children }: { id: string; children: React.ReactNo
   const { setNodeRef, isOver } = useDroppable({ id });
   return (
     <div ref={setNodeRef}
-      className={`flex-1 space-y-2.5 min-h-[120px] rounded-xl p-2.5 transition-colors duration-150 ${
+      className={`flex-1 min-h-[120px] rounded-xl p-2.5 transition-colors duration-150 ${
         isOver ? 'bg-primary/10 ring-2 ring-primary/30 ring-inset' : 'bg-muted/30'
       }`}>
       {children}
@@ -179,7 +179,11 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
   lockedProjectId, lockedProjectName,
   canEditTasks = true, canDeleteTasks, canAssign = false,
 }, ref) => {
-  const { tasks, loading, createTask, updateTask, deleteTask, moveTask, moveTaskToColumn, cancelRecurrence, silentFetch, patchTask } = useTaskStore();
+  const {
+    tasks, loading, columnTasks, columnPaginations, columnLoading, loadMoreColumn,
+    createTask, updateTask, deleteTask, moveTask, moveTaskToColumn, cancelRecurrence,
+    silentFetch, silentRefreshPersonal, patchTask,
+  } = useTaskStore();
   const { socket } = useSocketStore();
   const currentUser = useAuthStore((s) => s.user);
   const currentUserId = currentUser?.id ?? currentUser?._id;
@@ -239,10 +243,13 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
   // ── Socket ──────────────────────────────────────────────────
   useEffect(() => {
     if (!socket) return;
-    const handler = () => { void silentFetch(); };
+    const handler = () => {
+      if (lockedProjectId) { void silentFetch(); }
+      else { void silentRefreshPersonal(); }
+    };
     socket.on('task:statusUpdated', handler);
     return () => { socket.off('task:statusUpdated', handler); };
-  }, [socket, silentFetch]);
+  }, [socket, silentFetch, silentRefreshPersonal, lockedProjectId]);
 
   // ── Fetch project members ────────────────────────────────────
   useEffect(() => {
@@ -340,8 +347,14 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
     return true;
   };
 
-  const getTasksByStatus = (status: string) =>
-    sortTasks(tasks.filter((t) => t.status === status && (!filterFn || filterFn(t)) && applyFilters(t)));
+  const getTasksByStatus = (status: string) => {
+    if (!lockedProjectId) {
+      const col = columnTasks[status as 'todo' | 'doing' | 'done'] ?? [];
+      return col.filter(t => (!filterFn || filterFn(t)) && applyFilters(t));
+    }
+    const filtered = tasks.filter((t) => t.status === status && (!filterFn || filterFn(t)) && applyFilters(t));
+    return sortTasks(filtered);
+  };
 
   const getTasksByColumn = (col: BoardColumn) =>
     sortTasks(tasks.filter((t) => {
@@ -571,7 +584,7 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
         boardColumns={lockedProjectId ? boardColumns : undefined} />
     ));
 
-  if (loading) {
+  if (lockedProjectId ? loading : columnLoading) {
     return (
       <div className="flex items-center justify-center py-20">
         <Loader2 className="animate-spin text-primary" size={32} />
@@ -687,16 +700,18 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
             </div>
           ) : <div />}
 
-          <div className="flex items-center gap-2">
-            <ArrowUpDown size={13} className="text-muted-foreground" />
-            <span className="text-xs text-muted-foreground">Sort by</span>
-            <select value={sortBy} onChange={(e) => handleSortChange(e.target.value as SortOption)}
-              className="text-xs bg-muted border border-border rounded-lg px-2.5 py-1 text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer">
-              <option value="created">Created</option>
-              <option value="priority">Priority</option>
-              <option value="dueDate">Due Date</option>
-            </select>
-          </div>
+          {lockedProjectId && (
+            <div className="flex items-center gap-2">
+              <ArrowUpDown size={13} className="text-muted-foreground" />
+              <span className="text-xs text-muted-foreground">Sort by</span>
+              <select value={sortBy} onChange={(e) => handleSortChange(e.target.value as SortOption)}
+                className="text-xs bg-muted border border-border rounded-lg px-2.5 py-1 text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer">
+                <option value="created">Created</option>
+                <option value="priority">Priority</option>
+                <option value="dueDate">Due Date</option>
+              </select>
+            </div>
+          )}
         </div>
 
         {/* ── Project mode: dynamic columns ── */}
@@ -885,14 +900,17 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
             {STATIC_COLUMNS.map((col) => {
               const colTasks = getTasksByStatus(col.id);
+              const colPagination = columnPaginations[col.id as 'todo' | 'doing' | 'done'];
+              const totalCount = colPagination?.totalTasks ?? colTasks.length;
+              const remaining = totalCount - colTasks.length;
               return (
-                <div key={col.id} className="space-y-3">
+                <div key={col.id} className="flex flex-col h-full gap-3">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <div className={`w-2.5 h-2.5 rounded-full ${col.color}`} />
                       <h3 className="font-semibold text-foreground text-sm">{col.title}</h3>
                       <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full font-medium">
-                        {colTasks.length}
+                        {totalCount}
                       </span>
                     </div>
                     {canEditTasks && (
@@ -904,11 +922,21 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
                     )}
                   </div>
                   <DroppableColumn id={col.id}>
-                    {colTasks.length === 0 ? (
-                      <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
-                        <p className="text-xs">No tasks yet</p>
-                      </div>
-                    ) : renderTaskCards(colTasks)}
+                    <div className="space-y-2.5">
+                      {colTasks.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
+                          <p className="text-xs">No tasks yet</p>
+                        </div>
+                      ) : renderTaskCards(colTasks)}
+                      {colPagination?.hasNextPage && (
+                        <button
+                          onClick={() => void loadMoreColumn(col.id as 'todo' | 'doing' | 'done')}
+                          className="w-full text-xs text-muted-foreground hover:text-foreground py-2 rounded-xl border border-dashed border-border/50 hover:border-border hover:bg-muted/30 transition-colors mt-1"
+                        >
+                          Load {Math.min(20, remaining)} more ({remaining} remaining)
+                        </button>
+                      )}
+                    </div>
                   </DroppableColumn>
                 </div>
               );

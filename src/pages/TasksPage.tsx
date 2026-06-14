@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import KanbanBoard from '@/components/KanbanBoard';
 import type { KanbanBoardRef } from '@/components/KanbanBoard';
 import BulkCreatePersonalDialog from '@/components/BulkCreatePersonalDialog';
-import { Search, ChevronLeft, ChevronRight, Plus, Layers } from 'lucide-react';
+import { Search, Plus, Layers } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useTaskStore } from '@/store/taskStore';
 import DateRangePicker from '@/components/DateRangePicker';
@@ -14,14 +14,31 @@ export default function TasksPage() {
   const boardRef = useRef<KanbanBoardRef>(null);
   const location = useLocation();
   const navigate = useNavigate();
-  const { params, setParams, resetParams, pagination, silentFetch } = useTaskStore();
+  const { fetchPersonalTasks, silentRefreshPersonal } = useTaskStore();
   const [bulkDialogOpen, setBulkDialogOpen] = React.useState(false);
-  const [searchValue, setSearchValue] = React.useState(params.search || '');
 
+  // Local filter state
+  const [searchValue, setSearchValue] = React.useState('');
+  const [dateSort, setDateSort] = React.useState('');
+  const [prioritySort, setPrioritySort] = React.useState('');
+  const [deadlineFrom, setDeadlineFrom] = React.useState<string | null>(null);
+  const [deadlineTo, setDeadlineTo] = React.useState<string | null>(null);
+
+  const buildParams = React.useCallback(() => ({
+    personal: true as const,
+    search: searchValue || undefined,
+    sortBy: dateSort ? dateSort.split('-')[0] : prioritySort ? prioritySort.split('-')[0] : undefined,
+    order: dateSort ? dateSort.split('-')[1] : prioritySort ? prioritySort.split('-')[1] : undefined,
+    deadlineFrom: deadlineFrom ?? undefined,
+    deadlineTo: deadlineTo ?? undefined,
+  }), [searchValue, dateSort, prioritySort, deadlineFrom, deadlineTo]);
+
+  // Initial fetch
   React.useEffect(() => {
-    resetParams({ personal: true });
-  }, [resetParams]);
+    void fetchPersonalTasks({ personal: true });
+  }, [fetchPersonalTasks]);
 
+  // Location state handling
   React.useEffect(() => {
     if (location.state?.openCreate) {
       const timer = setTimeout(() => {
@@ -44,47 +61,45 @@ export default function TasksPage() {
     }
   }, [location, navigate]);
 
+  // Debounced search
   React.useEffect(() => {
     const timeout = setTimeout(() => {
-      if (searchValue !== (params.search || '')) {
-        setParams({ search: searchValue || undefined });
-      }
+      void fetchPersonalTasks(buildParams());
     }, 500);
     return () => clearTimeout(timeout);
-  }, [searchValue, setParams, params.search]);
-
-  const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSearchValue(e.target.value);
-  };
-
-  const handleStatusChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    setParams({ status: e.target.value || undefined });
-  };
+  }, [searchValue]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleDeadlineRange = (range: DateRange) => {
-    setParams({
-      deadlineFrom: range.from ?? undefined,
-      deadlineTo: range.to ?? undefined,
+    const from = range.from ?? null;
+    const to = range.to ?? null;
+    setDeadlineFrom(from);
+    setDeadlineTo(to);
+    void fetchPersonalTasks({
+      ...buildParams(),
+      deadlineFrom: from ?? undefined,
+      deadlineTo: to ?? undefined,
     });
   };
 
-  const handleSortChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+  const handleDateSortChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const value = e.target.value;
-    if (!value) {
-      setParams({ sortBy: undefined, order: undefined });
-      return;
-    }
-    const [sortBy, order] = value.split('-');
-    setParams({ sortBy, order });
+    setDateSort(value);
+    setPrioritySort('');
+    const [sb, ord] = value ? value.split('-') : [undefined, undefined];
+    void fetchPersonalTasks({ ...buildParams(), sortBy: sb, order: ord });
   };
 
-  const handlePageChange = (newPage: number) => {
-    setParams({ page: newPage });
+  const handlePrioritySortChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const value = e.target.value;
+    setPrioritySort(value);
+    setDateSort('');
+    const [sb, ord] = value ? value.split('-') : [undefined, undefined];
+    void fetchPersonalTasks({ ...buildParams(), sortBy: sb, order: ord });
   };
 
   return (
     <div className="space-y-6">
-      {/* Task Tracker Section */}
+      {/* Header */}
       <div className="flex items-center justify-between pt-2">
         <div className="flex items-center gap-3">
           <h2 className="text-xl font-bold text-foreground">Task Tracker</h2>
@@ -118,33 +133,22 @@ export default function TasksPage() {
             type="text"
             placeholder="Search tasks by title..."
             value={searchValue}
-            onChange={handleSearch}
+            onChange={(e) => setSearchValue(e.target.value)}
             className="w-full pl-10 pr-4 py-2 bg-card border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium"
           />
         </div>
 
-        {/* Deadline date range filter */}
+        {/* Deadline filter */}
         <DateRangePicker
-          value={{ from: params.deadlineFrom ?? null, to: params.deadlineTo ?? null }}
+          value={{ from: deadlineFrom, to: deadlineTo }}
           onChange={handleDeadlineRange}
         />
 
-        {/* Filters & Sort */}
+        {/* Sort controls */}
         <div className="flex flex-wrap gap-3">
           <select
-            value={params.status || ''}
-            onChange={handleStatusChange}
-            className="px-3 py-2 bg-card border border-border rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 appearance-none min-w-[130px] font-medium"
-          >
-            <option value="">All Statuses</option>
-            <option value="todo">To Do</option>
-            <option value="doing">In Progress</option>
-            <option value="done">Done</option>
-          </select>
-
-          <select
-            value={params.sortBy && params.sortBy !== 'priority' ? `${params.sortBy}-${params.order}` : ''}
-            onChange={handleSortChange}
+            value={dateSort}
+            onChange={handleDateSortChange}
             className="px-3 py-2 bg-card border border-border rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 appearance-none min-w-[150px] font-medium"
           >
             <option value="">Sort by Date</option>
@@ -155,8 +159,8 @@ export default function TasksPage() {
           </select>
 
           <select
-            value={params.sortBy === 'priority' ? `priority-${params.order}` : ''}
-            onChange={handleSortChange}
+            value={prioritySort}
+            onChange={handlePrioritySortChange}
             className="px-3 py-2 bg-card border border-border rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 appearance-none min-w-[150px] font-medium"
           >
             <option value="">Sort by Priority</option>
@@ -169,37 +173,10 @@ export default function TasksPage() {
       {/* Kanban Board */}
       <KanbanBoard ref={boardRef} />
 
-      {/* Pagination */}
-      {pagination && pagination.totalPages > 1 && (
-        <div className="flex items-center justify-between pt-4 border-t border-border mt-6">
-          <div className="text-sm text-muted-foreground font-medium">
-            Showing page {pagination.currentPage} of {pagination.totalPages} ({pagination.totalTasks} total tasks)
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => handlePageChange(pagination.currentPage - 1)}
-              disabled={!pagination.hasPrevPage}
-              aria-label="Previous page"
-              className="p-2 rounded-lg border border-border bg-card hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              <ChevronLeft size={16} />
-            </button>
-            <button
-              onClick={() => handlePageChange(pagination.currentPage + 1)}
-              disabled={!pagination.hasNextPage}
-              aria-label="Next page"
-              className="p-2 rounded-lg border border-border bg-card hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              <ChevronRight size={16} />
-            </button>
-          </div>
-        </div>
-      )}
-
       <BulkCreatePersonalDialog
         open={bulkDialogOpen}
         onClose={() => setBulkDialogOpen(false)}
-        onCreated={() => silentFetch()}
+        onCreated={() => void silentRefreshPersonal()}
       />
     </div>
   );
