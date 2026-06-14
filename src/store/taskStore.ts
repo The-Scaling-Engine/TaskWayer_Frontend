@@ -16,10 +16,11 @@ interface TaskQueryParams {
   deadlineTo?: string;
   personal?: boolean;
   projectId?: string;
+  columnId?: string;
 }
 
 interface TaskState {
-  // Project mode state
+  // Project mode state (tasks array — legacy, used for moveTask etc.)
   tasks: Task[];
   loading: boolean;
   error: string | null;
@@ -31,6 +32,12 @@ interface TaskState {
   columnPaginations: { todo: Pagination | null; doing: Pagination | null; done: Pagination | null };
   columnLoading: boolean;
   personalBaseParams: Partial<TaskQueryParams>;
+
+  // Project mode per-column state (board columns, paginated)
+  projectColTasks: Record<string, Task[]>;
+  projectColPaginations: Record<string, Pagination | null>;
+  projectColLoading: boolean;
+  projectColIds: string[];
 
   // Actions
   setParams: (newParams: Partial<TaskQueryParams>) => void;
@@ -46,9 +53,14 @@ interface TaskState {
   patchTask: (id: string, partial: Partial<Task>) => void;
 
   // Personal mode actions
-  fetchPersonalTasks: (params: Partial<TaskQueryParams>) => Promise<void>;
+  fetchPersonalTasks: (params: Partial<TaskQueryParams>, options?: { silent?: boolean }) => Promise<void>;
   loadMoreColumn: (status: ColumnKey) => Promise<void>;
   silentRefreshPersonal: () => Promise<void>;
+
+  // Project col mode actions
+  fetchProjectColTasks: (columnIds: string[], options?: { silent?: boolean }) => Promise<void>;
+  loadMoreProjectCol: (columnId: string) => Promise<void>;
+  silentRefreshProjectCols: () => Promise<void>;
 }
 
 export const useTaskStore = create<TaskState>((set, get) => ({
@@ -63,17 +75,22 @@ export const useTaskStore = create<TaskState>((set, get) => ({
   columnLoading: true, // true so spinner shows on personal board initial load
   personalBaseParams: {},
 
+  projectColTasks: {},
+  projectColPaginations: {},
+  projectColLoading: false,
+  projectColIds: [],
+
   setParams: (newParams) => {
     const updatedParams = { ...get().params, ...newParams };
     if (!newParams.page && (newParams.search !== undefined || newParams.status !== undefined || newParams.sortBy !== undefined || newParams.deadlineFrom !== undefined || newParams.deadlineTo !== undefined)) {
       updatedParams.page = 1;
     }
     set({ params: updatedParams });
-    get().fetchTasks();
+    void get().silentFetch();
   },
 
   resetParams: (overrides) => {
-    set({ tasks: [], params: { limit: 50, page: 1, ...overrides }, personalBaseParams: {} });
+    set({ tasks: [], params: { limit: 50, page: 1, ...overrides }, personalBaseParams: {}, projectColIds: [], projectColTasks: {}, projectColPaginations: {} });
     get().fetchTasks();
   },
 
@@ -87,9 +104,10 @@ export const useTaskStore = create<TaskState>((set, get) => ({
     }
   },
 
-  fetchPersonalTasks: async (params) => {
+  fetchPersonalTasks: async (params, options) => {
     const baseParams: Partial<TaskQueryParams> = { ...params, personal: true };
-    set({ columnLoading: true, personalBaseParams: baseParams });
+    if (!options?.silent) set({ columnLoading: true });
+    set({ personalBaseParams: baseParams });
     try {
       const [todo, doing, done] = await Promise.all([
         taskService.getTasks({ ...baseParams, status: 'todo', page: 1, limit: 20 }),
@@ -228,11 +246,25 @@ export const useTaskStore = create<TaskState>((set, get) => ({
 
   moveTaskToColumn: async (id: string, columnId: string, status?: ColumnKey) => {
     const prev = get().tasks;
+    const prevColTasks = get().projectColTasks;
     set({ tasks: prev.map((t) => (t._id === id ? { ...t, columnId, ...(status && { status }) } : t)) });
+    // Optimistic update for projectColTasks
+    if (Object.keys(prevColTasks).length > 0) {
+      const task = Object.values(prevColTasks).flat().find(t => t._id === id);
+      if (task) {
+        const oldColId = task.columnId;
+        const updTask = { ...task, columnId, ...(status && { status }) } as Task;
+        const newColTasks = { ...prevColTasks };
+        if (oldColId && newColTasks[oldColId]) newColTasks[oldColId] = newColTasks[oldColId].filter(t => t._id !== id);
+        if (newColTasks[columnId]) newColTasks[columnId] = [updTask, ...newColTasks[columnId].filter(t => t._id !== id)];
+        set({ projectColTasks: newColTasks });
+      }
+    }
     try {
       await taskService.updateTask(id, { columnId, ...(status && { status }) });
+      void get().silentRefreshProjectCols();
     } catch (err) {
-      set({ tasks: prev });
+      set({ tasks: prev, projectColTasks: prevColTasks });
       throw err;
     }
   },
@@ -260,6 +292,8 @@ export const useTaskStore = create<TaskState>((set, get) => ({
     try {
       if (get().personalBaseParams.personal) {
         await get().silentRefreshPersonal();
+      } else if (get().projectColIds.length > 0) {
+        await get().silentRefreshProjectCols();
       } else {
         const res = await taskService.getTasks(get().params);
         set({ tasks: res.data, pagination: res.pagination });
@@ -271,7 +305,7 @@ export const useTaskStore = create<TaskState>((set, get) => ({
 
   patchTask: (id, partial) => {
     set({ tasks: get().tasks.map(t => t._id === id ? { ...t, ...partial } : t) });
-    const { columnTasks } = get();
+    const { columnTasks, projectColTasks } = get();
     const patchInCol = (arr: Task[]) => arr.map(t => t._id === id ? { ...t, ...partial } : t);
     set({
       columnTasks: {
@@ -280,5 +314,63 @@ export const useTaskStore = create<TaskState>((set, get) => ({
         done: patchInCol(columnTasks.done),
       },
     });
+    if (Object.keys(projectColTasks).length > 0) {
+      const patched: Record<string, Task[]> = {};
+      for (const [colId, colArr] of Object.entries(projectColTasks)) patched[colId] = patchInCol(colArr);
+      set({ projectColTasks: patched });
+    }
+  },
+
+  fetchProjectColTasks: async (columnIds, options) => {
+    const { params } = get();
+    set({ projectColIds: columnIds });
+    if (!options?.silent) set({ projectColLoading: true });
+    try {
+      const results = await Promise.all(
+        columnIds.map(colId => taskService.getTasks({ ...params, columnId: colId, page: 1, limit: 20 }))
+      );
+      const newColTasks: Record<string, Task[]> = {};
+      const newColPaginations: Record<string, Pagination | null> = {};
+      columnIds.forEach((colId, i) => {
+        newColTasks[colId] = results[i].data;
+        newColPaginations[colId] = results[i].pagination;
+      });
+      set({ projectColTasks: newColTasks, projectColPaginations: newColPaginations, projectColLoading: false });
+    } catch {
+      set({ projectColLoading: false });
+    }
+  },
+
+  loadMoreProjectCol: async (columnId) => {
+    const { params, projectColPaginations } = get();
+    const pagination = projectColPaginations[columnId];
+    if (!pagination?.hasNextPage) return;
+    const res = await taskService.getTasks({ ...params, columnId, page: pagination.currentPage + 1, limit: 20 });
+    set({
+      projectColTasks: { ...get().projectColTasks, [columnId]: [...(get().projectColTasks[columnId] ?? []), ...res.data] },
+      projectColPaginations: { ...get().projectColPaginations, [columnId]: res.pagination },
+    });
+  },
+
+  silentRefreshProjectCols: async () => {
+    const { projectColIds, params } = get();
+    if (!projectColIds.length) return;
+    try {
+      const results = await Promise.allSettled(
+        projectColIds.map(colId => taskService.getTasks({ ...params, columnId: colId, page: 1, limit: 20 }))
+      );
+      const newColTasks = { ...get().projectColTasks };
+      const newColPaginations = { ...get().projectColPaginations };
+      projectColIds.forEach((colId, i) => {
+        const r = results[i];
+        if (r.status === 'fulfilled') {
+          newColTasks[colId] = r.value.data;
+          newColPaginations[colId] = r.value.pagination;
+        }
+      });
+      set({ projectColTasks: newColTasks, projectColPaginations: newColPaginations });
+    } catch {
+      // silent
+    }
   },
 }));

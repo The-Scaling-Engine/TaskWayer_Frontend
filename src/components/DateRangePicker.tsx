@@ -1,6 +1,6 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 import { useState, useRef, useEffect } from 'react';
-import { Calendar, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Calendar, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export interface DateRange {
@@ -12,6 +12,8 @@ interface DateRangePickerProps {
   value: DateRange;
   onChange: (range: DateRange) => void;
   className?: string;
+  compact?: boolean;
+  compactLg?: boolean;
 }
 
 // ─── Date helpers ──────────────────────────────────────────────
@@ -192,7 +194,7 @@ function MonthGrid({
 
 // ─── Main component ────────────────────────────────────────────
 
-export function DateRangePicker({ value, onChange, className }: DateRangePickerProps) {
+export function DateRangePicker({ value, onChange, className, compact, compactLg }: DateRangePickerProps) {
   const [open, setOpen] = useState(false);
   const [hover, setHover] = useState<string | null>(null);
   const [tempFrom, setTempFrom] = useState<string | null>(value.from);
@@ -270,25 +272,51 @@ export function DateRangePicker({ value, onChange, className }: DateRangePickerP
   return (
     <div ref={ref} className={cn('relative', className)}>
       {/* Trigger */}
-      <button
-        onClick={() => setOpen(v => !v)}
-        className={cn(
-          'flex items-center gap-2.5 px-4 py-2 rounded-xl border text-sm font-medium transition-all',
-          'bg-card border-border text-foreground hover:border-emerald-500/40 hover:bg-emerald-500/5',
-          open && 'border-emerald-500/40 bg-emerald-500/5',
-        )}
-      >
-        <Calendar size={15} className="text-emerald-500 shrink-0" />
-        <div className="flex flex-col items-start leading-none gap-0.5">
-          <span className="text-[9px] uppercase tracking-widest font-bold text-muted-foreground">
-            {value.from ? 'Custom Range' : 'Deadline Filter'}
-          </span>
-          <span className="text-sm font-semibold whitespace-nowrap">
-            {formatRange(value.from, value.to)}
-          </span>
-        </div>
-        <span className="ml-1 text-[9px] font-bold bg-emerald-500/10 text-emerald-500 px-1.5 py-0.5 rounded shrink-0">ICT</span>
-      </button>
+      {compactLg ? (
+        <button
+          onClick={() => setOpen(v => !v)}
+          className={cn(
+            'flex items-center gap-2 text-sm border border-border rounded-lg px-3 py-2 bg-muted text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer transition-colors hover:bg-muted/80 whitespace-nowrap',
+            (value.from || value.to) && 'border-primary/50 text-primary bg-primary/5',
+          )}
+        >
+          <Calendar size={14} className="shrink-0" />
+          <span>{value.from ? formatRange(value.from, value.to) : 'Deadline Range'}</span>
+          <ChevronDown size={14} className={cn('text-muted-foreground transition-transform shrink-0', open && 'rotate-180')} />
+        </button>
+      ) : compact ? (
+        <button
+          onClick={() => setOpen(v => !v)}
+          className={cn(
+            'flex items-center gap-1.5 text-xs border border-border rounded-lg px-2.5 py-1.5 bg-muted text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer transition-colors hover:bg-muted/80 whitespace-nowrap',
+            (value.from || value.to) && 'border-primary/50 text-primary bg-primary/5',
+          )}
+        >
+          <Calendar size={12} className="shrink-0" />
+          <span>{value.from ? formatRange(value.from, value.to) : 'Deadline Range'}</span>
+          <ChevronDown size={12} className={cn('text-muted-foreground transition-transform shrink-0', open && 'rotate-180')} />
+        </button>
+      ) : (
+        <button
+          onClick={() => setOpen(v => !v)}
+          className={cn(
+            'flex items-center gap-2.5 px-4 py-2 rounded-xl border text-sm font-medium transition-all',
+            'bg-card border-border text-foreground hover:border-emerald-500/40 hover:bg-emerald-500/5',
+            open && 'border-emerald-500/40 bg-emerald-500/5',
+          )}
+        >
+          <Calendar size={15} className="text-emerald-500 shrink-0" />
+          <div className="flex flex-col items-start leading-none gap-0.5">
+            <span className="text-[9px] uppercase tracking-widest font-bold text-muted-foreground">
+              {value.from ? 'Custom Range' : 'Deadline Filter'}
+            </span>
+            <span className="text-sm font-semibold whitespace-nowrap">
+              {formatRange(value.from, value.to)}
+            </span>
+          </div>
+          <span className="ml-1 text-[9px] font-bold bg-emerald-500/10 text-emerald-500 px-1.5 py-0.5 rounded shrink-0">ICT</span>
+        </button>
+      )}
 
       {/* Dropdown */}
       {open && (

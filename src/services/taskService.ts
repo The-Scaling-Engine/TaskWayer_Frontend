@@ -75,6 +75,7 @@ export const taskService = {
     scheduledTo?: string;
     personal?: boolean;
     projectId?: string;
+    columnId?: string;
   }): Promise<TasksResponse> => {
     const response = await api.get<TasksResponse>('/tasks', { params });
     return response.data;

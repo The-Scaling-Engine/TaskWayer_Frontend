@@ -26,10 +26,26 @@ import TaskCard from '@/components/TaskCard';
 import TaskDialog from '@/components/TaskDialog';
 import CommentDialog from '@/components/CommentDialog';
 import type { Task, BoardColumn, ProjectMember } from '@/types';
-import { Plus, Loader2, ArrowUpDown, MoreHorizontal, Palette, Trash2, GripVertical, Search, ChevronDown } from 'lucide-react';
+import { Plus, Loader2, MoreHorizontal, Palette, Trash2, GripVertical, Search, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
 import { getApiErrorMessage } from '@/services/api';
 import { cn } from '@/lib/utils';
+import DateRangePicker from '@/components/DateRangePicker';
+import type { DateRange } from '@/components/DateRangePicker';
+
+const DATE_SORT_OPTIONS = [
+  { value: '', label: 'Sort by Date' },
+  { value: 'createdAt-desc', label: 'Newest First' },
+  { value: 'createdAt-asc', label: 'Oldest First' },
+  { value: 'deadline-asc', label: 'Deadline (Earliest)' },
+  { value: 'deadline-desc', label: 'Deadline (Latest)' },
+];
+
+const PRIORITY_SORT_OPTIONS = [
+  { value: '', label: 'Sort by Priority' },
+  { value: 'priority-desc', label: 'High → Low' },
+  { value: 'priority-asc', label: 'Low → High' },
+];
 
 // ─── Static column definition (non-project mode) ──────────────
 
@@ -167,11 +183,6 @@ interface KanbanBoardProps {
   canAssign?: boolean;
 }
 
-// ─── Constants ────────────────────────────────────────────────
-
-const PRIORITY_ORDER: Record<string, number> = { high: 0, medium: 1, low: 2 };
-type SortOption = 'created' | 'priority' | 'dueDate';
-
 // ─── KanbanBoard ───────────────────────────────────────────────
 
 const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
@@ -180,23 +191,25 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
   canEditTasks = true, canDeleteTasks, canAssign = false,
 }, ref) => {
   const {
-    tasks, loading, columnTasks, columnPaginations, columnLoading, loadMoreColumn,
+    tasks, columnTasks, columnPaginations, columnLoading, loadMoreColumn,
     createTask, updateTask, deleteTask, moveTask, moveTaskToColumn, cancelRecurrence,
     silentFetch, silentRefreshPersonal, patchTask,
+    setParams, projectColTasks, projectColPaginations, projectColLoading,
+    fetchProjectColTasks, loadMoreProjectCol,
   } = useTaskStore();
   const { socket } = useSocketStore();
   const currentUser = useAuthStore((s) => s.user);
   const currentUserId = currentUser?.id ?? currentUser?._id;
 
-  // ── Sort ────────────────────────────────────────────────────
-  const sortStorageKey = `kanban-sort-${lockedProjectId ?? 'personal'}`;
-  const [sortBy, setSortBy] = useState<SortOption>(() =>
-    (localStorage.getItem(sortStorageKey) as SortOption) ?? 'created'
-  );
-  const handleSortChange = (value: SortOption) => {
-    setSortBy(value);
-    localStorage.setItem(sortStorageKey, value);
-  };
+  // ── Project sort/filter state ──────────────────────────────
+  const [dateSort, setDateSort] = useState('');
+  const [prioritySort, setPrioritySort] = useState('');
+  const [deadlineFrom, setDeadlineFrom] = useState<string | null>(null);
+  const [deadlineTo, setDeadlineTo] = useState<string | null>(null);
+  const [dateSortOpen, setDateSortOpen] = useState(false);
+  const [prioritySortOpen, setPrioritySortOpen] = useState(false);
+  const dateSortRef = useRef<HTMLDivElement>(null);
+  const prioritySortRef = useRef<HTMLDivElement>(null);
 
   // ── Project members + filter state ─────────────────────────
   const [projectMembers, setProjectMembers] = useState<ProjectMember[]>([]);
@@ -264,6 +277,10 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
       .catch(() => {});
     setFilterSearch('');
     setFilterAssignee(null);
+    setDateSort('');
+    setPrioritySort('');
+    setDeadlineFrom(null);
+    setDeadlineTo(null);
   }, [lockedProjectId]);
 
   // ── Fetch columns ────────────────────────────────────────────
@@ -275,6 +292,23 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
       .catch(() => toast.error('Failed to load columns'))
       .finally(() => setColumnsLoading(false));
   }, [lockedProjectId]);
+
+  // ── Close sort dropdowns on outside click ───────────────────
+  useEffect(() => {
+    if (!dateSortOpen && !prioritySortOpen) return;
+    const handleClose = (e: MouseEvent) => {
+      if (dateSortRef.current && !dateSortRef.current.contains(e.target as Node)) setDateSortOpen(false);
+      if (prioritySortRef.current && !prioritySortRef.current.contains(e.target as Node)) setPrioritySortOpen(false);
+    };
+    document.addEventListener('mousedown', handleClose);
+    return () => document.removeEventListener('mousedown', handleClose);
+  }, [dateSortOpen, prioritySortOpen]);
+
+  // ── Fetch project col tasks when columns finish loading ──────
+  useEffect(() => {
+    if (!lockedProjectId || columnsLoading || !boardColumns.length) return;
+    void fetchProjectColTasks(boardColumns.map(c => c.id));
+  }, [columnsLoading, lockedProjectId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Close column menu on outside click ───────────────────────
   useEffect(() => {
@@ -300,7 +334,8 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
   useImperativeHandle(ref, () => ({
     openCreateTask: () => handleCreate(),
     openTaskById: (taskId: string, hcId?: string, openNotesTab?: boolean) => {
-      const task = tasks.find((t) => t.id === taskId || t._id === taskId);
+      const task = tasks.find((t) => t.id === taskId || t._id === taskId)
+        ?? Object.values(projectColTasks).flat().find((t) => t.id === taskId || t._id === taskId);
       if (!task) return;
       if (hcId) {
         setHighlightCommentId(hcId);
@@ -312,27 +347,7 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
     },
   }));
 
-  // ── Sort helper ──────────────────────────────────────────────
-  const sortTasks = (filtered: Task[]) =>
-    [...filtered].sort((a, b) => {
-      if (sortBy === 'priority') {
-        const pa = PRIORITY_ORDER[a.priority ?? ''] ?? 3;
-        const pb = PRIORITY_ORDER[b.priority ?? ''] ?? 3;
-        if (pa !== pb) return pa - pb;
-        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-      }
-      if (sortBy === 'dueDate') {
-        const hasA = !!a.deadline, hasB = !!b.deadline;
-        if (hasA && !hasB) return -1;
-        if (!hasA && hasB) return 1;
-        if (hasA && hasB) return new Date(a.deadline!).getTime() - new Date(b.deadline!).getTime();
-        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-      }
-      const aTime = a.scheduledAt ? new Date(a.scheduledAt).getTime() : new Date(a.createdAt).getTime();
-      const bTime = b.scheduledAt ? new Date(b.scheduledAt).getTime() : new Date(b.createdAt).getTime();
-      return aTime - bTime;
-    });
-
+  // ── Filter helpers ───────────────────────────────────────────
   const applyFilters = (task: Task): boolean => {
     if (filterSearch && !task.title.toLowerCase().includes(filterSearch.toLowerCase())) return false;
     if (filterAssignee) {
@@ -348,20 +363,14 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
   };
 
   const getTasksByStatus = (status: string) => {
-    if (!lockedProjectId) {
-      const col = columnTasks[status as 'todo' | 'doing' | 'done'] ?? [];
-      return col.filter(t => (!filterFn || filterFn(t)) && applyFilters(t));
-    }
-    const filtered = tasks.filter((t) => t.status === status && (!filterFn || filterFn(t)) && applyFilters(t));
-    return sortTasks(filtered);
+    const col = columnTasks[status as 'todo' | 'doing' | 'done'] ?? [];
+    return col.filter(t => (!filterFn || filterFn(t)) && applyFilters(t));
   };
 
-  const getTasksByColumn = (col: BoardColumn) =>
-    sortTasks(tasks.filter((t) => {
-      if (filterFn && !filterFn(t)) return false;
-      if (!applyFilters(t)) return false;
-      return col.isDefault ? (!t.columnId || t.columnId === col.id) : t.columnId === col.id;
-    }));
+  const getTasksByColumn = (col: BoardColumn) => {
+    const colTasks = projectColTasks[col.id] ?? [];
+    return colTasks.filter(t => (!filterFn || filterFn(t)) && applyFilters(t));
+  };
 
   // ── Drag handlers ────────────────────────────────────────────
   const handleDragStart = (event: DragStartEvent) => {
@@ -370,7 +379,10 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
       setActiveColumn(boardColumns.find(c => c.id === data.columnId) ?? null);
       setActiveTask(null);
     } else {
-      setActiveTask(tasks.find((t) => t._id === event.active.id) ?? null);
+      const found = lockedProjectId
+        ? Object.values(projectColTasks).flat().find((t) => t._id === event.active.id)
+        : tasks.find((t) => t._id === event.active.id);
+      setActiveTask(found ?? null);
       setActiveColumn(null);
     }
   };
@@ -404,7 +416,9 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
 
     // Task move
     const taskId = active.id as string;
-    const task = tasks.find((t) => t._id === taskId);
+    const task = lockedProjectId
+      ? Object.values(projectColTasks).flat().find((t) => t._id === taskId)
+      : tasks.find((t) => t._id === taskId);
     if (!task) return;
 
     if (lockedProjectId) {
@@ -569,6 +583,41 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
     }
   };
 
+  // ── Project filter/sort handlers ─────────────────────────────
+  const handleDeadlineRange = (range: DateRange) => {
+    const from = range.from ?? null;
+    const to = range.to ?? null;
+    setDeadlineFrom(from);
+    setDeadlineTo(to);
+    setParams({ deadlineFrom: from ?? undefined, deadlineTo: to ?? undefined });
+  };
+
+  const handleDateSortChange = (value: string) => {
+    setDateSort(value);
+    setPrioritySort('');
+    const [sb, ord] = value ? value.split('-') : [undefined, undefined];
+    setParams({ sortBy: sb, order: ord });
+  };
+
+  const handlePrioritySortChange = (value: string) => {
+    setPrioritySort(value);
+    setDateSort('');
+    const [sb, ord] = value ? value.split('-') : [undefined, undefined];
+    setParams({ sortBy: sb, order: ord });
+  };
+
+  const handleClearAllFilters = () => {
+    setFilterSearch('');
+    setFilterAssignee(null);
+    setDateSort('');
+    setPrioritySort('');
+    setDeadlineFrom(null);
+    setDeadlineTo(null);
+    setParams({ sortBy: undefined, order: undefined, deadlineFrom: undefined, deadlineTo: undefined });
+  };
+
+  const hasAnyFilter = !!(filterSearch || filterAssignee || dateSort || prioritySort || deadlineFrom || deadlineTo);
+
   // ── Render helpers ────────────────────────────────────────────
   const renderTaskCards = (colTasks: Task[]) =>
     colTasks.map((task) => (
@@ -584,7 +633,7 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
         boardColumns={lockedProjectId ? boardColumns : undefined} />
     ));
 
-  if (lockedProjectId ? loading : columnLoading) {
+  if (lockedProjectId ? (projectColLoading || columnsLoading) : columnLoading) {
     return (
       <div className="flex items-center justify-center py-20">
         <Loader2 className="animate-spin text-primary" size={32} />
@@ -595,26 +644,80 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
   return (
     <>
       <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-        {/* Toolbar: filter bar (project mode) + sort control */}
-        <div className="flex items-center justify-between mb-4 gap-2 flex-wrap">
-          {lockedProjectId ? (
+        {/* Toolbar (project mode only) */}
+        {lockedProjectId && (
+          <div className="flex items-center gap-2 mb-4 flex-wrap">
+            {/* Search — left, wider */}
+            <div className="relative min-w-[340px] max-w-[460px] flex-1">
+              <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+              <input
+                type="text"
+                placeholder="Search tasks..."
+                value={filterSearch}
+                onChange={(e) => setFilterSearch(e.target.value)}
+                className="w-full pl-7 pr-3 py-1.5 bg-muted/50 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-primary/30 placeholder:text-muted-foreground/50 border border-border"
+              />
+            </div>
+
+            {/* Right controls */}
             <div className="flex items-center gap-2 flex-wrap">
-              <div className="relative min-w-[160px] max-w-[240px]">
-                <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
-                <input
-                  type="text"
-                  placeholder="Search tasks..."
-                  value={filterSearch}
-                  onChange={(e) => setFilterSearch(e.target.value)}
-                  className="w-full pl-7 pr-3 py-1.5 bg-muted/50 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-primary/30 placeholder:text-muted-foreground/50 border border-border"
-                />
+              <DateRangePicker compact value={{ from: deadlineFrom, to: deadlineTo }} onChange={handleDeadlineRange} />
+
+              {/* Date sort */}
+              <div className="relative" ref={dateSortRef}>
+                <button type="button"
+                  onClick={() => { setDateSortOpen(o => !o); setPrioritySortOpen(false); }}
+                  className={cn(
+                    'flex items-center gap-1.5 text-xs border border-border rounded-lg px-2.5 py-1.5 bg-muted text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer transition-colors hover:bg-muted/80 whitespace-nowrap',
+                    dateSort && 'border-primary/50 text-primary bg-primary/5',
+                  )}>
+                  {DATE_SORT_OPTIONS.find(o => o.value === dateSort)?.label ?? 'Sort by Date'}
+                  <ChevronDown size={12} className={cn('text-muted-foreground transition-transform shrink-0', dateSortOpen && 'rotate-180')} />
+                </button>
+                {dateSortOpen && (
+                  <div className="absolute top-full mt-1 left-0 z-30 bg-card border border-border rounded-xl shadow-lg min-w-[175px] overflow-hidden">
+                    {DATE_SORT_OPTIONS.map(opt => (
+                      <button key={opt.value} type="button"
+                        onClick={() => { handleDateSortChange(opt.value); setDateSortOpen(false); }}
+                        className={cn('w-full flex items-center px-3 py-2 text-xs text-left hover:bg-muted transition-colors', dateSort === opt.value && 'bg-primary/5 text-primary font-medium')}>
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
+
+              {/* Priority sort */}
+              <div className="relative" ref={prioritySortRef}>
+                <button type="button"
+                  onClick={() => { setPrioritySortOpen(o => !o); setDateSortOpen(false); }}
+                  className={cn(
+                    'flex items-center gap-1.5 text-xs border border-border rounded-lg px-2.5 py-1.5 bg-muted text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer transition-colors hover:bg-muted/80 whitespace-nowrap',
+                    prioritySort && 'border-primary/50 text-primary bg-primary/5',
+                  )}>
+                  {PRIORITY_SORT_OPTIONS.find(o => o.value === prioritySort)?.label ?? 'Sort by Priority'}
+                  <ChevronDown size={12} className={cn('text-muted-foreground transition-transform shrink-0', prioritySortOpen && 'rotate-180')} />
+                </button>
+                {prioritySortOpen && (
+                  <div className="absolute top-full mt-1 left-0 z-30 bg-card border border-border rounded-xl shadow-lg min-w-[155px] overflow-hidden">
+                    {PRIORITY_SORT_OPTIONS.map(opt => (
+                      <button key={opt.value} type="button"
+                        onClick={() => { handlePrioritySortChange(opt.value); setPrioritySortOpen(false); }}
+                        className={cn('w-full flex items-center px-3 py-2 text-xs text-left hover:bg-muted transition-colors', prioritySort === opt.value && 'bg-primary/5 text-primary font-medium')}>
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Assignee filter */}
               <div className="relative" ref={filterDropdownRef}>
                 <button
                   type="button"
                   onClick={() => setFilterDropdownOpen((o) => !o)}
                   className={cn(
-                    'flex items-center gap-1.5 text-xs border border-border rounded-lg px-2.5 py-1.5 bg-muted text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer transition-colors hover:bg-muted/80',
+                    'flex items-center gap-1.5 text-xs border border-border rounded-lg px-2.5 py-1.5 bg-muted text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer transition-colors hover:bg-muted/80 whitespace-nowrap',
                     filterAssignee && 'border-primary/50 text-primary bg-primary/5',
                   )}
                 >
@@ -628,7 +731,7 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
                             const m = projectMembers.find(m => m.profileId === filterAssignee);
                             return m?.profile?.name ?? m?.profile?.email ?? 'Assignee';
                           })()}
-                  <ChevronDown size={12} className={cn('text-muted-foreground transition-transform', filterDropdownOpen && 'rotate-180')} />
+                  <ChevronDown size={12} className={cn('text-muted-foreground transition-transform shrink-0', filterDropdownOpen && 'rotate-180')} />
                 </button>
                 {filterDropdownOpen && (
                   <div className="absolute top-full mt-1 left-0 z-30 bg-card border border-border rounded-xl shadow-lg min-w-[200px] overflow-hidden">
@@ -689,39 +792,22 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
                   </div>
                 )}
               </div>
-              {(filterSearch || filterAssignee) && (
+
+              {hasAnyFilter && (
                 <button
-                  onClick={() => { setFilterSearch(''); setFilterAssignee(null); }}
+                  onClick={handleClearAllFilters}
                   className="text-xs text-muted-foreground hover:text-foreground px-2.5 py-1.5 rounded-lg hover:bg-muted transition-colors border border-border"
                 >
                   Clear
                 </button>
               )}
             </div>
-          ) : <div />}
-
-          {lockedProjectId && (
-            <div className="flex items-center gap-2">
-              <ArrowUpDown size={13} className="text-muted-foreground" />
-              <span className="text-xs text-muted-foreground">Sort by</span>
-              <select value={sortBy} onChange={(e) => handleSortChange(e.target.value as SortOption)}
-                className="text-xs bg-muted border border-border rounded-lg px-2.5 py-1 text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer">
-                <option value="created">Created</option>
-                <option value="priority">Priority</option>
-                <option value="dueDate">Due Date</option>
-              </select>
-            </div>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* ── Project mode: dynamic columns ── */}
         {lockedProjectId ? (
-          columnsLoading ? (
-            <div className="flex items-center justify-center py-20">
-              <Loader2 className="animate-spin text-primary" size={28} />
-            </div>
-          ) : (
-            <SortableContext
+          <SortableContext
               items={boardColumns.map(c => `col-${c.id}`)}
               strategy={horizontalListSortingStrategy}>
               <div className="flex gap-5 overflow-x-auto pb-4 items-stretch">
@@ -773,7 +859,7 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
 
                             {/* Task count */}
                             <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full font-medium shrink-0">
-                              {colTasks.length}
+                              {projectColPaginations[col.id]?.totalTasks ?? colTasks.length}
                             </span>
 
                             {/* Add task */}
@@ -849,7 +935,22 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
                               <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
                                 <p className="text-xs">No tasks yet</p>
                               </div>
-                            ) : renderTaskCards(colTasks)}
+                            ) : (
+                              <div className="space-y-2.5">
+                                {renderTaskCards(colTasks)}
+                                {projectColPaginations[col.id]?.hasNextPage && (() => {
+                                  const total = projectColPaginations[col.id]?.totalTasks ?? colTasks.length;
+                                  const remaining = total - colTasks.length;
+                                  return (
+                                    <button
+                                      onClick={() => void loadMoreProjectCol(col.id)}
+                                      className="w-full text-xs text-muted-foreground hover:text-foreground py-2 rounded-xl border border-dashed border-border/50 hover:border-border hover:bg-muted/30 transition-colors mt-1">
+                                      Load {Math.min(20, remaining)} more ({remaining} remaining)
+                                    </button>
+                                  );
+                                })()}
+                              </div>
+                            )}
                           </ProjectTaskDropZone>
                         </div>
                       )}
@@ -894,7 +995,6 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
                 </div>}
               </div>
             </SortableContext>
-          )
         ) : (
           /* ── Static mode: 3-column status board ── */
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
