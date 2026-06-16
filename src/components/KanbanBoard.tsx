@@ -283,15 +283,24 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
     setDeadlineTo(null);
   }, [lockedProjectId]);
 
-  // ── Fetch columns ────────────────────────────────────────────
+  // ── Fetch columns + immediately trigger col task fetch ───────
+  // C-1: call fetchProjectColTasks inside .then() with fresh data to avoid stale closure
+  // B-1: cancelled flag prevents stale response from overwriting state after unmount/project switch
   useEffect(() => {
     if (!lockedProjectId) return;
+    let cancelled = false;
     setColumnsLoading(true);
     boardColumnService.getColumns(lockedProjectId)
-      .then(res => setBoardColumns([...res.data].sort((a, b) => a.order - b.order)))
-      .catch(() => toast.error('Failed to load columns'))
-      .finally(() => setColumnsLoading(false));
-  }, [lockedProjectId]);
+      .then(res => {
+        if (cancelled) return;
+        const cols = [...res.data].sort((a, b) => a.order - b.order);
+        setBoardColumns(cols);
+        void fetchProjectColTasks(cols.map(c => c.id));
+      })
+      .catch(() => { if (!cancelled) toast.error('Failed to load columns'); })
+      .finally(() => { if (!cancelled) setColumnsLoading(false); });
+    return () => { cancelled = true; };
+  }, [lockedProjectId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Close sort dropdowns on outside click ───────────────────
   useEffect(() => {
@@ -303,12 +312,6 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
     document.addEventListener('mousedown', handleClose);
     return () => document.removeEventListener('mousedown', handleClose);
   }, [dateSortOpen, prioritySortOpen]);
-
-  // ── Fetch project col tasks when columns finish loading ──────
-  useEffect(() => {
-    if (!lockedProjectId || columnsLoading || !boardColumns.length) return;
-    void fetchProjectColTasks(boardColumns.map(c => c.id));
-  }, [columnsLoading, lockedProjectId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Close column menu on outside click ───────────────────────
   useEffect(() => {
@@ -334,8 +337,9 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
   useImperativeHandle(ref, () => ({
     openCreateTask: () => handleCreate(),
     openTaskById: (taskId: string, hcId?: string, openNotesTab?: boolean) => {
-      const task = tasks.find((t) => t.id === taskId || t._id === taskId)
-        ?? Object.values(projectColTasks).flat().find((t) => t.id === taskId || t._id === taskId);
+      const task = [...columnTasks.todo, ...columnTasks.doing, ...columnTasks.done, ...Object.values(projectColTasks).flat()]
+        .find((t) => t.id === taskId || t._id === taskId)
+        ?? tasks.find((t) => t.id === taskId || t._id === taskId);
       if (!task) return;
       if (hcId) {
         setHighlightCommentId(hcId);
@@ -381,7 +385,7 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
     } else {
       const found = lockedProjectId
         ? Object.values(projectColTasks).flat().find((t) => t._id === event.active.id)
-        : tasks.find((t) => t._id === event.active.id);
+        : [...columnTasks.todo, ...columnTasks.doing, ...columnTasks.done].find((t) => t._id === event.active.id);
       setActiveTask(found ?? null);
       setActiveColumn(null);
     }
@@ -418,7 +422,7 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
     const taskId = active.id as string;
     const task = lockedProjectId
       ? Object.values(projectColTasks).flat().find((t) => t._id === taskId)
-      : tasks.find((t) => t._id === taskId);
+      : [...columnTasks.todo, ...columnTasks.doing, ...columnTasks.done].find((t) => t._id === taskId);
     if (!task) return;
 
     if (lockedProjectId) {
