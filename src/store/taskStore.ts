@@ -20,26 +20,22 @@ interface TaskQueryParams {
 }
 
 interface TaskState {
-  // Project mode state (tasks array — legacy, used for moveTask etc.)
   tasks: Task[];
   loading: boolean;
   error: string | null;
   params: TaskQueryParams;
   pagination: Pagination | null;
 
-  // Personal mode per-column state
   columnTasks: { todo: Task[]; doing: Task[]; done: Task[] };
   columnPaginations: { todo: Pagination | null; doing: Pagination | null; done: Pagination | null };
   columnLoading: boolean;
   personalBaseParams: Partial<TaskQueryParams>;
 
-  // Project mode per-column state (board columns, paginated)
   projectColTasks: Record<string, Task[]>;
   projectColPaginations: Record<string, Pagination | null>;
   projectColLoading: boolean;
   projectColIds: string[];
 
-  // Actions
   setParams: (newParams: Partial<TaskQueryParams>) => void;
   resetParams: (overrides?: Partial<TaskQueryParams>) => void;
   fetchTasks: () => Promise<void>;
@@ -52,16 +48,36 @@ interface TaskState {
   silentFetch: () => Promise<void>;
   patchTask: (id: string, partial: Partial<Task>) => void;
 
-  // Personal mode actions
   fetchPersonalTasks: (params: Partial<TaskQueryParams>, options?: { silent?: boolean }) => Promise<void>;
   loadMoreColumn: (status: ColumnKey) => Promise<void>;
   silentRefreshPersonal: () => Promise<void>;
 
-  // Project col mode actions
   fetchProjectColTasks: (columnIds: string[], options?: { silent?: boolean }) => Promise<void>;
   loadMoreProjectCol: (columnId: string) => Promise<void>;
   silentRefreshProjectCols: () => Promise<void>;
 }
+
+// M-3: in-flight guard — prevents duplicate pages on double-click "Load more"
+const loadingMoreCols = new Set<string>();
+// M-4: in-flight guard — prevents concurrent silentRefreshProjectCols from racing
+// B-4: pendingProjectColRefresh ensures a missed event during a refresh triggers one more run
+let refreshingProjectCols = false;
+let pendingProjectColRefresh = false;
+// D-1: debounce drag-triggered refreshes — rapid drags fire one refresh after the last drag
+// settles (400ms), preventing stale in-flight refresh from overwriting later optimistic state
+let personalDragRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+let projectColDragRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+const scheduleDebouncedPersonalRefresh = (getState: () => TaskState, delay = 400) => {
+  if (personalDragRefreshTimer) clearTimeout(personalDragRefreshTimer);
+  personalDragRefreshTimer = setTimeout(() => { personalDragRefreshTimer = null; void getState().silentRefreshPersonal(); }, delay);
+};
+const scheduleDebouncedProjectColRefresh = (getState: () => TaskState, delay = 400) => {
+  if (projectColDragRefreshTimer) clearTimeout(projectColDragRefreshTimer);
+  projectColDragRefreshTimer = setTimeout(() => { projectColDragRefreshTimer = null; void getState().silentRefreshProjectCols(); }, delay);
+};
+// D-2: track task IDs with in-flight status mutations — silentRefreshPersonal preserves their
+// optimistic positions so a stale in-flight response cannot overwrite a later drag's state
+const pendingPersonalMoves = new Set<string>();
 
 export const useTaskStore = create<TaskState>((set, get) => ({
   tasks: [],
@@ -72,7 +88,7 @@ export const useTaskStore = create<TaskState>((set, get) => ({
 
   columnTasks: { todo: [], doing: [], done: [] },
   columnPaginations: { todo: null, doing: null, done: null },
-  columnLoading: true, // true so spinner shows on personal board initial load
+  columnLoading: true,
   personalBaseParams: {},
 
   projectColTasks: {},
@@ -91,7 +107,10 @@ export const useTaskStore = create<TaskState>((set, get) => ({
 
   resetParams: (overrides) => {
     set({ tasks: [], params: { limit: 50, page: 1, ...overrides }, personalBaseParams: {}, projectColIds: [], projectColTasks: {}, projectColPaginations: {} });
-    get().fetchTasks();
+    // L-1: skip legacy fetchTasks when switching to project board (KanbanBoard handles col fetch)
+    if (!overrides?.projectId) {
+      get().fetchTasks();
+    }
   },
 
   fetchTasks: async () => {
@@ -125,24 +144,31 @@ export const useTaskStore = create<TaskState>((set, get) => ({
   },
 
   loadMoreColumn: async (status) => {
+    // M-3: skip if already fetching this column
+    if (loadingMoreCols.has(status)) return;
     const pagination = get().columnPaginations[status];
     if (!pagination?.hasNextPage) return;
-    const res = await taskService.getTasks({
-      ...get().personalBaseParams,
-      status,
-      page: pagination.currentPage + 1,
-      limit: 20,
-    });
-    set({
-      columnTasks: {
-        ...get().columnTasks,
-        [status]: [...get().columnTasks[status], ...res.data],
-      },
-      columnPaginations: {
-        ...get().columnPaginations,
-        [status]: res.pagination,
-      },
-    });
+    loadingMoreCols.add(status);
+    try {
+      const res = await taskService.getTasks({
+        ...get().personalBaseParams,
+        status,
+        page: pagination.currentPage + 1,
+        limit: 20,
+      });
+      set({
+        columnTasks: {
+          ...get().columnTasks,
+          [status]: [...get().columnTasks[status], ...res.data],
+        },
+        columnPaginations: {
+          ...get().columnPaginations,
+          [status]: res.pagination,
+        },
+      });
+    } finally {
+      loadingMoreCols.delete(status);
+    }
   },
 
   silentRefreshPersonal: async () => {
@@ -154,11 +180,19 @@ export const useTaskStore = create<TaskState>((set, get) => ({
         taskService.getTasks({ ...baseParams, status: 'doing', page: 1, limit: 20 }),
         taskService.getTasks({ ...baseParams, status: 'done', page: 1, limit: 20 }),
       ]);
+      // D-2: exclude pending-move tasks from server response, keep their current optimistic position
+      const curr = get().columnTasks;
+      const applyMerge = (serverTasks: Task[], currentTasks: Task[]) => {
+        if (pendingPersonalMoves.size === 0) return serverTasks;
+        const out = serverTasks.filter(t => !pendingPersonalMoves.has(t._id));
+        for (const t of currentTasks) { if (pendingPersonalMoves.has(t._id)) out.push(t); }
+        return out;
+      };
       set({
         columnTasks: {
-          todo: todo.status === 'fulfilled' ? todo.value.data : get().columnTasks.todo,
-          doing: doing.status === 'fulfilled' ? doing.value.data : get().columnTasks.doing,
-          done: done.status === 'fulfilled' ? done.value.data : get().columnTasks.done,
+          todo: todo.status === 'fulfilled' ? applyMerge(todo.value.data, curr.todo) : curr.todo,
+          doing: doing.status === 'fulfilled' ? applyMerge(doing.value.data, curr.doing) : curr.doing,
+          done: done.status === 'fulfilled' ? applyMerge(done.value.data, curr.done) : curr.done,
         },
         columnPaginations: {
           todo: todo.status === 'fulfilled' ? todo.value.pagination : get().columnPaginations.todo,
@@ -182,6 +216,7 @@ export const useTaskStore = create<TaskState>((set, get) => ({
 
   updateTask: async (id: string, data: UpdateTaskData) => {
     if (get().personalBaseParams.personal) {
+      // Personal mode: optimistic update on columnTasks
       const prevColumnTasks = get().columnTasks;
       const updateInCol = (arr: Task[]) => arr.map(t => t._id === id ? { ...t, ...data } as Task : t);
       set({
@@ -198,7 +233,19 @@ export const useTaskStore = create<TaskState>((set, get) => ({
         set({ columnTasks: prevColumnTasks });
         throw err;
       }
+    } else if (get().projectColIds.length > 0) {
+      // M-6: project board mode — optimistic update via patchTask (covers projectColTasks)
+      const prevProjectColTasks = get().projectColTasks;
+      get().patchTask(id, data as unknown as Partial<Task>);
+      try {
+        await taskService.updateTask(id, data);
+        scheduleDebouncedProjectColRefresh(get);
+      } catch (err) {
+        set({ projectColTasks: prevProjectColTasks });
+        throw err;
+      }
     } else {
+      // Legacy list mode
       const prev = get().tasks;
       set({ tasks: prev.map(t => t._id === id ? { ...t, ...data } as Task : t) });
       try {
@@ -226,11 +273,15 @@ export const useTaskStore = create<TaskState>((set, get) => ({
           [status]: [{ ...task, status }, ...prevColumnTasks[status]],
         },
       });
+      pendingPersonalMoves.add(id);
       try {
         await taskService.updateTask(id, { status });
+        scheduleDebouncedPersonalRefresh(get);
       } catch (err) {
         set({ columnTasks: prevColumnTasks });
         throw err;
+      } finally {
+        pendingPersonalMoves.delete(id);
       }
     } else {
       const prev = get().tasks;
@@ -248,21 +299,21 @@ export const useTaskStore = create<TaskState>((set, get) => ({
     const prev = get().tasks;
     const prevColTasks = get().projectColTasks;
     set({ tasks: prev.map((t) => (t._id === id ? { ...t, columnId, ...(status && { status }) } : t)) });
-    // Optimistic update for projectColTasks
     if (Object.keys(prevColTasks).length > 0) {
       const task = Object.values(prevColTasks).flat().find(t => t._id === id);
       if (task) {
-        const oldColId = task.columnId;
+        const srcColId = Object.entries(prevColTasks).find(([, colTasks]) => colTasks.some(t => t._id === id))?.[0];
         const updTask = { ...task, columnId, ...(status && { status }) } as Task;
         const newColTasks = { ...prevColTasks };
-        if (oldColId && newColTasks[oldColId]) newColTasks[oldColId] = newColTasks[oldColId].filter(t => t._id !== id);
-        if (newColTasks[columnId]) newColTasks[columnId] = [updTask, ...newColTasks[columnId].filter(t => t._id !== id)];
+        if (srcColId && newColTasks[srcColId]) newColTasks[srcColId] = newColTasks[srcColId].filter(t => t._id !== id);
+        // C-3: always initialize target column even if not yet in projectColTasks
+        newColTasks[columnId] = [updTask, ...(newColTasks[columnId] ?? []).filter(t => t._id !== id)];
         set({ projectColTasks: newColTasks });
       }
     }
     try {
       await taskService.updateTask(id, { columnId, ...(status && { status }) });
-      void get().silentRefreshProjectCols();
+      scheduleDebouncedProjectColRefresh(get);
     } catch (err) {
       set({ tasks: prev, projectColTasks: prevColTasks });
       throw err;
@@ -303,28 +354,30 @@ export const useTaskStore = create<TaskState>((set, get) => ({
     }
   },
 
+  // L-3: single set() call — avoids 3 separate re-renders
   patchTask: (id, partial) => {
-    set({ tasks: get().tasks.map(t => t._id === id ? { ...t, ...partial } : t) });
-    const { columnTasks, projectColTasks } = get();
     const patchInCol = (arr: Task[]) => arr.map(t => t._id === id ? { ...t, ...partial } : t);
+    const { tasks, columnTasks, projectColTasks } = get();
+    const patchedProjectCols: Record<string, Task[]> = {};
+    for (const [colId, colArr] of Object.entries(projectColTasks)) patchedProjectCols[colId] = patchInCol(colArr);
     set({
+      tasks: tasks.map(t => t._id === id ? { ...t, ...partial } : t),
       columnTasks: {
         todo: patchInCol(columnTasks.todo),
         doing: patchInCol(columnTasks.doing),
         done: patchInCol(columnTasks.done),
       },
+      ...(Object.keys(projectColTasks).length > 0 && { projectColTasks: patchedProjectCols }),
     });
-    if (Object.keys(projectColTasks).length > 0) {
-      const patched: Record<string, Task[]> = {};
-      for (const [colId, colArr] of Object.entries(projectColTasks)) patched[colId] = patchInCol(colArr);
-      set({ projectColTasks: patched });
-    }
   },
 
   fetchProjectColTasks: async (columnIds, options) => {
     const { params } = get();
-    set({ projectColIds: columnIds });
-    if (!options?.silent) set({ projectColLoading: true });
+    set({
+      projectColIds: columnIds,
+      // C-2: clear stale data immediately on non-silent fetch — prevents old project's tasks flashing
+      ...(!options?.silent && { projectColLoading: true, projectColTasks: {}, projectColPaginations: {} }),
+    });
     try {
       const results = await Promise.all(
         columnIds.map(colId => taskService.getTasks({ ...params, columnId: colId, page: 1, limit: 20 }))
@@ -342,19 +395,30 @@ export const useTaskStore = create<TaskState>((set, get) => ({
   },
 
   loadMoreProjectCol: async (columnId) => {
+    // M-3: skip if already fetching this column
+    if (loadingMoreCols.has(columnId)) return;
     const { params, projectColPaginations } = get();
     const pagination = projectColPaginations[columnId];
     if (!pagination?.hasNextPage) return;
-    const res = await taskService.getTasks({ ...params, columnId, page: pagination.currentPage + 1, limit: 20 });
-    set({
-      projectColTasks: { ...get().projectColTasks, [columnId]: [...(get().projectColTasks[columnId] ?? []), ...res.data] },
-      projectColPaginations: { ...get().projectColPaginations, [columnId]: res.pagination },
-    });
+    loadingMoreCols.add(columnId);
+    try {
+      const res = await taskService.getTasks({ ...params, columnId, page: pagination.currentPage + 1, limit: 20 });
+      set({
+        projectColTasks: { ...get().projectColTasks, [columnId]: [...(get().projectColTasks[columnId] ?? []), ...res.data] },
+        projectColPaginations: { ...get().projectColPaginations, [columnId]: res.pagination },
+      });
+    } finally {
+      loadingMoreCols.delete(columnId);
+    }
   },
 
+  // M-4: in-flight guard — if already refreshing, queue one pending retry instead of racing
+  // B-4: pending flag ensures an event that arrived during refresh is not silently dropped
   silentRefreshProjectCols: async () => {
+    if (refreshingProjectCols) { pendingProjectColRefresh = true; return; }
     const { projectColIds, params } = get();
     if (!projectColIds.length) return;
+    refreshingProjectCols = true;
     try {
       const results = await Promise.allSettled(
         projectColIds.map(colId => taskService.getTasks({ ...params, columnId: colId, page: 1, limit: 20 }))
@@ -371,6 +435,12 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       set({ projectColTasks: newColTasks, projectColPaginations: newColPaginations });
     } catch {
       // silent
+    } finally {
+      refreshingProjectCols = false;
+      if (pendingProjectColRefresh) {
+        pendingProjectColRefresh = false;
+        void get().silentRefreshProjectCols();
+      }
     }
   },
 }));
