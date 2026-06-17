@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import { getApiErrorMessage } from '@/services/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -53,7 +54,7 @@ export default function SettingsPage() {
       setNewPassword('');
       setConfirmNewPassword('');
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to change password');
+      toast.error(getApiErrorMessage(err, 'Failed to change password'));
     } finally {
       setPasswordLoading(false);
     }

@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/store/authStore';
 import { authService } from '@/services/authService';
+import { getApiErrorMessage } from '@/services/api';
 import { Mail, Lock, Eye, EyeOff, CheckSquare } from 'lucide-react';
 import ThemeToggle from '@/components/ThemeToggle'; // Keep if we want users to toggle, though cursorrule says top-left logo. Let's put theme toggle top-right.
 
@@ -38,7 +39,7 @@ export default function LoginPage() {
         navigate('/dashboard');
       }
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Login failed');
+      setError(getApiErrorMessage(err, 'Login failed'));
     } finally {
       setLoading(false);
     }

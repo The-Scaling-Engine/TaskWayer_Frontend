@@ -1,6 +1,7 @@
 import { useState, useEffect, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
+import { getApiErrorMessage } from '@/services/api';
 import { Lock, Eye, EyeOff, CheckSquare } from 'lucide-react';
 import ThemeToggle from '@/components/ThemeToggle';
 
@@ -65,7 +66,7 @@ export default function ResetPasswordPage() {
       await supabase.auth.signOut();
       setDone(true);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Password reset failed');
+      setError(getApiErrorMessage(err, 'Password reset failed'));
     } finally {
       setLoading(false);
     }
