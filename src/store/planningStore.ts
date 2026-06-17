@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { planningService } from '@/services/planningService';
+import { getApiErrorMessage } from '@/services/api';
 import type { PlanningTree, PlanningMilestone } from '@/types';
 
 interface PlanningState {
@@ -34,8 +35,8 @@ export const usePlanningStore = create<PlanningState>((set, get) => ({
       const tree = await planningService.getTree(projectId);
       const expandedMilestones = new Set(tree.milestones.map(m => m.id));
       set({ tree, loading: false, expandedMilestones });
-    } catch {
-      set({ error: 'Failed to load planning tree', loading: false });
+    } catch (err) {
+      set({ error: getApiErrorMessage(err, 'Failed to load planning tree'), loading: false });
     }
   },
 

@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { Task, TasksResponse } from '@/types';
 import { taskService, type CreateTaskData, type UpdateTaskData } from '@/services/taskService';
+import { getApiErrorMessage } from '@/services/api';
 
 type Pagination = TasksResponse['pagination'];
 type ColumnKey = 'todo' | 'doing' | 'done';
@@ -118,8 +119,8 @@ export const useTaskStore = create<TaskState>((set, get) => ({
     try {
       const res = await taskService.getTasks(get().params);
       set({ tasks: res.data, pagination: res.pagination, loading: false });
-    } catch {
-      set({ error: 'Failed to fetch tasks', loading: false });
+    } catch (err) {
+      set({ error: getApiErrorMessage(err, 'Failed to fetch tasks'), loading: false });
     }
   },
 
