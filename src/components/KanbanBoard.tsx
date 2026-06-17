@@ -297,7 +297,7 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
         setBoardColumns(cols);
         void fetchProjectColTasks(cols.map(c => c.id));
       })
-      .catch(() => { if (!cancelled) toast.error('Failed to load columns'); })
+      .catch((err) => { if (!cancelled) toast.error(getApiErrorMessage(err, 'Failed to load columns')); })
       .finally(() => { if (!cancelled) setColumnsLoading(false); });
     return () => { cancelled = true; };
   }, [lockedProjectId]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -411,9 +411,9 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
         const map = new Map(prev.map(c => [c.id, c]));
         return newIds.map((id, i) => ({ ...map.get(id)!, order: i }));
       });
-      void boardColumnService.reorderColumns(lockedProjectId, newIds).catch(() => {
+      void boardColumnService.reorderColumns(lockedProjectId, newIds).catch((err) => {
         setBoardColumns(prev => [...prev].sort((a, b) => a.order - b.order));
-        toast.error('Failed to reorder columns');
+        toast.error(getApiErrorMessage(err, 'Failed to reorder columns'));
       });
       return;
     }
@@ -568,8 +568,8 @@ const KanbanBoard = forwardRef<KanbanBoardRef, KanbanBoardProps>(({
     setBoardColumns(prev => prev.map(c => c.id === columnId ? { ...c, color } : c));
     try {
       await boardColumnService.updateColumn(lockedProjectId, columnId, { color });
-    } catch {
-      toast.error('Failed to save color');
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Failed to save color'));
       boardColumnService.getColumns(lockedProjectId)
         .then(res => setBoardColumns([...res.data].sort((a, b) => a.order - b.order)))
         .catch(() => {});
