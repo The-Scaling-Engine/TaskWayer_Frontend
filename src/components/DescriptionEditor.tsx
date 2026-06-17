@@ -6,6 +6,7 @@ import DOMPurify from 'dompurify';
 import { useRef, useState, useMemo } from 'react';
 import { Bold, Italic, Link2, ImageIcon, Paperclip, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { uploadFile } from '@/services/uploadService';
+import { getApiErrorMessage } from '@/services/api';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
@@ -188,6 +189,8 @@ export default function DescriptionEditor({
   const imageInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
+  // Stable ref so the TipTap handlePaste closure always calls the latest handleUploadImages
+  const uploadPastedImagesRef = useRef<(files: File[]) => Promise<void>>(async () => {});
   const [linkMode, setLinkMode] = useState(false);
   const [linkUrl, setLinkUrl] = useState('');
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
@@ -214,6 +217,19 @@ export default function DescriptionEditor({
     editable: !disabled,
     onUpdate: ({ editor }) => {
       onChange(buildHtml(editor.getHTML(), imagesRef.current));
+    },
+    editorProps: {
+      handlePaste: (_view, event) => {
+        const items = Array.from(event.clipboardData?.items ?? []);
+        const imageFiles = items
+          .filter(item => item.kind === 'file' && item.type.startsWith('image/'))
+          .map(item => item.getAsFile())
+          .filter((f): f is File => f !== null);
+        if (imageFiles.length === 0) return false;
+        event.preventDefault();
+        void uploadPastedImagesRef.current(imageFiles);
+        return true;
+      },
     },
   });
 
@@ -243,11 +259,12 @@ export default function DescriptionEditor({
       if (failed > 0) toast.error(`${failed} image(s) failed to upload`);
       if (urls.length > 0) addImages(urls);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Upload failed');
+      toast.error(getApiErrorMessage(err, 'Upload failed'));
     } finally {
       setUploading(false);
     }
   };
+  uploadPastedImagesRef.current = handleUploadImages;
 
   const handleUploadFile = async (file: File) => {
     setUploading(true);
@@ -257,7 +274,7 @@ export default function DescriptionEditor({
         .insertContent(`<a href="${url}" target="_blank" rel="noopener noreferrer">${file.name}</a>`)
         .run();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Upload failed');
+      toast.error(getApiErrorMessage(err, 'Upload failed'));
     } finally {
       setUploading(false);
     }
@@ -309,7 +326,7 @@ export default function DescriptionEditor({
         ><Link2 size={12} /></ToolbarBtn>
         <ToolbarBtn
           onClick={() => imageInputRef.current?.click()}
-          title="Upload images (multiple)"
+          title="Upload images or paste from clipboard (Ctrl+V)"
           disabled={uploading}
         >
           {uploading ? <Loader2 size={12} className="animate-spin" /> : <ImageIcon size={12} />}
