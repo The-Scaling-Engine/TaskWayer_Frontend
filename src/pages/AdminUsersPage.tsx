@@ -75,9 +75,9 @@ export default function AdminUsersPage() {
         setTotalUsers(res.data.pagination.totalUsers);
       }
     } catch (err) {
-      console.error(err);
-      setError('Failed to fetch users list');
-      toast.error('Failed to load user data');
+      const msg = getApiErrorMessage(err, 'Failed to load users');
+      setError(msg);
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
@@ -116,8 +116,7 @@ export default function AdminUsersPage() {
       ));
       setConfirmAction(null);
     } catch (err) {
-      console.error(err);
-      toast.error(`Failed to ${action} user`);
+      toast.error(getApiErrorMessage(err, `Failed to ${action} user`));
     } finally {
       setActionLoading(false);
     }
