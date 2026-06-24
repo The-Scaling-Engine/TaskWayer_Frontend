@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { adminTeamService, type AssignTaskPayload } from '@/services/adminTeamService';
+import { adminTeamService } from '@/services/adminTeamService';
 import { getApiErrorMessage } from '@/services/api';
 import type { TeamOverviewMember, TeamOverviewTask } from '@/types';
 import { toast } from 'sonner';
@@ -9,20 +9,7 @@ import {
   Loader2, RefreshCw, X, UserPlus, ChevronRight,
   AlertCircle, FolderOpen,
 } from 'lucide-react';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@/components/ui/select';
+import AssignTaskDialog from '@/components/AssignTaskDialog';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -73,15 +60,6 @@ export default function TeamOverviewPage() {
 
   // ── Assign Task dialog state ──
   const [showAssignDialog, setShowAssignDialog] = useState(false);
-  const [assignLoading, setAssignLoading]       = useState(false);
-  const [assignTitle, setAssignTitle]           = useState('');
-  const [assignDescription, setAssignDescription] = useState('');
-  const [assignStatus, setAssignStatus]         = useState<'todo' | 'doing' | 'done'>('todo');
-  const [assignPriority, setAssignPriority]     = useState<'low' | 'medium' | 'high' | ''>('');
-  const [assignDeadline, setAssignDeadline]     = useState('');
-  const [assignScheduledAt, setAssignScheduledAt] = useState('');
-  const [assignTags, setAssignTags]             = useState('');
-  const [assignEstHours, setAssignEstHours]     = useState('');
 
   // ── Load overview ──
   const fetchOverview = useCallback(async () => {
@@ -125,48 +103,6 @@ export default function TeamOverviewPage() {
     setDrawerOpen(false);
     setSelectedMember(null);
     setMemberTasks([]);
-  };
-
-  // ── Assign Task ──
-  const resetAssignForm = () => {
-    setAssignTitle('');
-    setAssignDescription('');
-    setAssignStatus('todo');
-    setAssignPriority('');
-    setAssignDeadline('');
-    setAssignScheduledAt('');
-    setAssignTags('');
-    setAssignEstHours('');
-  };
-
-  const handleAssign = async () => {
-    if (!selectedMember) return;
-    if (!assignTitle.trim()) { toast.error('Title is required'); return; }
-
-    const payload: AssignTaskPayload = {
-      title: assignTitle.trim(),
-      status: assignStatus,
-      targetProfileId: selectedMember.profileId,
-    };
-    if (assignPriority)          payload.priority      = assignPriority;
-    if (assignDeadline)          payload.deadline      = new Date(assignDeadline).toISOString();
-    if (assignDescription.trim()) payload.description  = assignDescription.trim();
-    if (assignScheduledAt)       payload.scheduledAt   = new Date(assignScheduledAt).toISOString();
-    if (assignTags.trim())       payload.tags          = assignTags.split(',').map(t => t.trim()).filter(Boolean);
-    if (assignEstHours)          payload.estimatedHours = parseFloat(assignEstHours);
-
-    setAssignLoading(true);
-    try {
-      await adminTeamService.assignTask(payload);
-      toast.success('Task assigned successfully');
-      setShowAssignDialog(false);
-      resetAssignForm();
-      void loadMemberTasks(selectedMember.profileId);
-    } catch (err) {
-      toast.error(getApiErrorMessage(err, 'Failed to assign task'));
-    } finally {
-      setAssignLoading(false);
-    }
   };
 
   // ── Filtered tasks ──
@@ -360,7 +296,7 @@ export default function TeamOverviewPage() {
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 <button
-                  onClick={() => { setShowAssignDialog(true); resetAssignForm(); }}
+                  onClick={() => setShowAssignDialog(true)}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
                 >
                   <UserPlus size={13} />
@@ -475,168 +411,12 @@ export default function TeamOverviewPage() {
         document.body
       )}
 
-      {/* ── Assign Task Dialog ── */}
-      <Dialog open={showAssignDialog} onOpenChange={(open) => { if (!open) { setShowAssignDialog(false); resetAssignForm(); } }}>
-        <DialogContent className="sm:max-w-[560px] max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="text-lg font-bold">Create Task</DialogTitle>
-          </DialogHeader>
-
-          <div className="space-y-4 py-1">
-            {/* Assigned to — locked, auto-filled */}
-            {selectedMember && (
-              <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-primary/5 border border-primary/20">
-                {selectedMember.avatar ? (
-                  <img src={selectedMember.avatar} alt="" className="w-7 h-7 rounded-full object-cover shrink-0" />
-                ) : (
-                  <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center text-primary text-xs font-bold shrink-0">
-                    {(selectedMember.name ?? selectedMember.email).charAt(0).toUpperCase()}
-                  </div>
-                )}
-                <div className="min-w-0">
-                  <p className="text-xs text-muted-foreground leading-none mb-0.5">Assigning to</p>
-                  <p className="text-sm font-medium text-foreground truncate">
-                    {selectedMember.name ?? selectedMember.email}
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {/* Title */}
-            <div className="space-y-1.5">
-              <Label htmlFor="assign-title" className="font-medium">
-                Title <span className="text-destructive">*</span>
-              </Label>
-              <Input
-                id="assign-title"
-                placeholder="Enter task title..."
-                value={assignTitle}
-                onChange={e => setAssignTitle(e.target.value)}
-                className="rounded-xl"
-                autoFocus
-              />
-            </div>
-
-            {/* Description */}
-            <div className="space-y-1.5">
-              <Label htmlFor="assign-description" className="font-medium">Description</Label>
-              <Textarea
-                id="assign-description"
-                placeholder="Add a description..."
-                value={assignDescription}
-                onChange={e => setAssignDescription(e.target.value)}
-                className="rounded-xl min-h-[80px] resize-none"
-              />
-            </div>
-
-            {/* Status + Priority */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label className="font-medium">Status</Label>
-                <Select value={assignStatus} onValueChange={v => setAssignStatus(v as typeof assignStatus)}>
-                  <SelectTrigger className="rounded-xl"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="todo">To Do</SelectItem>
-                    <SelectItem value="doing">Doing</SelectItem>
-                    <SelectItem value="done">Done</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label className="font-medium">Priority</Label>
-                <Select value={assignPriority || '__none__'} onValueChange={v => setAssignPriority(v === '__none__' ? '' : v as typeof assignPriority)}>
-                  <SelectTrigger className="rounded-xl"><SelectValue placeholder="No priority" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">No priority</SelectItem>
-                    <SelectItem value="low">Low</SelectItem>
-                    <SelectItem value="medium">Medium</SelectItem>
-                    <SelectItem value="high">High</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            {/* Scheduled + Deadline */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label htmlFor="assign-scheduled" className="font-medium">Scheduled for</Label>
-                <Input
-                  id="assign-scheduled"
-                  type="datetime-local"
-                  step="60"
-                  value={assignScheduledAt}
-                  onChange={e => setAssignScheduledAt(e.target.value)}
-                  className="rounded-xl"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="assign-deadline" className="font-medium">
-                  Deadline <span className="text-muted-foreground font-normal text-xs">(opt.)</span>
-                </Label>
-                <Input
-                  id="assign-deadline"
-                  type="datetime-local"
-                  step="60"
-                  value={assignDeadline}
-                  onChange={e => setAssignDeadline(e.target.value)}
-                  className="rounded-xl"
-                />
-              </div>
-            </div>
-
-            {/* Est. hours + Tags */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label htmlFor="assign-est-hours" className="font-medium">
-                  Est. hours <span className="text-muted-foreground font-normal text-xs">(opt.)</span>
-                </Label>
-                <Input
-                  id="assign-est-hours"
-                  type="number"
-                  min="0"
-                  step="0.5"
-                  placeholder="e.g. 4"
-                  value={assignEstHours}
-                  onChange={e => setAssignEstHours(e.target.value)}
-                  className="rounded-xl"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="assign-tags" className="font-medium">
-                  Tags <span className="text-muted-foreground font-normal text-xs">(comma-separated)</span>
-                </Label>
-                <Input
-                  id="assign-tags"
-                  placeholder="bug, feature, ..."
-                  value={assignTags}
-                  onChange={e => setAssignTags(e.target.value)}
-                  className="rounded-xl"
-                />
-              </div>
-            </div>
-          </div>
-
-          <DialogFooter className="gap-2 pt-2">
-            <Button
-              variant="outline"
-              onClick={() => { setShowAssignDialog(false); resetAssignForm(); }}
-              disabled={assignLoading}
-              className="rounded-xl"
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleAssign}
-              disabled={assignLoading || !assignTitle.trim()}
-              className="rounded-xl bg-[#FE812C] hover:bg-[#e5732a] text-white"
-            >
-              {assignLoading ? (
-                <><Loader2 size={14} className="animate-spin mr-1.5" />Assigning...</>
-              ) : 'Assign Task'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <AssignTaskDialog
+        open={showAssignDialog}
+        onOpenChange={setShowAssignDialog}
+        member={selectedMember}
+        onSuccess={() => selectedMember && void loadMemberTasks(selectedMember.profileId)}
+      />
     </div>
   );
 }
