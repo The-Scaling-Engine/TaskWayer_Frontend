@@ -706,3 +706,29 @@ export interface UserGrowthPoint {
   date: string;
   totalUsers: number;
 }
+
+// ============================================
+// ADMIN TEAM OVERVIEW
+// ============================================
+export interface TeamOverviewMember {
+  profileId: string;
+  name: string | null;
+  email: string;
+  avatar: string | null;
+  totalTasks: number;
+  todoCount: number;
+  doingCount: number;
+  doneCount: number;
+  overdueCount: number;
+  completionRate: number;
+}
+
+export interface TeamOverviewTask {
+  id: string;
+  title: string;
+  status: 'todo' | 'doing' | 'done';
+  priority: 'low' | 'medium' | 'high' | null;
+  deadline: string | null;
+  createdAt: string;
+  project: { id: string; name: string } | null;
+}
