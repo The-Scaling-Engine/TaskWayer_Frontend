@@ -8,7 +8,7 @@ import { invitationService } from '@/services/invitationService';
 import { userService } from '@/services/userService';
 import { toast } from 'sonner';
 import {
-  Building2, ChevronDown, RefreshCw, Loader2, Users, Clock, AlertTriangle, Zap,
+  Building2, ChevronDown, RefreshCw, Loader2, Users, Clock, AlertTriangle, Zap, TrendingUp,
   ChevronLeft, ChevronRight, X, Check, UserPlus, UserMinus, Mail, Search, Timer, MessageSquare,
   ClipboardPlus, Pencil, Trash2, FolderOpen, Link2,
 } from 'lucide-react';
@@ -516,13 +516,19 @@ export default function DepartmentManagerPage() {
           const activeCount = workload.filter((m) => m.hasActiveSession).length;
           const overdueCount = workload.reduce((sum, m) => sum + m.tasks.overdue, 0);
           const highPriorityCount = workload.reduce((sum, m) => sum + m.tasks.highPriority, 0);
+          const nearDeadlineCount = workload.reduce((sum, m) => sum + m.tasks.nearDeadline, 0);
+          const avgCompletion = workload.length > 0
+            ? Math.round(workload.reduce((sum, m) => sum + (m.tasks.total > 0 ? Math.round((m.tasks.done / m.tasks.total) * 100) : 0), 0) / workload.length)
+            : 0;
           return (
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
               {[
                 { icon: Users, label: 'Members', value: workloadTotal, color: 'text-blue-500', bg: 'bg-blue-500/10' },
                 { icon: Clock, label: 'Active Sessions', value: activeCount, color: 'text-green-500', bg: 'bg-green-500/10' },
                 { icon: AlertTriangle, label: 'Overdue Tasks', value: overdueCount, color: 'text-red-500', bg: 'bg-red-500/10' },
                 { icon: Zap, label: 'High Priority', value: highPriorityCount, color: 'text-[#FE812C]', bg: 'bg-[#FE812C]/10' },
+                { icon: Clock, label: 'Near Deadline', value: nearDeadlineCount, color: 'text-orange-500', bg: 'bg-orange-500/10' },
+                { icon: TrendingUp, label: 'Avg. Completion', value: `${avgCompletion}%`, color: 'text-emerald-600', bg: 'bg-emerald-500/10' },
               ].map(({ icon: Icon, label, value, color, bg }) => (
                 <div key={label} className="bg-card border border-border rounded-2xl px-4 py-3 flex items-center gap-3">
                   <div className={cn('w-9 h-9 rounded-xl flex items-center justify-center shrink-0', bg)}>
@@ -578,7 +584,7 @@ export default function DepartmentManagerPage() {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-border bg-muted/30">
-                        {['Member', 'Job Title', 'Role', 'Todo', 'Doing', 'Done', 'Overdue', 'Est. Hours', 'Session'].map((h, i) => (
+                        {['Member', 'Job Title', 'Role', 'Todo', 'Doing', 'Done', 'Overdue', 'Near Deadline', 'Completion', 'Est. Hours', 'Session'].map((h, i) => (
                           <th key={h} className={cn('px-3 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider', i === 0 ? 'px-5 text-left' : i < 3 ? 'text-left' : 'text-center')}>{h}</th>
                         ))}
                       </tr>
@@ -627,6 +633,24 @@ export default function DepartmentManagerPage() {
                             {m.tasks.overdue > 0 ? (
                               <span className="inline-flex items-center gap-1 text-red-500 font-semibold"><AlertTriangle size={12} />{m.tasks.overdue}</span>
                             ) : <span className="text-muted-foreground">0</span>}
+                          </td>
+                          <td className="px-3 py-3 text-center">
+                            {m.tasks.nearDeadline > 0 ? (
+                              <span className="inline-flex items-center gap-1 text-orange-500 font-semibold"><Clock size={12} />{m.tasks.nearDeadline}</span>
+                            ) : <span className="text-muted-foreground">0</span>}
+                          </td>
+                          <td className="px-3 py-3 text-center min-w-[90px]">
+                            {(() => {
+                              const pct = m.tasks.total > 0 ? Math.round((m.tasks.done / m.tasks.total) * 100) : 0;
+                              return (
+                                <div className="flex flex-col items-center gap-1">
+                                  <span className="text-xs font-semibold tabular-nums text-foreground">{pct}%</span>
+                                  <div className="w-full max-w-[60px] h-1.5 rounded-full bg-muted overflow-hidden">
+                                    <div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${pct}%` }} />
+                                  </div>
+                                </div>
+                              );
+                            })()}
                           </td>
                           <td className="px-3 py-3 text-center min-w-[110px]">
                             {m.tasks.totalEstimatedHours > 0 ? (
