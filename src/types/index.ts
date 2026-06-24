@@ -9,7 +9,7 @@ export interface User {
   avatar?: string;
   username?: string;
   jobTitle?: string;
-  role?: 'USER' | 'ADMIN' | 'DEPT_MANAGER' | 'DEPT_MEMBER';
+  role?: 'USER' | 'ADMIN' | 'MANAGER';
   status?: 'ACTIVE' | 'BANNED';
   createdAt?: string;
 }
@@ -117,7 +117,7 @@ export interface AuthResponse {
     email: string;
     token?: string;
     createdAt?: string;
-    role?: 'USER' | 'ADMIN' | 'DEPT_MANAGER' | 'DEPT_MEMBER';
+    role?: 'USER' | 'ADMIN' | 'MANAGER';
   };
 }
 
@@ -166,7 +166,7 @@ export interface AdminUser {
   email: string;
   name?: string;
   username?: string;
-  role: 'USER' | 'ADMIN' | 'DEPT_MANAGER' | 'DEPT_MEMBER';
+  role: 'USER' | 'ADMIN' | 'MANAGER';
   status: 'PENDING' | 'ACTIVE' | 'BANNED';
   createdAt?: string;
 }
