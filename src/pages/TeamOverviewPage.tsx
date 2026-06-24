@@ -7,13 +7,23 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import {
   Loader2, RefreshCw, X, UserPlus, ChevronRight,
-  AlertCircle, FolderOpen,
+  AlertCircle, FolderOpen, Search,
 } from 'lucide-react';
 import AssignTaskDialog from '@/components/AssignTaskDialog';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 type TaskFilter = 'all' | 'todo' | 'doing' | 'done' | 'overdue';
+type DeadlineFilter = 'any' | 'overdue' | 'today' | 'week' | 'no-deadline';
+type SortOrder = 'default' | 'created-desc' | 'created-asc' | 'deadline-asc' | 'deadline-desc';
+
+const deadlineOptions: { key: DeadlineFilter; label: string }[] = [
+  { key: 'any',         label: 'Any date' },
+  { key: 'overdue',     label: 'Overdue' },
+  { key: 'today',       label: 'Due today' },
+  { key: 'week',        label: 'This week' },
+  { key: 'no-deadline', label: 'No date' },
+];
 
 const isOverdue = (task: TeamOverviewTask) =>
   !!task.deadline && new Date(task.deadline) < new Date() && task.status !== 'done';
@@ -57,6 +67,9 @@ export default function TeamOverviewPage() {
   const [memberTasks, setMemberTasks]       = useState<TeamOverviewTask[]>([]);
   const [tasksLoading, setTasksLoading]     = useState(false);
   const [taskFilter, setTaskFilter]         = useState<TaskFilter>('all');
+  const [searchQuery, setSearchQuery]       = useState('');
+  const [deadlineFilter, setDeadlineFilter] = useState<DeadlineFilter>('any');
+  const [sortOrder, setSortOrder]           = useState<SortOrder>('default');
 
   // ── Assign Task dialog state ──
   const [showAssignDialog, setShowAssignDialog] = useState(false);
@@ -95,6 +108,9 @@ export default function TeamOverviewPage() {
   const openDrawer = (member: TeamOverviewMember) => {
     setSelectedMember(member);
     setTaskFilter('all');
+    setSearchQuery('');
+    setDeadlineFilter('any');
+    setSortOrder('default');
     setDrawerOpen(true);
     void loadMemberTasks(member.profileId);
   };
@@ -103,14 +119,52 @@ export default function TeamOverviewPage() {
     setDrawerOpen(false);
     setSelectedMember(null);
     setMemberTasks([]);
+    setSearchQuery('');
+    setDeadlineFilter('any');
+    setSortOrder('default');
   };
 
-  // ── Filtered tasks ──
-  const filteredTasks = memberTasks.filter(t => {
-    if (taskFilter === 'all')     return true;
-    if (taskFilter === 'overdue') return isOverdue(t);
-    return t.status === taskFilter;
-  });
+  // ── Filtered + sorted tasks ──
+  const filteredTasks = (() => {
+    const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+    const weekEnd = new Date(todayStart); weekEnd.setDate(todayStart.getDate() + 6); weekEnd.setHours(23, 59, 59, 999);
+    const q = searchQuery.trim().toLowerCase();
+
+    const tasks = memberTasks.filter(t => {
+      // Status / overdue tab
+      if (taskFilter !== 'all') {
+        if (taskFilter === 'overdue' ? !isOverdue(t) : t.status !== taskFilter) return false;
+      }
+      // Text search
+      if (q && !t.title.toLowerCase().includes(q)) return false;
+      // Deadline chips
+      if (deadlineFilter !== 'any') {
+        if (deadlineFilter === 'no-deadline') return !t.deadline;
+        if (!t.deadline) return false;
+        const dl = new Date(t.deadline);
+        if (deadlineFilter === 'overdue') return dl < todayStart && t.status !== 'done';
+        if (deadlineFilter === 'today') {
+          const dlDay = new Date(dl.getFullYear(), dl.getMonth(), dl.getDate());
+          return dlDay.getTime() === todayStart.getTime();
+        }
+        if (deadlineFilter === 'week') return dl >= todayStart && dl <= weekEnd;
+      }
+      return true;
+    });
+
+    if (sortOrder === 'default') return tasks;
+    return [...tasks].sort((a, b) => {
+      if (sortOrder.startsWith('created')) {
+        const d = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+        return sortOrder === 'created-asc' ? d : -d;
+      }
+      if (!a.deadline && !b.deadline) return 0;
+      if (!a.deadline) return sortOrder === 'deadline-asc' ? 1 : -1;
+      if (!b.deadline) return sortOrder === 'deadline-asc' ? -1 : 1;
+      const d = new Date(a.deadline).getTime() - new Date(b.deadline).getTime();
+      return sortOrder === 'deadline-asc' ? d : -d;
+    });
+  })();
 
   const overdueCount = memberTasks.filter(isOverdue).length;
 
@@ -311,8 +365,8 @@ export default function TeamOverviewPage() {
               </div>
             </div>
 
-            {/* Filter tabs */}
-            <div className="flex gap-1 px-5 py-3 border-b border-border shrink-0 overflow-x-auto">
+            {/* Status filter tabs */}
+            <div className="flex gap-1 px-5 py-3 border-b border-border shrink-0 overflow-x-auto scrollbar-hide">
               {filterTabs.map(tab => (
                 <button
                   key={tab.key}
@@ -332,6 +386,59 @@ export default function TeamOverviewPage() {
                   )}
                 </button>
               ))}
+            </div>
+
+            {/* Search + sort */}
+            <div className="px-5 pt-3 pb-2 shrink-0 space-y-2">
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1">
+                  <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                  <input
+                    type="text"
+                    placeholder="Search tasks..."
+                    value={searchQuery}
+                    onChange={e => setSearchQuery(e.target.value)}
+                    className="w-full pl-7 pr-7 py-1.5 text-xs bg-muted rounded-lg border border-transparent focus:border-primary/30 focus:outline-none placeholder:text-muted-foreground"
+                  />
+                  {searchQuery && (
+                    <button
+                      onClick={() => setSearchQuery('')}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    >
+                      <X size={12} />
+                    </button>
+                  )}
+                </div>
+                <select
+                  value={sortOrder}
+                  onChange={e => setSortOrder(e.target.value as SortOrder)}
+                  className="text-xs bg-muted rounded-lg px-2 py-1.5 text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/30 cursor-pointer shrink-0"
+                >
+                  <option value="default">Sort</option>
+                  <option value="created-desc">Newest</option>
+                  <option value="created-asc">Oldest</option>
+                  <option value="deadline-asc">Deadline ↑</option>
+                  <option value="deadline-desc">Deadline ↓</option>
+                </select>
+              </div>
+
+              {/* Deadline chips */}
+              <div className="flex gap-1 overflow-x-auto scrollbar-hide pb-0.5">
+                {deadlineOptions.map(opt => (
+                  <button
+                    key={opt.key}
+                    onClick={() => setDeadlineFilter(opt.key)}
+                    className={cn(
+                      'px-2.5 py-1 rounded-md text-[11px] font-medium whitespace-nowrap transition-colors shrink-0',
+                      deadlineFilter === opt.key
+                        ? 'bg-primary/10 text-primary'
+                        : 'bg-muted text-muted-foreground hover:text-foreground'
+                    )}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
             </div>
 
             {/* Task list */}
@@ -400,8 +507,10 @@ export default function TeamOverviewPage() {
             {/* Drawer footer */}
             <div className="px-5 py-3 border-t border-border shrink-0">
               <p className="text-xs text-muted-foreground">
-                {filteredTasks.length} task{filteredTasks.length !== 1 ? 's' : ''}
-                {taskFilter !== 'all' ? ` · ${taskFilter}` : ''}
+                {filteredTasks.length} of {memberTasks.length} task{memberTasks.length !== 1 ? 's' : ''}
+                {searchQuery.trim() && <span> · &ldquo;{searchQuery.trim()}&rdquo;</span>}
+                {deadlineFilter !== 'any' && <span> · {deadlineOptions.find(o => o.key === deadlineFilter)?.label}</span>}
+                {sortOrder !== 'default' && <span> · sorted</span>}
               </p>
             </div>
           </>
