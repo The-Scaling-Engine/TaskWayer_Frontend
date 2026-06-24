@@ -29,6 +29,7 @@ const ProjectTasksPage      = lazy(() => import('@/pages/ProjectTasksPage'));
 const AdminDashboardPage    = lazy(() => import('@/pages/AdminDashboardPage'));
 const AdminUsersPage        = lazy(() => import('@/pages/AdminUsersPage'));
 const AdminDepartmentsPage  = lazy(() => import('@/pages/AdminDepartmentsPage'));
+const TeamOverviewPage      = lazy(() => import('@/pages/TeamOverviewPage'));
 
 // ── Fallback spinner shown while a lazy chunk is downloading ─────
 function PageLoader() {
@@ -77,6 +78,7 @@ function App() {
             <Route path="admin" element={<AdminRoute><AdminDashboardPage /></AdminRoute>} />
             <Route path="admin/users" element={<AdminRoute><AdminUsersPage /></AdminRoute>} />
             <Route path="admin/departments" element={<AdminRoute><AdminDepartmentsPage /></AdminRoute>} />
+            <Route path="admin/team" element={<AdminRoute><TeamOverviewPage /></AdminRoute>} />
           </Route>
         </Routes>
       </Suspense>
