@@ -42,6 +42,11 @@ export const adminService = {
     return response.data;
   },
 
+  changeUserRole: async (id: string, role: 'USER' | 'MANAGER'): Promise<{ success: boolean; message: string }> => {
+    const response = await api.patch<{ success: boolean; message: string }>(`/admin/users/${id}/role`, { role });
+    return response.data;
+  },
+
   // ── Department CRUD ──────────────────────────────────────────
 
   createDepartment: async (data: { name: string; description?: string }): Promise<{ success: boolean; message: string; data: Department }> => {
