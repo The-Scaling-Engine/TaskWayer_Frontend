@@ -14,6 +14,7 @@ import {
   Building2,
   FolderOpen,
   CalendarDays,
+  UsersRound,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useDepartmentStore } from '@/store/departmentStore';
@@ -41,6 +42,7 @@ const adminNavItems = [
   { icon: LayoutDashboard, label: 'Admin Panel', path: '/dashboard/admin' },
   { icon: Users, label: 'Manage Users', path: '/dashboard/admin/users' },
   { icon: Building2, label: 'Departments', path: '/dashboard/admin/departments' },
+  { icon: UsersRound, label: 'Team Overview', path: '/dashboard/admin/team' },
 ];
 
 export default function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: SidebarProps) {
