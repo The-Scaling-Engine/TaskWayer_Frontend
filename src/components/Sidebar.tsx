@@ -145,79 +145,54 @@ export default function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose
           })}
 
           {user?.role !== 'ADMIN' && topDepts.length > 0 && (
-            <>
-              <div className={cn('mt-4 mb-2', collapsed ? 'text-center' : 'px-3')}>
-                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                  {collapsed ? 'Dept' : 'My Departments'}
-                </span>
-              </div>
-              {topDepts.map((m) => {
-                const deptPath = `/dashboard/departments/${m.department.id}`;
-                const active = isActive(deptPath);
-                return (
-                  <Link
-                    key={m.id}
-                    to={deptPath}
-                    onClick={onMobileClose}
-                    title={collapsed ? m.department.name : undefined}
-                    className={cn(
-                      'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200',
-                      active
-                        ? 'bg-primary/10 text-primary'
-                        : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-                      collapsed && 'justify-center px-2'
-                    )}
-                  >
-                    <Building2 size={20} className="shrink-0" />
-                    {!collapsed && (
-                      <>
-                        <span className="flex-1 truncate">{m.department.name}</span>
-                        <span className={cn(
-                          'text-[10px] font-bold px-1.5 py-0.5 rounded-full shrink-0',
-                          m.role === 'OWNER'
-                            ? 'bg-[#FE812C]/10 text-[#FE812C]'
-                            : 'bg-purple-500/10 text-purple-500'
-                        )}>
-                          {m.role}
-                        </span>
-                      </>
-                    )}
-                  </Link>
-                );
-              })}
-            </>
+            <Link
+              to={`/dashboard/departments/${topDepts[0].department.id}`}
+              onClick={onMobileClose}
+              title={collapsed ? 'Department Management' : undefined}
+              className={cn(
+                'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200',
+                location.pathname.startsWith('/dashboard/departments/')
+                  ? 'bg-primary/10 text-primary'
+                  : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                collapsed && 'justify-center px-2'
+              )}
+            >
+              <Building2 size={20} className="shrink-0" />
+              {!collapsed && (
+                <>
+                  <span className="flex-1 truncate">Department Management</span>
+                  {topDepts.length > 1 && (
+                    <span className="ml-1 px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground text-[10px] font-bold shrink-0">
+                      {topDepts.length}
+                    </span>
+                  )}
+                </>
+              )}
+            </Link>
           )}
 
-          {user?.role === 'MANAGER' && (
-            <>
-              <div className={cn('mt-4 mb-2', collapsed ? 'text-center' : 'px-3')}>
-                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                  {collapsed ? 'Mgr' : 'Management'}
-                </span>
-              </div>
-              {managerNavItems.map((item) => {
-                const Icon = item.icon;
-                const active = isActive(item.path);
-                return (
-                  <Link
-                    key={item.path}
-                    to={item.path}
-                    onClick={onMobileClose}
-                    className={cn(
-                      'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200',
-                      active
-                        ? 'bg-purple-500/10 text-purple-500'
-                        : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-                      collapsed && 'justify-center px-2'
-                    )}
-                  >
-                    <Icon size={20} className="shrink-0" />
-                    {!collapsed && <span className="flex-1">{item.label}</span>}
-                  </Link>
-                );
-              })}
-            </>
-          )}
+          {user?.role === 'MANAGER' && managerNavItems.map((item) => {
+            const Icon = item.icon;
+            const active = isActive(item.path);
+            return (
+              <Link
+                key={item.path}
+                to={item.path}
+                onClick={onMobileClose}
+                title={collapsed ? item.label : undefined}
+                className={cn(
+                  'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200',
+                  active
+                    ? 'bg-purple-500/10 text-purple-500'
+                    : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                  collapsed && 'justify-center px-2'
+                )}
+              >
+                <Icon size={20} className="shrink-0" />
+                {!collapsed && <span className="flex-1">{item.label}</span>}
+              </Link>
+            );
+          })}
 
           {user?.role === 'ADMIN' && (
             <>
