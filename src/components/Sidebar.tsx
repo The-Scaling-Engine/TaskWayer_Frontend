@@ -45,6 +45,10 @@ const adminNavItems = [
   { icon: UsersRound, label: 'Team Overview', path: '/dashboard/admin/team' },
 ];
 
+const managerNavItems = [
+  { icon: UsersRound, label: 'Team Overview', path: '/dashboard/admin/team' },
+];
+
 export default function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: SidebarProps) {
   const { user, logout } = useAuthStore();
   const navigate = useNavigate();
@@ -178,6 +182,37 @@ export default function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose
                         </span>
                       </>
                     )}
+                  </Link>
+                );
+              })}
+            </>
+          )}
+
+          {user?.role === 'MANAGER' && (
+            <>
+              <div className={cn('mt-4 mb-2', collapsed ? 'text-center' : 'px-3')}>
+                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  {collapsed ? 'Mgr' : 'Management'}
+                </span>
+              </div>
+              {managerNavItems.map((item) => {
+                const Icon = item.icon;
+                const active = isActive(item.path);
+                return (
+                  <Link
+                    key={item.path}
+                    to={item.path}
+                    onClick={onMobileClose}
+                    className={cn(
+                      'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200',
+                      active
+                        ? 'bg-purple-500/10 text-purple-500'
+                        : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                      collapsed && 'justify-center px-2'
+                    )}
+                  >
+                    <Icon size={20} className="shrink-0" />
+                    {!collapsed && <span className="flex-1">{item.label}</span>}
                   </Link>
                 );
               })}
