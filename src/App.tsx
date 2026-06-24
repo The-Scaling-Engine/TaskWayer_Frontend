@@ -4,6 +4,7 @@ import { Toaster } from '@/components/ui/sonner';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import DashboardLayout from '@/layouts/DashboardLayout';
 import AdminRoute from '@/components/AdminRoute';
+import ManagerRoute from '@/components/ManagerRoute';
 import GuestRoute from '@/components/GuestRoute';
 import UserRoute from '@/components/UserRoute';
 
@@ -78,7 +79,8 @@ function App() {
             <Route path="admin" element={<AdminRoute><AdminDashboardPage /></AdminRoute>} />
             <Route path="admin/users" element={<AdminRoute><AdminUsersPage /></AdminRoute>} />
             <Route path="admin/departments" element={<AdminRoute><AdminDepartmentsPage /></AdminRoute>} />
-            <Route path="admin/team" element={<AdminRoute><TeamOverviewPage /></AdminRoute>} />
+            <Route path="admin/team" element={<ManagerRoute><TeamOverviewPage /></ManagerRoute>} />
+
           </Route>
         </Routes>
       </Suspense>
