@@ -39,6 +39,9 @@ export default function AdminUsersPage() {
   // Resend invite state
   const [resendingId, setResendingId] = useState<string | null>(null);
 
+  // Role change state
+  const [roleChangingId, setRoleChangingId] = useState<string | null>(null);
+
   // Invite user modal state
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteName, setInviteName] = useState('');
@@ -86,6 +89,21 @@ export default function AdminUsersPage() {
   useEffect(() => {
     fetchUsers();
   }, [fetchUsers]);
+
+  const handleChangeRole = async (user: AdminUser, newRole: 'USER' | 'MANAGER') => {
+    const userId = user.id ?? user._id;
+    if (!userId) return;
+    setRoleChangingId(userId);
+    try {
+      await adminService.changeUserRole(userId, newRole);
+      setUsers(prev => prev.map(u => (u.id ?? u._id) === userId ? { ...u, role: newRole } : u));
+      toast.success(`Role updated to ${newRole}`);
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Failed to update role'));
+    } finally {
+      setRoleChangingId(null);
+    }
+  };
 
   const handleToggleClick = (user: AdminUser) => {
     const userId = user.id ?? user._id;
@@ -311,13 +329,31 @@ export default function AdminUsersPage() {
                       <p className="font-medium text-foreground">{user.name || '—'}</p>
                     </td>
                     <td className="px-6 py-4">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${
-                        user.role === 'ADMIN' 
-                          ? 'bg-[#FE812C]/10 border-[#FE812C]/20 text-[#FE812C]' 
-                          : 'bg-muted border-border text-muted-foreground'
-                      }`}>
-                        {user.role}
-                      </span>
+                      {user.role === 'ADMIN' || (user.id ?? user._id) === (currentUser?.id ?? currentUser?._id) ? (
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${
+                          user.role === 'ADMIN'
+                            ? 'bg-[#FE812C]/10 border-[#FE812C]/20 text-[#FE812C]'
+                            : user.role === 'MANAGER'
+                            ? 'bg-purple-500/10 border-purple-500/20 text-purple-500'
+                            : 'bg-muted border-border text-muted-foreground'
+                        }`}>
+                          {user.role}
+                        </span>
+                      ) : (
+                        <select
+                          value={user.role}
+                          disabled={roleChangingId === (user.id ?? user._id)}
+                          onChange={(e) => handleChangeRole(user, e.target.value as 'USER' | 'MANAGER')}
+                          className={`text-xs font-medium px-2 py-0.5 rounded-full border cursor-pointer outline-none bg-transparent ${
+                            user.role === 'MANAGER'
+                              ? 'bg-purple-500/10 border-purple-500/20 text-purple-500'
+                              : 'bg-muted border-border text-muted-foreground'
+                          }`}
+                        >
+                          <option value="USER">USER</option>
+                          <option value="MANAGER">MANAGER</option>
+                        </select>
+                      )}
                     </td>
                     <td className="px-6 py-4">
                       <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium border ${
