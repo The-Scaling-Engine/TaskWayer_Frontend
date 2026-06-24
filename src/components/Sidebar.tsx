@@ -35,7 +35,6 @@ const navItems = [
   { icon: FolderOpen, label: 'Projects', path: '/dashboard/projects' },
   { icon: CalendarDays, label: 'Calendar', path: '/dashboard/calendar' },
   { icon: BarChart2, label: 'Analytics & Timesheet', path: '/dashboard/analytics' },
-  { icon: Settings, label: 'Settings', path: '/dashboard/settings' },
 ];
 
 const adminNavItems = [
@@ -121,7 +120,8 @@ export default function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
+        <nav className="flex-1 p-3 overflow-y-auto flex flex-col">
+          <div className="space-y-1 flex-1">
           {user?.role !== 'ADMIN' && navItems.map((item) => {
             const Icon = item.icon;
             const active = isActive(item.path);
@@ -224,6 +224,26 @@ export default function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose
               })}
             </>
           )}
+          </div>
+
+          {/* Settings — pinned to bottom of nav */}
+          <div className="pt-2 mt-2 border-t border-border">
+            <Link
+              to="/dashboard/settings"
+              onClick={onMobileClose}
+              title={collapsed ? 'Settings' : undefined}
+              className={cn(
+                'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200',
+                isActive('/dashboard/settings')
+                  ? 'bg-primary/10 text-primary'
+                  : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                collapsed && 'justify-center px-2'
+              )}
+            >
+              <Settings size={20} className="shrink-0" />
+              {!collapsed && <span className="flex-1">Settings</span>}
+            </Link>
+          </div>
         </nav>
 
         {/* Footer */}
