@@ -11,6 +11,11 @@ export interface AssignTaskPayload {
   tags?: string[];
   estimatedHours?: number;
   targetProfileId: string;
+  projectId?: string;
+  isRecurring?: boolean;
+  recurrenceType?: 'DAILY' | 'WEEKLY' | 'MONTHLY' | null;
+  recurrenceInterval?: number | null;
+  recurrenceEndDate?: string | null;
 }
 
 export const adminTeamService = {
