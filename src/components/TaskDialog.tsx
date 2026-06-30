@@ -321,6 +321,8 @@ interface TaskDialogProps {
   isReadOnly?: boolean;
   externalError?: string;
   onSubtasksChanged?: (taskId: string, progress: { completed: number; total: number } | undefined) => void;
+  initialMilestoneId?: string | null;
+  preloadedMilestones?: Milestone[];
 }
 
 // ─── TaskDialog ───────────────────────────────────────────────
@@ -332,6 +334,7 @@ export default function TaskDialog({
   initialTab, onCancelFromDate,
   projectMembers, canAssign = false, isReadOnly = false,
   externalError, onSubtasksChanged,
+  initialMilestoneId, preloadedMilestones,
 }: TaskDialogProps) {
   const projects = useProjectStore((s) => s.projects);
   const user = useAuthStore((s) => s.user);
@@ -447,7 +450,7 @@ export default function TaskDialog({
       setRecurrenceEndDate(task?.recurrenceEndDate ? task.recurrenceEndDate.substring(0, 10) : '');
       setColumnId(task?.columnId ?? null);
       setAssignedTo(task?.assignedTo ?? null);
-      setMilestoneId(task?.milestoneId ?? null);
+      setMilestoneId(task?.milestoneId ?? initialMilestoneId ?? null);
       setEstimatedHours(task?.estimatedHours != null ? String(task.estimatedHours) : '');
       setError('');
     }
@@ -456,6 +459,10 @@ export default function TaskDialog({
   // Fetch milestones for project context (canAssign = OWNER/MANAGER, both create and edit)
   useEffect(() => {
     if (!open || !lockedProjectId || !canAssign) { setProjectMilestones([]); return; }
+    if (preloadedMilestones) {
+      setProjectMilestones(preloadedMilestones.filter(m => m.status === 'ACTIVE'));
+      return;
+    }
     milestoneService.getMilestones(lockedProjectId)
       .then(res => setProjectMilestones(res.data.filter(m => m.status === 'ACTIVE')))
       .catch(() => {});
