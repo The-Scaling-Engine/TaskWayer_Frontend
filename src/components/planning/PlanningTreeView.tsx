@@ -367,6 +367,33 @@ export default function PlanningTreeView({ projectId, canManage, projectMembers 
     setEditingTask({ _id: '__new__', title: '', description: '', status: 'todo', priority: 'medium', tags: [] } as unknown as Task);
   }, []);
 
+  const handleDeleteTask = useCallback(async (taskId: string) => {
+    // Optimistic: remove task from tree immediately
+    const currentTree = usePlanningStore.getState().tree;
+    if (currentTree) {
+      const newMilestones = currentTree.milestones.map(m => ({
+        ...m,
+        tasks: m.tasks.filter(t => t.id !== taskId),
+      }));
+      const wasUnassigned = currentTree.unassigned.data.some(t => t.id === taskId);
+      usePlanningStore.setState({
+        tree: {
+          ...currentTree,
+          milestones: newMilestones,
+          unassigned: wasUnassigned
+            ? { ...currentTree.unassigned, data: currentTree.unassigned.data.filter(t => t.id !== taskId), total: Math.max(0, currentTree.unassigned.total - 1) }
+            : currentTree.unassigned,
+        },
+      });
+    }
+    try {
+      await useTaskStore.getState().deleteTask(taskId);
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Failed to delete task'));
+      void refresh(); // revert optimistic on error
+    }
+  }, [refresh]);
+
   const toIso = (val: string) => val ? `${val}T00:00:00.000Z` : null;
 
   const handleCreateMilestone = useCallback(async () => {
@@ -583,6 +610,7 @@ export default function PlanningTreeView({ projectId, canManage, projectMembers 
                 onOpenTask={handleOpenTask}
                 onAddTask={handleAddTask}
                 projectId={projectId}
+                onDeleteTask={canManage ? handleDeleteTask : undefined}
               />
             ))}
           </div>
@@ -607,6 +635,7 @@ export default function PlanningTreeView({ projectId, canManage, projectMembers 
                   projectMembers={projectMembers}
                   onOpenTask={handleOpenTask}
                   onToggleSubtask={async () => {}}
+                  onDeleteTask={canManage ? handleDeleteTask : undefined}
                 />
               ))}
             </div>
@@ -658,9 +687,9 @@ export default function PlanningTreeView({ projectId, canManage, projectMembers 
               } else {
                 await useTaskStore.getState().updateTask(editingTask._id, data);
               }
+              await refresh();
               setEditingTask(null);
               setCreateForMilestone(null);
-              void refresh();
             } finally {
               setSubmitting(false);
             }
@@ -671,6 +700,8 @@ export default function PlanningTreeView({ projectId, canManage, projectMembers 
           canAssign={canManage}
           loading={submitting}
           onSubtasksChanged={() => refresh()}
+          initialMilestoneId={createForMilestone}
+          preloadedMilestones={tree?.milestones}
         />
       )}
     </div>
