@@ -18,6 +18,7 @@ interface Props {
   onOpenTask: (taskId: string) => void;
   onAddTask: (milestoneId: string) => void;
   projectId: string;
+  onDeleteTask?: (taskId: string) => Promise<void>;
 }
 
 // plan2.md §5.2: 4 distinct display states
@@ -30,7 +31,7 @@ const statusConfig = {
 };
 
 export default function MilestoneNode({
-  milestone, canManage, projectMembers, onOpenTask, onAddTask, projectId,
+  milestone, canManage, projectMembers, onOpenTask, onAddTask, projectId, onDeleteTask,
 }: Props) {
   const { expandedMilestones, toggleMilestone, refresh, patchMilestones } = usePlanningStore();
   const isExpanded = expandedMilestones.has(milestone.id);
@@ -368,6 +369,7 @@ export default function MilestoneNode({
                   onOpenTask={onOpenTask}
                   onToggleSubtask={handleToggleSubtask}
                   onAddSubtask={canManage ? (t) => { setAddingSubtaskFor(t.id); setNewSubtaskTitle(''); } : undefined}
+                  onDeleteTask={onDeleteTask}
                 />
                 {/* Inline add subtask input */}
                 {addingSubtaskFor === task.id && (
